@@ -116,8 +116,11 @@ body{background:var(--bg-deep);color:var(--text)}
 .con-greeting{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
 .con-greeting-text{font-size:17px;font-weight:700;color:var(--text)}
 .con-greeting-date{font-size:11px;color:var(--text-dim)}
-.con-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:12px}
-.con-stat{text-align:center;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px 4px;cursor:pointer;transition:.2s}
+.con-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.con-stat{text-align:center;background:var(--bg-card);border-radius:12px;padding:12px 4px 10px;cursor:pointer;transition:.2s;position:relative;overflow:hidden}
+.con-stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.con-stat.cs-run::before{background:#4CAF50}.con-stat.cs-wait::before{background:#FFB300}.con-stat.cs-fault::before{background:#EF5350}.con-stat.cs-idle::before{background:#607890}
+.con-stat:active{transform:scale(.95);opacity:.8}
 .con-stat:active{transform:scale(.95);opacity:.8}
 .stat-mach-item{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:.15s}
 .stat-mach-item:last-child{border-bottom:none}
@@ -125,9 +128,9 @@ body{background:var(--bg-deep);color:var(--text)}
 .stat-mach-id{font-size:15px;font-weight:700;color:var(--text);min-width:70px}
 .stat-mach-sub{flex:1;font-size:12px;color:var(--text-muted)}
 .stat-mach-arrow{font-size:18px;color:var(--text-dim);margin-left:8px}
-.con-stat-num{font-size:18px;font-weight:800;line-height:1.2}
+.con-stat-num{font-size:26px;font-weight:800;line-height:1.2}
 .con-stat-num.c-run{color:#4CAF50}.con-stat-num.c-wait{color:#FFB300}.con-stat-num.c-fault{color:#EF5350}.con-stat-num.c-idle{color:var(--text-dim)}
-.con-stat-lbl{font-size:12px;color:var(--text-dim);margin-top:2px}
+.con-stat-lbl{font-size:12px;color:var(--text-dim);margin-top:4px;font-weight:500}
 .con-section{margin-bottom:8px}
 .con-section-title{font-size:10px;color:var(--text-dark2);padding:0 4px 6px;letter-spacing:2px;display:flex;align-items:center;gap:6px}
 .con-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
@@ -398,6 +401,7 @@ select.prog-input{appearance:none;-webkit-appearance:none;background:#0D1B2A url
 .mc-btn-mgr{background:var(--blue);border:none;color:var(--gold);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
 .mc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:100%}
 @media(min-width:600px){.mc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:900px){.mc-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.machine-card{padding:18px}.mc-id{font-size:16px}.mc-model{font-size:13px}.mc-status{font-size:13px}.mc-info{font-size:13px}.mc-current{padding:12px}.mc-current-label{font-size:12px}.mc-current-product{font-size:14px}.mc-detail{font-size:13px;padding:14px}.mc-detail-title{font-size:14px}.mc-detail table{font-size:13px}.mc-head{padding:8px 6px;gap:6px}.mc-btn-mgr{padding:10px 18px;font-size:14px}.mc-top-bar input[type="date"]{font-size:15px;padding:10px 14px}.page-back{font-size:15px;padding:10px 16px}.ds-grid{gap:12px}.ds-title{font-size:15px}.mgr-panel{max-width:600px;padding:20px}.mgr-title{font-size:18px}.mgr-row input,.mgr-row select{font-size:14px;padding:10px}}
 
 
 
@@ -714,10 +718,10 @@ async function loadVolcOrders(){try{_volcOrders=await vsGet('orders','select=*&o
 
 <div class="console" id="console-panel">
   <div class="con-stats" id="con-stats">
-    <div class="con-stat" onclick="goMachineFilter('running')"><div class="con-stat-num c-run" id="cs-run">0</div><div class="con-stat-lbl">运行中</div></div>
-    <div class="con-stat" onclick="goMachineFilter('waiting')"><div class="con-stat-num c-wait" id="cs-wait">0</div><div class="con-stat-lbl">待料</div></div>
-    <div class="con-stat" onclick="goMachineFilter('fault')"><div class="con-stat-num c-fault" id="cs-fault">0</div><div class="con-stat-lbl">故障</div></div>
-    <div class="con-stat" onclick="goMachineFilter('idle')"><div class="con-stat-num c-idle" id="cs-idle">0</div><div class="con-stat-lbl">空闲</div></div>
+    <div class="con-stat cs-run" onclick="goMachineFilter('running')"><div style="font-size:18px;margin-bottom:4px">🟢</div><div class="con-stat-num c-run" id="cs-run">0</div><div class="con-stat-lbl">运行中</div></div>
+    <div class="con-stat cs-wait" onclick="goMachineFilter('waiting')"><div style="font-size:18px;margin-bottom:4px">🟡</div><div class="con-stat-num c-wait" id="cs-wait">0</div><div class="con-stat-lbl">待料</div></div>
+    <div class="con-stat cs-fault" onclick="goMachineFilter('fault')"><div style="font-size:18px;margin-bottom:4px">🔴</div><div class="con-stat-num c-fault" id="cs-fault">0</div><div class="con-stat-lbl">故障</div></div>
+    <div class="con-stat cs-idle" onclick="goMachineFilter('idle')"><div style="font-size:18px;margin-bottom:4px">⚪</div><div class="con-stat-num c-idle" id="cs-idle">0</div><div class="con-stat-lbl">空闲</div></div>
   </div>
   <div class="home-page">
     <div class="home-greeting">
