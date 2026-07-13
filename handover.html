@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>交班记录系统</title>
+<style>
+:root{--bg:#0D1B2A;--bg2:#152238;--bg3:#1B3A5C;--bd:#1B3A5C;--bdf:#2E5984;--gold:#D4A843;--blue:#2E5984;--bluel:#4FC3F7;--txt:#fff;--dim:#8098B0;--red:#E74C3C;--green:#27AE60;--orange:#F39C12}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{overscroll-behavior-y:none}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--txt);font-size:15px;line-height:1.5;min-height:100vh;-webkit-tap-highlight-color:transparent}
+input,select,textarea,button{font-family:inherit;font-size:15px;outline:none}
+input,select,textarea{background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:8px;padding:11px 12px;width:100%;transition:border .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238098B0' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+textarea{resize:vertical;min-height:56px}
+button{cursor:pointer;border:none;border-radius:8px;padding:11px 20px;font-weight:600;transition:transform .1s,opacity .2s}
+button:active{transform:scale(.97)}
+.btn-gold{background:linear-gradient(135deg,var(--gold),#C49B30);color:#000}
+.btn-blue{background:linear-gradient(135deg,var(--blue),var(--bd));color:var(--txt)}
+.btn-red{background:linear-gradient(135deg,var(--red),#C0392B);color:#fff}
+.btn-green{background:linear-gradient(135deg,var(--green),#1E8449);color:#fff}
+.btn-sm{padding:7px 14px;font-size:13px;border-radius:6px}
+.page{display:none;min-height:100vh;padding:16px;padding-bottom:80px}
+.page.active{display:block}
+#splashPage{flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
+#splashPage.active{display:flex}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;color:var(--dim);margin-bottom:4px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.page-header h2{font-size:18px;color:var(--gold)}
+.page-header .user-info{font-size:13px;color:var(--dim)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--bg2);border-top:1px solid var(--bd);z-index:100}
+.bottom-nav .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 4px;color:var(--dim);font-size:11px;cursor:pointer;transition:color .2s}
+.bottom-nav .nav-item.active{color:var(--gold)}
+.bottom-nav .nav-item .nav-icon{font-size:20px;margin-bottom:2px}
+.sub-nav{display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid var(--bd)}
+.sub-nav-item{flex:1;text-align:center;padding:10px 0;font-size:14px;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.sub-nav-item.active{color:var(--gold);border-bottom-color:var(--gold)}
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.card-title{font-size:15px;font-weight:600;color:var(--gold);margin-bottom:10px}
+.card-sub{font-size:12px;color:var(--dim);margin-bottom:8px}
+.record-item{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:10px}
+.record-item .ri-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.record-item .ri-head .ri-device{font-weight:600;color:var(--bluel);font-size:15px}
+.record-item .ri-head .ri-status{font-size:12px;padding:2px 8px;border-radius:10px;font-weight:600}
+.ri-status.s-normal{background:rgba(39,174,96,.15);color:var(--green)}
+.ri-status.s-pending{background:rgba(243,156,18,.15);color:var(--orange)}
+.ri-status.s-done{background:rgba(79,195,247,.15);color:var(--bluel)}
+.ri-row{font-size:13px;margin-bottom:3px;color:var(--dim)}
+.ri-row span{color:var(--txt)}
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filter-bar input,.filter-bar select{width:auto;flex:1;min-width:0}
+.filter-bar input[type="date"]{min-width:120px;max-width:160px;flex:0 0 auto}
+.add-row-btn{width:100%;padding:10px;border:2px dashed var(--bd);border-radius:8px;background:transparent;color:var(--dim);font-size:14px;margin-top:8px;cursor:pointer}
+.add-row-btn:active{border-color:var(--gold);color:var(--gold)}
+.dyn-row{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:10px;position:relative}
+.dyn-row .del-row{position:absolute;top:8px;right:8px;background:var(--red);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.dyn-row .del-row:active{transform:scale(.9)}
+.check-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)}
+.check-item:last-child{border-bottom:none}
+.check-item label{font-size:14px;flex:1}
+.toggle{position:relative;width:48px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--bd);border-radius:13px;cursor:pointer;transition:background .2s}
+.toggle .slider:before{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle input:checked+.slider{background:var(--green)}
+.toggle input:checked+.slider:before{transform:translateX(22px)}
+.chip-area{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{padding:6px 10px;border-radius:6px;font-size:12px;border:1px solid var(--bd);background:var(--bg);color:var(--dim);cursor:pointer;transition:all .2s}
+.chip.active{border-color:var(--gold);background:rgba(212,168,67,.15);color:var(--gold)}
+.setting-section{margin-bottom:20px}
+.setting-section h3{font-size:15px;color:var(--gold);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--bd)}
+.user-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--bd)}
+.recycle-toggle{margin:10px 0 6px;padding:10px 14px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-dim);user-select:none}
+.recycle-toggle:active{background:rgba(255,255,255,.1)}
+.recycle-box .recycle-row{opacity:.7;border-left:3px solid var(--red)}
+.recycle-box .recycle-row:hover{opacity:1}
+.user-item:last-child{border-bottom:none}
+.user-item .ui-name{font-size:14px}
+.user-item .ui-role{font-size:12px;color:var(--dim);margin-left:6px}
+.empty{text-align:center;color:var(--dim);padding:40px 0;font-size:14px}
+.toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
+.loading{text-align:center;padding:30px;color:var(--dim)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- SPLASH -->
+<div id="splashPage" class="page active" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh">
+  <div style="font-size:42px">⚙️</div>
+  <div style="color:var(--gold);font-size:16px;font-weight:600;letter-spacing:2px;margin-top:12px">加载中...</div>
+</div>
+
+<!-- MAIN UNIFIED PAGE -->
+<div id="mainPage" class="page">
+  <div class="page-header"><h2 id="mainTitle">交班系统</h2><div><span class="user-info" id="mainUser"></span></div></div>
+  <div id="subNav"></div>
+  <div id="mainContent"></div>
+  <div class="bottom-nav" id="mainNav"></div>
+</div>
+
+<script>
+// ====== SUPABASE CONFIG ======
+var SB_URL='https://prqievwybuzwmmcdoqdq.supabase.co';
+var SB_KEY='sb_publishable_QIyZMuUReK3-gudQwrqbfg_7-0z48bw';
+var SB_URL2='https://br-glad-kite-fa945c96.supabase2.aidap-global.cn-beijing.volces.com';
+var SB_KEY2='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjIwODg3MTksInJvbGUiOiJhbm9uIn0.JPc7B41GXEoiXoAchqjMB47RB4c4BktPWbn4uchKin8';
+
+// ====== DEVICES ======
+var DEVICES=[
+  {id:'SD01',model:'Star SB-20R'},{id:'SD02',model:'Star SB-20R'},{id:'SD03',model:'Star SB-20R'},
+  {id:'SD04',model:'Star SB-20R'},{id:'SD05',model:'Star SB-20R'},{id:'SD06',model:'Star SB-20R'},
+  {id:'XTC01',model:'Citizen L20'},{id:'XTC02',model:'Citizen L20'},{id:'XTC03',model:'Citizen L20'},
+  {id:'XTC04',model:'Citizen L20'},{id:'XTC05',model:'Citizen L20'},{id:'XTC06',model:'Citizen L20'},
+  {id:'JS01',model:'Tsugami'},{id:'JS02',model:'Tsugami'},{id:'JS03',model:'Tsugami'},
+  {id:'JS04',model:'Tsugami'},{id:'JS05',model:'Tsugami'},{id:'JS06',model:'Tsugami'},
+  {id:'JS07',model:'Tsugami'},{id:'JS08',model:'Tsugami'},{id:'JS09',model:'Tsugami'},
+  {id:'JS10',model:'Tsugami'},{id:'JS11',model:'Tsugami'},{id:'JS12',model:'Tsugami'}
+];
+var DEFAULT_DEVICES=JSON.parse(JSON.stringify(DEVICES));
+var DEVICE_MODELS=['西铁城A20','津上B0206','津上B0205','斯大SB-10J','斯大SB-20','SB-23'];
+function devLabel(d){return d.id+' — '+d.model}
+function devById(id){for(var i=0;i<DEVICES.length;i++){if(DEVICES[i].id===id)return DEVICES[i]}return null}
+function loadDevices(){
+  return sbGet('users','name=eq.__devices__&role=eq.system').then(function(data){
+    if(data&&data.length>0&&data[0].password){
+      try{DEVICES=JSON.parse(data[0].password)}catch(e){DEVICES=JSON.parse(JSON.stringify(DEFAULT_DEVICES))}
+    }
+    return DEVICES;
+  });
+}
+function initDevices(){
+  return sbGet('users','name=eq.__devices__&role=eq.system').then(function(data){
+    if(!data||data.length===0){
+      return sbPost('users',{name:'__devices__',role:'system',password:JSON.stringify(DEFAULT_DEVICES),department:'',is_admin:false});
+    }
+  });
+}
+
+// ====== ROLE MAPPING ======
+var ROLE_MAP={'主管':'admin','领班':'leader','操作员':'operator','学徒':'operator','operator':'operator','admin':'admin','leader':'leader','apprentice':'operator'};
+var ROLE_LABEL={'admin':'主管','leader':'领班','operator':'操作员'};
+var DB_ROLES={'admin':['admin','主管'],'leader':['leader','领班'],'operator':['operator','操作员','学徒']};
+
+function mapRole(r){return ROLE_MAP[r]||r}
+function dbRoleFilter(role){return '('+DB_ROLES[role].map(function(r){return 'role.eq.'+r}).join(',')+')'}
+
+// ====== PERMISSIONS ======
+var DEFAULT_HO_PERMS={
+  admin:{shift_write:1,shift_view:1,daily_write:1,daily_view:1,cross_shift:1,settings:1},
+  leader:{shift_write:1,shift_view:1,daily_view:1,cross_shift:1},
+  operator:{daily_write:1,daily_view:1,cross_shift:1}
+};
+var myPerms={};
+function initPerms(){
+  if(portalUser&&portalUser.permissions){
+    var ha=portalUser.permissions.handover_actions;
+    if(ha&&Array.isArray(ha)&&ha.length>0){
+      myPerms={};
+      for(var i=0;i<ha.length;i++) myPerms[ha[i]]=1;
+      return;
+    }
+  }
+  if(currentUser){
+    myPerms=DEFAULT_HO_PERMS[currentUser.role]||{};
+  }
+}
+function hasPerm(k){return !!myPerms[k]}
+
+// ====== SUPABASE API ======
+function sbGet(table,q){
+  var url=SB_URL+'/rest/v1/'+table+(q?'?'+q:'');
+  return fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).then(function(r){return r.json()});
+}
+function sbPost(table,data){
+  return fetch(SB_URL+'/rest/v1/'+table,{
+    method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  }).then(function(r){return r.json()});
+}
+function sbPatch(table,q,data){
+  return fetch(SB_URL+'/rest/v1/'+table+'?'+q,{
+    method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  }).then(function(r){return r.json()});
+}
+function sbDelete(table,q){
+  return fetch(SB_URL+'/rest/v1/'+table+'?'+q,{
+    method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+  });
+}
+
+// ====== SUPABASE API 2 (shift_records) ======
+function sbGet2(table,q){
+  var url=SB_URL2+'/rest/v1/'+table+(q?'?'+q:'');
+  return fetch(url,{headers:{'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2}}).then(function(r){if(!r.ok)throw new Error('GET '+table+': '+r.status);return r.json()});
+}
+function sbPost2(table,data){
+  return fetch(SB_URL2+'/rest/v1/'+table,{
+    method:'POST',headers:{'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  }).then(function(r){if(!r.ok)throw new Error('POST '+table+': '+r.status);return r.json()});
+}
+function sbPatch2(table,q,data){
+  return fetch(SB_URL2+'/rest/v1/'+table+'?'+q,{
+    method:'PATCH',headers:{'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2,'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  }).then(function(r){if(!r.ok)throw new Error('PATCH '+table+': '+r.status);return r.json()});
+}
+function sbDelete2(table,q){
+  return fetch(SB_URL2+'/rest/v1/'+table+'?'+q,{
+    method:'DELETE',headers:{'apikey':SB_KEY2,'Authorization':'Bearer '+SB_KEY2}
+  });
+}
+
+// ====== DELETE RECORD ======
+function delRecord(id,type,btn){
+  cfm('确定删除该记录吗？',function(ok){
+    if(!ok)return;
+    sbDelete2('shift_records','id=eq.'+id).then(function(resp){
+      if(resp.ok){
+        toast('已删除');
+        renderCurrentTab();
+      }else{
+        toast('删除失败',true);
+      }
+    }).catch(function(){
+      toast('删除失败',true);
+    });
+  });
+}
+
+// ====== UTILS ======
+function $(id){return document.getElementById(id)}
+function toast(msg,err){var t=$('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';setTimeout(function(){t.className='toast'},2200)}
+function copyToClip(text){fallbackCopy(text)}
+function fallbackCopy(text){
+  var ta=document.createElement('textarea');
+  ta.value=text;ta.setAttribute('readonly','');
+  ta.style.cssText='position:fixed;left:0;top:0;width:2em;height:2em;padding:0;border:none;outline:none;box-shadow:none;background:transparent;opacity:0';
+  document.body.appendChild(ta);ta.setSelectionRange(0,ta.value.length);
+  try{document.execCommand('copy');toast('已复制，可粘贴发群')}catch(e){toast('复制失败',1)}
+  document.body.removeChild(ta);
+}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function fmtDate(s){if(!s)return '';var p=s.split('-');return p[0]+'/'+p[1]+'/'+p[2]}
+function showPage(id){var all=document.querySelectorAll('.page');for(var i=0;i<all.length;i++)all[i].classList.remove('active');$(id).classList.add('active')}
+
+function fmtShiftText(r){
+  var pp=r.production_progress||{};
+  var t='============\n【交接班记录】\n============\n';
+  t+='📅 日期：'+fmtDate(r.shift_date)+'\n';
+  t+='🕑 班次：'+r.shift_type+'\n';
+  t+='👤 记录人：'+r.reporter+'\n';
+  if(pp.operator)t+='👷 操作人：'+pp.operator+'\n';
+  var recs=r.equipment_status&&r.equipment_status.records?r.equipment_status.records:[];
+  if(recs.length>0){
+    t+='\n-------------------------------\n';
+    for(var i=0;i<recs.length;i++){
+      var rec=recs[i];
+      t+='🔧 '+rec.device;
+      if(rec.drawing)t+=' | 图号:'+rec.drawing;
+      t+='\n';
+      if(rec.status)t+='   状态：'+rec.status+'\n';
+      if(rec.issue)t+='   ⚠️ 异常：'+rec.issue+'\n';
+      if(rec.cause)t+='   🔍 原因：'+rec.cause+'\n';
+      if(rec.measure)t+='   🛠 措施：'+rec.measure+'\n';
+      if(rec.notes)t+='   📝 注意：'+rec.notes+'\n';
+      if(i<recs.length-1)t+='-------------------------------\n';
+    }
+  }
+  t+='🔧 不良返修：'+(pp.rework_done?'✅ 已完成':'❌ 未完成')+'\n';
+  t+='🧹 操作员5S：'+(pp.s5s_checked?'✅ 全部通过':'⚠️ 有未完成')+'\n';
+  if(pp.s5s_items){
+    var si=pp.s5s_items;
+    t+='   工作台面已整理：'+(si.workbench?'✅':'❌')+' | 5色盒已整齐：'+(si.color_box?'✅':'❌')+'\n';
+    t+='   地面油污已清理：'+(si.floor_oil?'✅':'❌')+' | 量具塞棒已齐全：'+(si.gauges?'✅':'❌')+'\n';
+    t+='   工具扳手已归还：'+(si.tools_returned?'✅':'❌')+'\n';
+  }
+  t+='👷 操作员工作检查：'+(pp.operator_checked?'✅ 已检查':'❌ 未检查')+'\n';
+  t+='🔍 设备点检：'+(pp.inspection_done?'✅ 已点检':'❌ 未点检')+'\n';
+  t+='💧 洗油泵：'+(pp.oil_pump_cleaned?'✅ 已洗':'❌ 未洗')+'\n';
+  if(pp.oil_pump_cleaned&&pp.oil_pump_devices&&pp.oil_pump_devices.length>0)t+='   清洗设备：'+pp.oil_pump_devices.join('、')+'\n';
+  if(pp.operator_work_note)t+='📝 操作员工作情况：'+pp.operator_work_note+'\n';
+  t+='\n============';
+  return t;
+}
+
+function fmtDailyText(r){
+  var pp=r.production_progress||{};
+  var t='============\n【操作员日报】\n============\n';
+  t+='📅 日期：'+fmtDate(r.shift_date)+'\n';
+  t+='🕑 班次：'+(r.shift_type||'')+'\n';
+  t+='👤 记录人：'+r.reporter+'\n';
+  t+='\n-------------------------------\n';
+  t+='🔍 点检表：'+(pp.inspection_done?'✅ 已点检':'❌ 未点检')+'\n';
+  if(pp.drawings){
+    var dk=Object.keys(pp.drawings);
+    if(dk.length>0){
+      t+='📐 图号：\n';
+      for(var i=0;i<dk.length;i++)t+='   '+dk[i]+' → '+pp.drawings[dk[i]]+'\n';
+    }
+  }
+  t+='💧 高压油清洗：'+(pp.oil_clean?'✅ 已清洗':'❌ 未清洗')+'\n';
+  if(pp.oil_clean&&pp.cleaned_devices&&pp.cleaned_devices.length>0)t+='   清洗设备：'+pp.cleaned_devices.join('、')+'\n';
+  t+='📏 二次元投影：'+(pp.projection_done?'✅ 已投影':'❌ 未投影')+'\n';
+  if(pp.projection_done&&pp.projection_devices&&pp.projection_devices.length>0){
+    var pds=pp.projection_devices;
+    var isNew=pds.length>0&&typeof pds[0]==='object';
+    if(isNew){
+      for(var i=0;i<pds.length;i++){
+        if(pds[i].status==='issue')t+='   ❌ '+pds[i].name+'：'+(pds[i].issue||'有问题')+'\n';
+        else t+='   ✅ '+pds[i].name+'：正常\n';
+      }
+    }else{
+      t+='   投影设备：'+pds.join('、')+'\n';
+      if(pp.projection_has_issue)t+='   ❌ 问题：'+(pp.projection_issue||'有问题')+'\n';
+    }
+  }
+  t+='🔧 不良返修：'+(pp.rework_done?'✅ 已完成':'❌ 未完成')+'\n';
+  t+='🧹 车间5S：'+(pp.s5s_checked?'✅ 全部完成':'⚠️ 有未完成')+'\n';
+  if(pp.s5s_items){
+    var _si=pp.s5s_items;
+    t+='   工作台面已整理：'+(_si.workbench?'✅':'❌')+' | 5色盒已整齐：'+(_si.color_box?'✅':'❌')+'\n';
+    t+='   地面油污已清理：'+(_si.floor_oil?'✅':'❌')+' | 量具塞棒已齐全：'+(_si.gauges?'✅':'❌')+'\n';
+    t+='   工具扳手已归还：'+(_si.tools_returned?'✅':'❌')+'\n';
+  }
+  t+='\n============';
+  return t;
+}
+
+// ====== CACHE ======
+var cachedUsers=null;
+var currentUser=null;
+var portalUser=null;
+
+function loadUsers(){
+  return sbGet('users','select=*&order=id').then(function(data){
+    cachedUsers=data||[];
+    for(var i=0;i<cachedUsers.length;i++){
+      var u=cachedUsers[i];
+      if(u.role==='system'&&u.name==='__devices__'){
+        try{var parsed=JSON.parse(u.password);if(parsed.length>0&&typeof parsed[0]==='string'){DEVICES=parsed.map(function(id){var old=DEFAULT_DEVICES.filter(function(d){return d.id===id})[0];return{id:id,model:old?old.model:'Other'}})}else{DEVICES=parsed}}catch(e){}
+      }
+    }
+    return cachedUsers;
+  });
+}
+function initSystemEntries(){return initDevices()}
+function getUsersByRole(role){
+  if(!cachedUsers)return [];
+  return cachedUsers.filter(function(u){return mapRole(u.role)===role&&u.status!=='inactive'});
+}
+
+// ====== PORTAL AUTO-LOGIN ======
+var PORTAL_ROLE_MAP={'admin':'admin','leader':'leader','operator':'operator','apprentice':'operator'};
+function readPortalUser(){
+  try{
+    // 1. 优先从URL参数读
+    var p=new URLSearchParams(location.search);
+    var u=p.get('zxj_user');
+    if(u){
+      var s=JSON.parse(decodeURIComponent(u));
+      if(s&&s.name){
+        var role=PORTAL_ROLE_MAP[s.role]||s.role||'apprentice';
+        return{name:s.name,role:role,tag:s.tag||'',id:s.id||0,deptName:s.deptName||'',permissions:s.permissions||{}};
+      }
+    }
+    // 2. 同域localStorage fallback（静态部署后所有页面同域）
+    var ls=localStorage.getItem('zxj_session');
+    if(ls){
+      var s2=JSON.parse(ls);
+      if(s2&&s2.name){
+        var role2=PORTAL_ROLE_MAP[s2.role]||s2.role||'apprentice';
+        return{name:s2.name,role:role2,tag:s2.tag||'',id:s2.id||0,deptName:s2.deptName||'',permissions:s2.permissions||{}};
+      }
+    }
+    return null;
+  }catch(e){return null}
+}
+
+function goBackPortal(){
+  if(window.opener){window.close()}
+  else{window.location.href='./index.html'}
+}
+
+// ====== UNIFIED NAVIGATION ======
+var mainTabs=[];
+var mainTabIdx=0;
+var subTabIdx={shift:0,daily:0};
+
+function buildMainNav(){
+  mainTabs=[];
+  if(hasPerm('shift_write')||hasPerm('shift_view')) mainTabs.push({id:'shift',icon:'&#9997;',label:'交接班'});
+  if(hasPerm('daily_write')||hasPerm('daily_view')) mainTabs.push({id:'daily',icon:'&#9998;',label:'操作日报'});
+  if(hasPerm('cross_shift')) mainTabs.push({id:'cross',icon:'&#8644;',label:'对班情况'});
+  if(hasPerm('settings')) mainTabs.push({id:'settings',icon:'&#9881;',label:'管理设置'});
+
+  var navHtml='';
+  for(var i=0;i<mainTabs.length;i++){
+    navHtml+='<div class="nav-item'+(i===0?' active':'')+'" onclick="switchMainTab('+i+')"><div class="nav-icon">'+mainTabs[i].icon+'</div>'+mainTabs[i].label+'</div>';
+  }
+  $('mainNav').innerHTML=navHtml;
+  if(mainTabs.length>0) switchMainTab(0);
+}
+
+function switchMainTab(idx){
+  mainTabIdx=idx;
+  var items=$('mainNav').querySelectorAll('.nav-item');
+  for(var i=0;i<items.length;i++) items[i].classList.toggle('active',i===idx);
+  var tab=mainTabs[idx];
+  $('mainTitle').textContent=tab.label;
+  renderTab(tab.id);
+}
+
+function renderTab(tabId){
+  switch(tabId){
+    case 'shift': renderShiftTab(); break;
+    case 'daily': renderDailyTab(); break;
+    case 'cross': $('subNav').innerHTML=''; renderCrossShift(); break;
+    case 'settings': $('subNav').innerHTML=''; renderSettings(); break;
+  }
+}
+
+function renderCurrentTab(){
+  if(mainTabs.length>0) renderTab(mainTabs[mainTabIdx].id);
+}
+
+function switchSubTab(tabId,idx){
+  subTabIdx[tabId]=idx;
+  renderTab(tabId);
+}
+
+// ====== SHIFT TAB ======
+function renderShiftTab(){
+  var canWrite=hasPerm('shift_write');
+  var canView=hasPerm('shift_view');
+  var sIdx=subTabIdx.shift||0;
+  var subHtml='';
+  if(canWrite&&canView){
+    subHtml='<div class="sub-nav">';
+    subHtml+='<div class="sub-nav-item'+(sIdx===0?' active':'')+'" onclick="switchSubTab(\'shift\',0)">填写记录</div>';
+    subHtml+='<div class="sub-nav-item'+(sIdx===1?' active':'')+'" onclick="switchSubTab(\'shift\',1)">历史记录</div>';
+    subHtml+='</div>';
+  }
+  $('subNav').innerHTML=subHtml;
+  if(sIdx===0&&canWrite) renderShiftForm();
+  else if(canView) renderShiftHistory();
+  else if(canWrite) renderShiftForm();
+  else $('mainContent').innerHTML='<div class="empty">无权限</div>';
+}
+
+// ====== LEADER FORM ======
+var shiftRows=[];
+var editShiftId=null;
+var editShiftDate='';
+var editShiftType='';
+var editShiftOperator='';
+var editShiftCheckData={};
+var cachedShiftRecords=[];
+
+function renderShiftForm(){
+  if(shiftRows.length===0) shiftRows=[{device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''}];
+  var html='<div class="card">';
+  html+='<div class="form-group"><label>日期</label><input type="date" id="lDate" value="'+(editShiftDate||today())+'"></div>';
+  html+='<div class="form-group"><label>班次</label><select id="lShift"><option value="白班"'+(editShiftType==='白班'?' selected':'')+'>白班</option><option value="夜班"'+(editShiftType==='夜班'?' selected':'')+'>夜班</option></select></div>';
+  html+='<div class="form-group"><label>操作人</label><select id="lOperator">';
+  var opUsers=getUsersByRole('leader');
+  html+='<option value="">— 选择操作人 —</option>';
+  for(var oi=0;oi<opUsers.length;oi++) html+='<option value="'+opUsers[oi].name+'"'+(editShiftOperator===opUsers[oi].name?' selected':'')+'>'+opUsers[oi].name+'</option>';
+  html+='</select></div>';
+  html+='</div>';
+  html+='<div class="card"><div class="card-title">领班检查项</div>';
+  html+='<div class="check-item"><label>操作员工作情况已检查</label><label class="toggle"><input type="checkbox" id="lOpCheck"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>操作员已点检</label><label class="toggle"><input type="checkbox" id="lInspect"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>已洗油泵</label><label class="toggle"><input type="checkbox" id="lOilPump" onchange="toggleLOilPump()"><span class="slider"></span></label></div>';
+  html+='<div id="lOilPumpArea" style="display:none"><div style="font-size:13px;color:var(--dim);margin:8px 0 6px">洗了哪几台</div><div class="chip-area">';
+  for(var oi=0;oi<DEVICES.length;oi++) html+='<div class="chip" data-dev="'+DEVICES[oi].id+'" data-group="loil" onclick="toggleChip(this)">'+DEVICES[oi].id+'</div>';
+  html+='</div></div>';
+  html+='<div class="check-item"><label>操作员已完成返修</label><label class="toggle"><input type="checkbox" id="lRework"><span class="slider"></span></label></div>';
+  html+='<div style="font-size:13px;color:var(--dim);margin-bottom:6px">操作员5S检查</div>';
+  html+='<div class="check-item"><label>操作员已整理工作台面</label><label class="toggle"><input type="checkbox" id="lS5s1"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>操作员5色盒已整齐</label><label class="toggle"><input type="checkbox" id="lS5s2"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>操作员已清理地面油污</label><label class="toggle"><input type="checkbox" id="lS5s3"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>操作员量具塞棒已齐全</label><label class="toggle"><input type="checkbox" id="lS5s4"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>操作员已归还工具扳手</label><label class="toggle"><input type="checkbox" id="lS5s5"><span class="slider"></span></label></div>';
+  html+='<div class="form-group" style="margin-top:10px"><label>操作员工作情况备注</label><textarea id="lOpNote" placeholder="记录操作员工作表现、注意事项等">'+(editShiftCheckData.operator_work_note||'')+'</textarea></div>';
+  html+='</div>';
+  html+='<div class="card-title" style="margin-top:8px">设备交接记录</div>';
+  for(var i=0;i<shiftRows.length;i++){
+    var r=shiftRows[i];
+    html+='<div class="dyn-row">';
+    if(shiftRows.length>1) html+='<button class="del-row" onclick="delShiftRow('+i+')">×</button>';
+    html+='<div class="form-group"><label>机台</label><select id="lr_dev_'+i+'">';
+    for(var d=0;d<DEVICES.length;d++) html+='<option value="'+DEVICES[d].id+'"'+(r.device===DEVICES[d].id?' selected':'')+'>'+devLabel(DEVICES[d])+'</option>';
+    html+='</select></div>';
+    html+='<div class="form-group"><label>图号</label><input type="text" id="lr_draw_'+i+'" value="'+esc(r.drawing)+'" placeholder="输入图号"></div>';
+    html+='<div class="form-group"><label>异常问题</label><textarea id="lr_issue_'+i+'" placeholder="描述异常情况">'+esc(r.issue)+'</textarea></div>';
+    html+='<div class="form-group"><label>原因</label><textarea id="lr_cause_'+i+'" placeholder="分析原因">'+esc(r.cause)+'</textarea></div>';
+    html+='<div class="form-group"><label>措施</label><textarea id="lr_meas_'+i+'" placeholder="采取的措施">'+esc(r.measure)+'</textarea></div>';
+    html+='<div class="form-group"><label>目前状态</label><select id="lr_stat_'+i+'">';
+    ['正常','待处理','已处理'].forEach(function(s){html+='<option value="'+s+'"'+(r.status===s?' selected':'')+'>'+s+'</option>'});
+    html+='</select></div>';
+    html+='<div class="form-group"><label>注意事项</label><textarea id="lr_note_'+i+'" placeholder="需要注意的事项">'+esc(r.notes)+'</textarea></div>';
+    html+='</div>';
+  }
+  html+='<button class="add-row-btn" onclick="addShiftRow()">+ 添加设备记录</button>';
+  html+='<button class="btn-gold" style="width:100%;margin-top:16px;padding:13px;font-size:16px" onclick="submitShift()">'+(editShiftId?'保存修改':'提交交班记录')+'</button>';
+  $('mainContent').innerHTML=html;
+  if(editShiftId) setTimeout(fillShiftEditData,50);
+}
+
+function fillShiftEditData(){
+  if(!editShiftId)return;
+  var d=editShiftCheckData;
+  var oc=$('lOpCheck');if(oc)oc.checked=d.operator_checked||false;
+  var ins=$('lInspect');if(ins)ins.checked=d.inspection_done||false;
+  var op=$('lOilPump');if(op){op.checked=d.oil_pump_cleaned||false;toggleLOilPump()}
+  if(d.oil_pump_devices&&d.oil_pump_devices.length>0){
+    var chips=document.querySelectorAll('.chip[data-group="loil"]');
+    for(var i=0;i<chips.length;i++){if(d.oil_pump_devices.indexOf(chips[i].getAttribute('data-dev'))>=0)chips[i].classList.add('active')}
+  }
+  var rw=$('lRework');if(rw)rw.checked=d.rework_done||false;
+  var si=d.s5s_items||{};
+  var s1=$('lS5s1');if(s1)s1.checked=si.workbench||false;
+  var s2=$('lS5s2');if(s2)s2.checked=si.color_box||false;
+  var s3=$('lS5s3');if(s3)s3.checked=si.floor_oil||false;
+  var s4=$('lS5s4');if(s4)s4.checked=si.gauges||false;
+  var s5=$('lS5s5');if(s5)s5.checked=si.tools_returned||false;
+}
+function addShiftRow(){syncShiftRows();shiftRows.push({device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''});renderShiftForm()}
+function delShiftRow(idx){syncShiftRows();shiftRows.splice(idx,1);if(shiftRows.length===0)shiftRows=[{device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''}];renderShiftForm()}
+function syncShiftRows(){
+  for(var i=0;i<shiftRows.length;i++){
+    var d=$('lr_dev_'+i);if(d)shiftRows[i].device=d.value;
+    var dr=$('lr_draw_'+i);if(dr)shiftRows[i].drawing=dr.value;
+    var is=$('lr_issue_'+i);if(is)shiftRows[i].issue=is.value;
+    var ca=$('lr_cause_'+i);if(ca)shiftRows[i].cause=ca.value;
+    var me=$('lr_meas_'+i);if(me)shiftRows[i].measure=me.value;
+    var st=$('lr_stat_'+i);if(st)shiftRows[i].status=st.value;
+    var no=$('lr_note_'+i);if(no)shiftRows[i].notes=no.value;
+  }
+}
+
+function submitShift(){
+  syncShiftRows();
+  var dateV=$('lDate').value;
+  var shiftV=$('lShift').value;
+  var opV=$('lOperator')?$('lOperator').value:'';
+  if(!dateV){toast('请选择日期',1);return}
+  var opCheck=$('lOpCheck')?$('lOpCheck').checked:false;
+  var inspect=$('lInspect')?$('lInspect').checked:false;
+  var oilPump=$('lOilPump')?$('lOilPump').checked:false;
+  var lOilPumpDevs=oilPump?getActiveChips('loil'):[];
+  var rework=$('lRework')?$('lRework').checked:false;
+  var s5s1=$('lS5s1')?$('lS5s1').checked:false;
+  var s5s2=$('lS5s2')?$('lS5s2').checked:false;
+  var s5s3=$('lS5s3')?$('lS5s3').checked:false;
+  var s5s4=$('lS5s4')?$('lS5s4').checked:false;
+  var s5s5=$('lS5s5')?$('lS5s5').checked:false;
+  var opNote=$('lOpNote')?$('lOpNote').value:'';
+  var data={
+    shift_date:dateV,shift_type:shiftV,handover_from:currentUser.name,handover_to:'',
+    equipment_status:{records:JSON.parse(JSON.stringify(shiftRows))},
+    production_progress:{operator:opV,operator_checked:opCheck,inspection_done:inspect,oil_pump_cleaned:oilPump,oil_pump_devices:lOilPumpDevs,rework_done:rework,s5s_items:{workbench:s5s1,color_box:s5s2,floor_oil:s5s3,gauges:s5s4,tools_returned:s5s5},s5s_checked:s5s1&&s5s2&&s5s3&&s5s4&&s5s5,operator_work_note:opNote},
+    tool_warning:'',quality_issue:'',pending_items:'',
+    reporter:currentUser.name
+  };
+  if(editShiftId){
+    sbPatch2('shift_records','id=eq.'+editShiftId,data).then(function(){
+      editShiftId=null;editShiftDate='';editShiftType='';editShiftOperator='';editShiftCheckData={};
+      shiftRows=[{device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''}];
+      toast('交班记录已修改');renderShiftForm();
+    });
+  }else{
+    sbPost2('shift_records',data).then(function(){
+      shiftRows=[{device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''}];
+      toast('交班记录已提交');renderShiftForm();
+    });
+  }
+}
+
+function editLeaderRecord(id){
+  var record=null;
+  for(var i=0;i<cachedShiftRecords.length;i++){if(cachedShiftRecords[i].id===id){record=cachedShiftRecords[i];break}}
+  if(!record)return;
+  editShiftId=record.id;
+  editShiftDate=record.shift_date||today();
+  editShiftType=record.shift_type||'白班';
+  var _epp=record.production_progress||{};editShiftOperator=_epp.operator||'';
+  editShiftCheckData={
+    operator_checked:_epp.operator_checked||false,
+    inspection_done:_epp.inspection_done||false,
+    oil_pump_cleaned:_epp.oil_pump_cleaned||false,
+    oil_pump_devices:_epp.oil_pump_devices||[],
+    rework_done:_epp.rework_done||false,
+    s5s_items:_epp.s5s_items||{workbench:false,color_box:false,floor_oil:false,gauges:false,tools_returned:false},
+    s5s_checked:_epp.s5s_checked||false,
+    operator_work_note:_epp.operator_work_note||''
+  };
+  shiftRows=JSON.parse(JSON.stringify(record.equipment_status.records||[]));
+  if(shiftRows.length===0)shiftRows=[{device:DEVICES[0]?DEVICES[0].id:'',drawing:'',issue:'',cause:'',measure:'',status:'待处理',notes:''}];
+  subTabIdx.shift=0;
+  renderShiftTab();
+}
+
+// ====== LEADER HISTORY (unified: all records if leader_view, own only if leader_write) ======
+function renderShiftHistory(){
+  var canViewAll=hasPerm('shift_view');
+  var html='<div class="filter-bar"><input type="date" id="lHDate" value="'+today()+'" onchange="renderShiftHistory()">';
+  html+='<select id="lHShift" onchange="renderShiftHistory()"><option value="">全部班次</option><option value="白班">白班</option><option value="夜班">夜班</option></select>';
+  if(canViewAll){
+    html+='<select id="lHReporter" onchange="renderShiftHistory()"><option value="">全部人员</option>';
+    var allUsers=getUsersByRole('leader').concat(getUsersByRole('admin'));
+    for(var oi=0;oi<allUsers.length;oi++) html+='<option value="'+allUsers[oi].name+'">'+allUsers[oi].name+'</option>';
+    html+='</select>';
+  }
+  html+='</div>';
+  html+='<div id="lHList" class="loading">加载中...</div>';
+  $('mainContent').innerHTML=html;
+  var dateV=$('lHDate').value;
+  var q="select=*&order=created_at.desc&limit=200&shift_date=eq."+dateV+"&or=(shift_type.eq.白班,shift_type.eq.夜班,shift_type.eq.领班交班)";
+  sbGet2('shift_records',q).then(function(records){
+    var shiftV=$('lHShift')?$('lHShift').value:'';
+    var reporterV=canViewAll&&$('lHReporter')?$('lHReporter').value:'';
+    var filtered=records.filter(function(r){
+      var es=r.equipment_status;
+      if(!es||!es.records||es.records.length===0)return false;
+      if(shiftV&&r.shift_type!==shiftV)return false;
+      if(reporterV&&r.reporter!==reporterV)return false;
+      if(!canViewAll&&r.reporter!==currentUser.name)return false;
+      return true;
+    });
+    cachedShiftRecords=filtered;
+    var h='';
+    if(filtered.length===0){h='<div class="empty">暂无交接班记录</div>'}
+    else{
+      for(var i=0;i<filtered.length;i++){
+        var r=filtered[i];
+        var opV2=(r.production_progress&&r.production_progress.operator)||'';
+        var opTag=opV2?(' · 操作人：<span style="color:var(--gold)">'+opV2+'</span>'):'';
+        h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="card-sub" style="margin:0">'+fmtDate(r.shift_date)+' '+r.shift_type+' — '+r.reporter+opTag+'</div><div style="display:flex;gap:6px">';
+        h+='<button class="btn-blue btn-sm" onclick="copyToClip(fmtShiftText(cachedShiftRecords['+i+']))">复制</button>';
+        if(r.reporter===currentUser.name||canViewAll) h+='<button class="btn-blue btn-sm" onclick="editLeaderRecord('+r.id+')">编辑</button><button class="btn-red btn-sm" onclick="delRecord('+r.id+',\'lH\',this)">删除</button>';
+        h+='</div></div>';
+        var recs=r.equipment_status.records||[];
+        for(var j=0;j<recs.length;j++){
+          var rec=recs[j];
+          var sc=rec.status==='正常'?'s-normal':rec.status==='待处理'?'s-pending':'s-done';
+          h+='<div class="record-item"><div class="ri-head"><span class="ri-device">'+esc(rec.device)+'</span><span class="ri-status '+sc+'">'+rec.status+'</span></div>';
+          if(rec.drawing)h+='<div class="ri-row">图号：<span>'+rec.drawing+'</span></div>';
+          if(rec.issue)h+='<div class="ri-row">异常：<span>'+rec.issue+'</span></div>';
+          if(rec.cause)h+='<div class="ri-row">原因：<span>'+rec.cause+'</span></div>';
+          if(rec.measure)h+='<div class="ri-row">措施：<span>'+rec.measure+'</span></div>';
+          if(rec.notes)h+='<div class="ri-row">注意：<span>'+rec.notes+'</span></div>';
+          h+='</div>';
+        }
+        var pp2=r.production_progress||{};
+        var hasChecks=pp2.operator_checked!==undefined||pp2.inspection_done!==undefined||pp2.oil_pump_cleaned!==undefined||pp2.rework_done!==undefined||pp2.s5s_checked!==undefined||pp2.operator_work_note;
+        if(hasChecks){
+          h+='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)">';
+          if(pp2.operator_checked!==undefined)h+='<div class="ri-row">操作员工作检查：<span style="color:'+(pp2.operator_checked?'var(--green)':'var(--red)')+'">'+(pp2.operator_checked?'已检查':'未检查')+'</span></div>';
+          if(pp2.inspection_done!==undefined)h+='<div class="ri-row">设备点检：<span style="color:'+(pp2.inspection_done?'var(--green)':'var(--red)')+'">'+(pp2.inspection_done?'已点检':'未点检')+'</span></div>';
+          if(pp2.oil_pump_cleaned!==undefined)h+='<div class="ri-row">洗油泵：<span style="color:'+(pp2.oil_pump_cleaned?'var(--green)':'var(--red)')+'">'+(pp2.oil_pump_cleaned?'已洗':'未洗')+'</span></div>';
+          if(pp2.oil_pump_cleaned&&pp2.oil_pump_devices&&pp2.oil_pump_devices.length>0)h+='<div class="ri-row">清洗设备：<span>'+pp2.oil_pump_devices.join('、')+'</span></div>';
+          if(pp2.rework_done!==undefined)h+='<div class="ri-row">不良返修：<span style="color:'+(pp2.rework_done?'var(--green)':'var(--red)')+'">'+(pp2.rework_done?'已完成':'未完成')+'</span></div>';
+          if(pp2.s5s_checked!==undefined){
+            var si2=pp2.s5s_items||{};
+            var s5ok=pp2.s5s_checked;
+            h+='<div class="ri-row">操作员5S：<span style="color:'+(s5ok?'var(--green)':'var(--orange)')+'">'+(s5ok?'全部通过':'有未完成')+'</span></div>';
+            h+='<div style="font-size:12px;color:var(--dim);padding-left:12px;margin-top:2px">';
+            h+='工作台面已整理：<span style="color:'+(si2.workbench?'var(--green)':'var(--red)')+'">'+(si2.workbench?'✓':'✗')+'</span> ';
+            h+='5色盒已整齐：<span style="color:'+(si2.color_box?'var(--green)':'var(--red)')+'">'+(si2.color_box?'✓':'✗')+'</span> ';
+            h+='地面油污已清理：<span style="color:'+(si2.floor_oil?'var(--green)':'var(--red)')+'">'+(si2.floor_oil?'✓':'✗')+'</span> ';
+            h+='量具塞棒已齐全：<span style="color:'+(si2.gauges?'var(--green)':'var(--red)')+'">'+(si2.gauges?'✓':'✗')+'</span> ';
+            h+='工具扳手已归还：<span style="color:'+(si2.tools_returned?'var(--green)':'var(--red)')+'">'+(si2.tools_returned?'✓':'✗')+'</span>';
+            h+='</div>';
+          }
+          if(pp2.operator_work_note)h+='<div class="ri-row">操作员工作情况：<span>'+pp2.operator_work_note+'</span></div>';
+          h+='</div>';
+        }
+        h+='</div>';
+      }
+    }
+    $('lHList').innerHTML=h;
+  });
+}
+
+// ====== CROSS-SHIFT ======
+function renderCrossShift(){
+  var dateV=today();
+  var myShift='白班';var oppShift='夜班';
+  var html='<div class="card" style="border-left:3px solid var(--gold)">';
+  html+='<div style="font-size:14px;color:var(--gold);font-weight:600;margin-bottom:10px">🌐 查看对班生产情况</div>';
+  html+='<div style="font-size:12px;color:var(--dim);margin-bottom:12px">选择你的班次，自动显示对班的交接记录和操作日报</div>';
+  html+='<div class="filter-bar"><input type="date" id="cSDate" value="'+dateV+'" onchange="loadCrossShiftData()">';
+  html+='<select id="cSMyShift" onchange="loadCrossShiftData()"><option value="白班">我是白班</option><option value="夜班">我是夜班</option></select></div>';
+  html+='</div>';
+  html+='<div style="text-align:center;padding:6px 0 10px;font-size:14px;color:var(--bluel);font-weight:600" id="cSLabel">对班【'+oppShift+'】记录</div>';
+  html+='<div id="cSLeaderList" class="loading">加载中...</div>';
+  html+='<div id="cSApprenTitle" style="display:none;text-align:center;padding:14px 0 8px;font-size:14px;color:var(--green);font-weight:600">对班【'+oppShift+'】操作日报</div>';
+  html+='<div id="cSApprenList"></div>';
+  $('mainContent').innerHTML=html;
+  loadCrossShiftData();
+}
+
+function loadCrossShiftData(){
+  var dateV=$('cSDate').value;
+  var myShift=$('cSMyShift').value;
+  var oppShift=myShift==='白班'?'夜班':'白班';
+  var lbl=$('cSLabel');if(lbl)lbl.innerHTML='对班【'+oppShift+'】记录';
+  $('cSLeaderList').innerHTML='<div class="loading">加载中...</div>';
+  $('cSApprenTitle').style.display='none';
+  $('cSApprenList').innerHTML='';
+  var qLeader="select=*&order=created_at.desc&limit=50&shift_date=eq."+dateV+"&shift_type=eq."+oppShift;
+  sbGet2('shift_records',qLeader).then(function(records){
+    var filtered=records.filter(function(r){var es=r.equipment_status;return es&&es.records&&es.records.length>0});
+    var _cSL=filtered;
+    var h='';
+    if(filtered.length===0){h='<div class="empty">对班无交接班记录</div>'}
+    else{
+      for(var i=0;i<filtered.length;i++){
+        var r=filtered[i];
+        h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="card-sub" style="margin:0">'+fmtDate(r.shift_date)+' '+r.shift_type+' — '+r.reporter+'</div><button class="btn-blue btn-sm" onclick="copyToClip(fmtShiftText(_cSL['+i+']))">复制</button></div>';
+        var recs=r.equipment_status.records||[];
+        for(var j=0;j<recs.length;j++){
+          var rec=recs[j];
+          var sc=rec.status==='正常'?'s-normal':rec.status==='待处理'?'s-pending':'s-done';
+          h+='<div class="record-item"><div class="ri-head"><span class="ri-device">'+esc(rec.device)+'</span><span class="ri-status '+sc+'">'+rec.status+'</span></div>';
+          if(rec.drawing)h+='<div class="ri-row">图号：<span>'+rec.drawing+'</span></div>';
+          if(rec.issue)h+='<div class="ri-row">异常：<span>'+rec.issue+'</span></div>';
+          if(rec.cause)h+='<div class="ri-row">原因：<span>'+rec.cause+'</span></div>';
+          if(rec.measure)h+='<div class="ri-row">措施：<span>'+rec.measure+'</span></div>';
+          if(rec.notes)h+='<div class="ri-row">注意：<span>'+rec.notes+'</span></div>';
+          h+='</div>';
+        }
+        var pp3=r.production_progress||{};
+        var hasChecks3=pp3.operator_checked!==undefined||pp3.inspection_done!==undefined||pp3.oil_pump_cleaned!==undefined||pp3.rework_done!==undefined||pp3.s5s_checked!==undefined||pp3.operator_work_note;
+        if(hasChecks3){
+          h+='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd)">';
+          if(pp3.operator_checked!==undefined)h+='<div class="ri-row">操作员工作检查：<span style="color:'+(pp3.operator_checked?'var(--green)':'var(--red)')+'">'+(pp3.operator_checked?'已检查':'未检查')+'</span></div>';
+          if(pp3.inspection_done!==undefined)h+='<div class="ri-row">设备点检：<span style="color:'+(pp3.inspection_done?'var(--green)':'var(--red)')+'">'+(pp3.inspection_done?'已点检':'未点检')+'</span></div>';
+          if(pp3.oil_pump_cleaned!==undefined)h+='<div class="ri-row">洗油泵：<span style="color:'+(pp3.oil_pump_cleaned?'var(--green)':'var(--red)')+'">'+(pp3.oil_pump_cleaned?'已洗':'未洗')+'</span></div>';
+          if(pp3.oil_pump_cleaned&&pp3.oil_pump_devices&&pp3.oil_pump_devices.length>0)h+='<div class="ri-row">清洗设备：<span>'+pp3.oil_pump_devices.join('、')+'</span></div>';
+          if(pp3.rework_done!==undefined)h+='<div class="ri-row">不良返修：<span style="color:'+(pp3.rework_done?'var(--green)':'var(--red)')+'">'+(pp3.rework_done?'已完成':'未完成')+'</span></div>';
+          if(pp3.s5s_checked!==undefined){
+            var si3=pp3.s5s_items||{};
+            var s5ok3=pp3.s5s_checked;
+            h+='<div class="ri-row">操作员5S：<span style="color:'+(s5ok3?'var(--green)':'var(--orange)')+'">'+(s5ok3?'全部通过':'有未完成')+'</span></div>';
+            h+='<div style="font-size:12px;color:var(--dim);padding-left:12px;margin-top:2px">';
+            h+='工作台面已整理：<span style="color:'+(si3.workbench?'var(--green)':'var(--red)')+'">'+(si3.workbench?'✓':'✗')+'</span> ';
+            h+='5色盒已整齐：<span style="color:'+(si3.color_box?'var(--green)':'var(--red)')+'">'+(si3.color_box?'✓':'✗')+'</span> ';
+            h+='地面油污已清理：<span style="color:'+(si3.floor_oil?'var(--green)':'var(--red)')+'">'+(si3.floor_oil?'✓':'✗')+'</span> ';
+            h+='量具塞棒已齐全：<span style="color:'+(si3.gauges?'var(--green)':'var(--red)')+'">'+(si3.gauges?'✓':'✗')+'</span> ';
+            h+='工具扳手已归还：<span style="color:'+(si3.tools_returned?'var(--green)':'var(--red)')+'">'+(si3.tools_returned?'✓':'✗')+'</span>';
+            h+='</div>';
+          }
+          if(pp3.operator_work_note)h+='<div class="ri-row">操作员工作情况：<span>'+pp3.operator_work_note+'</span></div>';
+          h+='</div>';
+        }
+        h+='</div>';
+      }
+    }
+    $('cSLeaderList').innerHTML=h;
+  });
+  var qAppren="select=*&order=created_at.desc&limit=50&shift_date=eq."+dateV+"&or=(shift_type.eq.操作日报,shift_type.eq.学徒记录)";
+  sbGet2('shift_records',qAppren).then(function(records){
+    if(records.length===0){$('cSApprenTitle').style.display='none';return}
+    $('cSApprenTitle').style.display='block';
+    var _cSA=records;
+    var h='';
+    for(var i=0;i<records.length;i++){
+      var r=records[i];var pp=r.production_progress||{};
+      h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="card-sub" style="margin:0">'+fmtDate(r.shift_date)+' — '+r.reporter+'</div><button class="btn-blue btn-sm" onclick="copyToClip(fmtDailyText(_cSA['+i+']))">复制</button></div>';
+      h+='<div class="ri-row">点检表：<span style="color:'+(pp.inspection_done?'var(--green)':'var(--red)')+'">'+(pp.inspection_done?'已点检':'未点检')+'</span></div>';
+      h+='<div class="ri-row">不良返修：<span style="color:'+(pp.rework_done?'var(--green)':'var(--red)')+'">'+(pp.rework_done?'已完成':'未完成')+'</span></div>';
+      h+='<div class="ri-row">车间5S：<span style="color:'+(pp.s5s_checked?'var(--green)':'var(--red)')+'">'+(pp.s5s_checked?'全部完成':'有未完成')+'</span></div>';
+      if(pp.s5s_items){
+        var _si=pp.s5s_items;
+        h+='<div style="font-size:12px;color:var(--dim);padding-left:12px;margin-top:2px">';
+        h+='工作台面：<span style="color:'+(_si.workbench?'var(--green)':'var(--red)')+'">'+(_si.workbench?'✓':'✗')+'</span> ';
+        h+='5色盒：<span style="color:'+(_si.color_box?'var(--green)':'var(--red)')+'">'+(_si.color_box?'✓':'✗')+'</span> ';
+        h+='地面油污：<span style="color:'+(_si.floor_oil?'var(--green)':'var(--red)')+'">'+(_si.floor_oil?'✓':'✗')+'</span> ';
+        h+='量具塞棒：<span style="color:'+(_si.gauges?'var(--green)':'var(--red)')+'">'+(_si.gauges?'✓':'✗')+'</span> ';
+        h+='工具扳手：<span style="color:'+(_si.tools_returned?'var(--green)':'var(--red)')+'">'+(_si.tools_returned?'✓':'✗')+'</span>';
+        h+='</div>';
+      }
+      if(pp.drawings){var dK=Object.keys(pp.drawings);if(dK.length>0){h+='<div class="ri-row" style="margin-top:4px">图号：';for(var dk=0;dk<dK.length;dk++)h+='<span style="margin-right:10px;color:var(--bluel)">'+dK[dk]+':'+pp.drawings[dK[dk]]+'</span>';h+='</div>'}}
+      h+='<div class="ri-row">高压油清洗：<span style="color:'+(pp.oil_clean?'var(--green)':'var(--red)')+'">'+(pp.oil_clean?'已洗':'未洗')+'</span></div>';
+      if(pp.oil_clean&&pp.cleaned_devices&&pp.cleaned_devices.length>0)h+='<div class="ri-row">清洗设备：<span>'+pp.cleaned_devices.join('、')+'</span></div>';
+      h+='<div class="ri-row">二次元投影：<span style="color:'+(pp.projection_done?'var(--green)':'var(--red)')+'">'+(pp.projection_done?'已投影':'未投影')+'</span></div>';
+      if(pp.projection_done&&pp.projection_devices&&pp.projection_devices.length>0){
+        var pds=pp.projection_devices;var isNewF=pds.length>0&&typeof pds[0]==='object';
+        if(isNewF){for(var pd=0;pd<pds.length;pd++){if(pds[pd].status==='issue')h+='<div class="ri-row">'+pds[pd].name+'：<span style="color:var(--red)">'+(pds[pd].issue||'有问题')+'</span></div>';else h+='<div class="ri-row">'+pds[pd].name+'：<span style="color:var(--green)">正常</span></div>'}}
+        else{h+='<div class="ri-row">投影设备：<span>'+pds.join('、')+'</span></div>';if(pp.projection_has_issue)h+='<div class="ri-row">投影问题：<span style="color:var(--red)">'+(pp.projection_issue||'有问题')+'</span></div>';else h+='<div class="ri-row">投影问题：<span style="color:var(--green)">无问题</span></div>'}
+      }
+      h+='</div>';
+    }
+    $('cSApprenList').innerHTML=h;
+  });
+}
+
+// ====== DAILY TAB ======
+function renderDailyTab(){
+  var canWrite=hasPerm('daily_write');
+  var canView=hasPerm('daily_view');
+  var sIdx=subTabIdx.daily||0;
+  var subHtml='';
+  if(canWrite&&canView){
+    subHtml='<div class="sub-nav">';
+    subHtml+='<div class="sub-nav-item'+(sIdx===0?' active':'')+'" onclick="switchSubTab(\'daily\',0)">填写记录</div>';
+    subHtml+='<div class="sub-nav-item'+(sIdx===1?' active':'')+'" onclick="switchSubTab(\'daily\',1)">历史记录</div>';
+    subHtml+='</div>';
+  }
+  $('subNav').innerHTML=subHtml;
+  if(sIdx===0&&canWrite) renderDailyForm();
+  else if(canView) renderDailyHistory();
+  else if(canWrite) renderDailyForm();
+  else $('mainContent').innerHTML='<div class="empty">无权限</div>';
+}
+
+// ====== APPRENTICE FORM ======
+var editDailyId=null;
+var editDailyData=null;
+var editDailyDate='';
+var editDailyShift='';
+var cachedDailyRecords=[];
+var projDeviceMap={};
+
+function renderDailyForm(){
+  projDeviceMap={};
+  var html='<div class="card">';
+  html+='<div class="form-group"><label>日期</label><input type="date" id="aDate" value="'+(editDailyDate||today())+'"></div>';
+  html+='<div class="form-group"><label>班次</label><select id="aShift"><option value="白班"'+(editDailyShift==='白班'?' selected':'')+'>白班</option><option value="夜班"'+(editDailyShift==='夜班'?' selected':'')+'>夜班</option></select></div>';
+  html+='</div>';
+  html+='<div class="card"><div class="card-title">点检与清洗</div>';
+  html+='<div class="check-item"><label>点检表是否点检</label><label class="toggle"><input type="checkbox" id="aInspect"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>高压油清洗</label><label class="toggle"><input type="checkbox" id="aOilClean" onchange="toggleOilClean()"><span class="slider"></span></label></div>';
+  html+='<div id="oilDevicesArea" style="display:none"><div style="font-size:13px;color:var(--dim);margin-bottom:6px">清洗了哪几台机</div><div class="chip-area">';
+  for(var i=0;i<DEVICES.length;i++) html+='<div class="chip" data-dev="'+DEVICES[i].id+'" data-group="oil" onclick="toggleChip(this)">'+DEVICES[i].id+'</div>';
+  html+='</div></div>';
+  html+='<div class="check-item"><label>二次元投影</label><label class="toggle"><input type="checkbox" id="aProj" onchange="toggleProj()"><span class="slider"></span></label></div>';
+  html+='<div id="projArea" style="display:none">';
+  html+='<div style="font-size:13px;color:var(--dim);margin:8px 0 6px">投影了哪台机</div><div class="chip-area" id="projChips">';
+  for(var i=0;i<DEVICES.length;i++) html+='<div class="chip" data-dev="'+DEVICES[i].id+'" data-group="proj" onclick="toggleChip(this)">'+DEVICES[i].id+'</div>';
+  html+='</div>';
+  html+='<div id="projDeviceStatus"></div>';
+  html+='</div>';
+  html+='</div>';
+  html+='<div class="card"><div class="card-title">不良返修与5S</div>';
+  html+='<div class="check-item"><label>不良返修是否完成</label><label class="toggle"><input type="checkbox" id="aRework"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>已做5S</label><label class="toggle"><input type="checkbox" id="aS5s" onchange="toggleS5sDetail()"><span class="slider"></span></label></div>';
+  html+='<div id="s5sDetailArea" style="display:none;padding-left:12px;border-left:3px solid var(--dim);margin:4px 0 4px 6px">';
+  html+='<div class="check-item"><label>设备工作台面已整理</label><label class="toggle"><input type="checkbox" id="aS5s1"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>5色盒已整齐</label><label class="toggle"><input type="checkbox" id="aS5s2"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>地面油污已清理</label><label class="toggle"><input type="checkbox" id="aS5s3"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>量具塞棒已齐全</label><label class="toggle"><input type="checkbox" id="aS5s4"><span class="slider"></span></label></div>';
+  html+='<div class="check-item"><label>工具扳手已归还</label><label class="toggle"><input type="checkbox" id="aS5s5"><span class="slider"></span></label></div>';
+  html+='</div>';
+  html+='</div>';
+  html+='<button class="btn-gold" style="width:100%;margin-top:16px;padding:13px;font-size:16px" onclick="submitDaily()">'+(editDailyId?'保存修改':'提交记录')+'</button>';
+  $('mainContent').innerHTML=html;
+  if(editDailyId) setTimeout(fillApprenticeEditData,50);
+}
+
+function toggleOilClean(){var a=$('oilDevicesArea');if(a)a.style.display=$('aOilClean').checked?'block':'none'}
+function toggleS5sDetail(){var a=$('s5sDetailArea');if(a)a.style.display=$('aS5s').checked?'block':'none'}
+function toggleLOilPump(){var a=$('lOilPumpArea');if(a)a.style.display=$('lOilPump').checked?'block':'none'}
+function toggleProj(){var a=$('projArea');if(a)a.style.display=$('aProj').checked?'block':'none'}
+function toggleChip(el){el.classList.toggle('active');if(el.getAttribute('data-group')==='proj')updateProjDeviceStatus()}
+function getActiveChips(group){var sel=group?'[data-group="'+group+'"].chip.active':'.chip.active';var chips=document.querySelectorAll(sel);var arr=[];for(var i=0;i<chips.length;i++)arr.push(chips[i].getAttribute('data-dev'));return arr}
+
+function updateProjDeviceStatus(){
+  var selected=getActiveChips('proj');
+  var newMap={};
+  for(var i=0;i<selected.length;i++){
+    var dev=selected[i];
+    if(projDeviceMap[dev]){
+      var _pm=projDeviceMap[dev];
+      var _di=document.getElementById('aDwg_'+dev);if(_di)_pm.drawing=_di.value;
+      var _ii=document.getElementById('projIssue_'+dev);if(_ii)_pm.issue=_ii.value;
+      newMap[dev]=_pm;
+    }else newMap[dev]={status:'normal',issue:'',drawing:''};
+  }
+  projDeviceMap=newMap;
+  var container=$('projDeviceStatus');
+  if(!container)return;
+  if(selected.length===0){container.innerHTML='';return}
+  var html='';
+  for(var i=0;i<selected.length;i++){
+    var dev=selected[i];
+    var info=projDeviceMap[dev]||{status:'normal',issue:'',drawing:''};
+    html+='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-top:8px">';
+    html+='<div style="font-weight:600;color:var(--bluel);margin-bottom:6px">'+dev+'</div>';
+    html+='<div style="display:flex;gap:8px">';
+    var nA=info.status==='normal';
+    html+='<div style="flex:1;text-align:center;padding:8px;font-size:13px;border:1px solid '+(nA?'var(--green)':'var(--bd)')+';border-radius:6px;background:'+(nA?'rgba(39,174,96,.15)':'transparent')+';color:'+(nA?'var(--green)':'var(--dim)')+';cursor:pointer" onclick="setProjDeviceStatus(\''+dev+'\',\'normal\')">正常</div>';
+    var iA=info.status==='issue';
+    html+='<div style="flex:1;text-align:center;padding:8px;font-size:13px;border:1px solid '+(iA?'var(--red)':'var(--bd)')+';border-radius:6px;background:'+(iA?'rgba(231,76,60,.15)':'transparent')+';color:'+(iA?'var(--red)':'var(--dim)')+';cursor:pointer" onclick="setProjDeviceStatus(\''+dev+'\',\'issue\')">有问题</div>';
+    html+='</div>';
+    html+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:var(--dim);white-space:nowrap">图号</span><input type="text" id="aDwg_'+dev+'" value="'+esc(info.drawing||'')+'" placeholder="输入图号" style="flex:1;padding:6px 8px;font-size:13px"></div>';
+    if(info.status==='issue') html+='<div style="margin-top:6px"><input type="text" id="projIssue_'+dev+'" value="'+esc(info.issue||'')+'" placeholder="描述问题" style="width:100%"></div>';
+    html+='</div>';
+  }
+  container.innerHTML=html;
+}
+function setProjDeviceStatus(dev,status){
+  if(!projDeviceMap[dev])projDeviceMap[dev]={status:'normal',issue:'',drawing:''};
+  projDeviceMap[dev].status=status;
+  updateProjDeviceStatus();
+}
+
+function editDailyRecord(id){
+  var record=null;
+  for(var i=0;i<cachedDailyRecords.length;i++){if(cachedDailyRecords[i].id===id){record=cachedDailyRecords[i];break}}
+  if(!record)return;
+  editDailyId=record.id;
+  editDailyData=record.production_progress||{};
+  editDailyDate=record.shift_date||today();
+  editDailyShift=record.shift_type||'白班';
+  subTabIdx.daily=0;
+  renderDailyTab();
+}
+
+function fillDailyEditData(){
+  if(!editDailyId||!editDailyData)return;
+  var d=editDailyData;
+  var dateInp=$('aDate');if(dateInp)dateInp.value=editDailyDate;
+  var shiftSel=$('aShift');if(shiftSel){for(var i=0;i<shiftSel.options.length;i++){if(shiftSel.options[i].value===editDailyShift){shiftSel.selectedIndex=i;break}}}
+  var insp=$('aInspect');if(insp)insp.checked=d.inspection_done||false;
+  var rw=$('aRework');if(rw)rw.checked=d.rework_done||false;
+  var s5=$('aS5s');if(s5)s5.checked=d.s5s_checked||false;
+  var s5si=d.s5s_items||{};
+  var s5d1=$('aS5s1');if(s5d1)s5d1.checked=s5si.workbench||false;
+  var s5d2=$('aS5s2');if(s5d2)s5d2.checked=s5si.color_box||false;
+  var s5d3=$('aS5s3');if(s5d3)s5d3.checked=s5si.floor_oil||false;
+  var s5d4=$('aS5s4');if(s5d4)s5d4.checked=s5si.gauges||false;
+  var s5d5=$('aS5s5');if(s5d5)s5d5.checked=s5si.tools_returned||false;
+  var s5a=$('s5sDetailArea');if(s5a)s5a.style.display=d.s5s_checked?'block':'none';
+  var oil=$('aOilClean');if(oil){oil.checked=d.oil_clean||false;toggleOilClean()}
+  if(d.cleaned_devices&&d.cleaned_devices.length>0){
+    var chips=document.querySelectorAll('.chip[data-group="oil"]');
+    for(var i=0;i<chips.length;i++){if(d.cleaned_devices.indexOf(chips[i].getAttribute('data-dev'))>=0)chips[i].classList.add('active')}
+  }
+  var proj=$('aProj');if(proj){proj.checked=d.projection_done||false;toggleProj()}
+  if(d.projection_devices&&d.projection_devices.length>0){
+    var isNewFmt=typeof d.projection_devices[0]==='object';
+    if(isNewFmt){
+      for(var i=0;i<d.projection_devices.length;i++){
+        var dev=d.projection_devices[i];
+        var chip=document.querySelector('.chip[data-group="proj"][data-dev="'+dev.name+'"]');
+        if(chip)chip.classList.add('active');
+        projDeviceMap[dev.name]={status:dev.status,issue:dev.issue||'',drawing:(d.drawings&&d.drawings[dev.name])||''};
+      }
+    }else{
+      for(var i=0;i<d.projection_devices.length;i++){
+        var chip=document.querySelector('.chip[data-group="proj"][data-dev="'+d.projection_devices[i]+'"]');
+        if(chip)chip.classList.add('active');
+        projDeviceMap[d.projection_devices[i]]={status:'normal',issue:'',drawing:''};
+      }
+    }
+    updateProjDeviceStatus();
+  }
+}
+
+function submitDaily(){
+  var dateV=$('aDate').value;
+  var shiftV=$('aShift').value;
+  if(!dateV){toast('请选择日期',1);return}
+  var projDevices=[];
+  if($('aProj').checked){
+    var selP=getActiveChips('proj');
+    for(var pi=0;pi<selP.length;pi++){
+      var pInp=$('projIssue_'+selP[pi]);
+      if(pInp&&projDeviceMap[selP[pi]])projDeviceMap[selP[pi]].issue=pInp.value;
+      var info=projDeviceMap[selP[pi]]||{status:'normal',issue:'',drawing:''};
+      projDevices.push({name:selP[pi],status:info.status,issue:info.issue||''});
+    }
+  }
+  var drawings={};
+  var selP2=getActiveChips('proj');
+  for(var pi=0;pi<selP2.length;pi++){
+    var dwgInp=$('aDwg_'+selP2[pi]);
+    if(dwgInp&&dwgInp.value.trim())drawings[selP2[pi]]=dwgInp.value.trim();
+  }
+  var pp={
+    inspection_done:$('aInspect').checked,
+    rework_done:$('aRework').checked,
+    s5s_items:{workbench:$('aS5s1')?$('aS5s1').checked:false,color_box:$('aS5s2')?$('aS5s2').checked:false,floor_oil:$('aS5s3')?$('aS5s3').checked:false,gauges:$('aS5s4')?$('aS5s4').checked:false,tools_returned:$('aS5s5')?$('aS5s5').checked:false},
+    s5s_checked:$('aS5s').checked,
+    oil_clean:$('aOilClean').checked,
+    cleaned_devices:getActiveChips('oil'),
+    projection_done:$('aProj').checked,
+    projection_devices:projDevices,
+    drawings:drawings
+  };
+  var data={
+    shift_date:dateV,shift_type:'操作日报',
+    handover_from:currentUser.name,handover_to:'',
+    equipment_status:{},production_progress:pp,
+    tool_warning:'',quality_issue:'',pending_items:'',
+    reporter:currentUser.name
+  };
+  if(editDailyId){
+    sbPatch2('shift_records','id=eq.'+editDailyId,data).then(function(){
+      editDailyId=null;editDailyData=null;editDailyDate='';editDailyShift='';
+      toast('记录已修改');renderDailyForm();
+    });
+  }else{
+    sbPost2('shift_records',data).then(function(){
+      toast('记录已提交');renderDailyForm();
+    });
+  }
+}
+
+// ====== APPRENTICE HISTORY (unified) ======
+function renderDailyHistory(){
+  var canViewAll=hasPerm('daily_view');
+  var html='<div class="filter-bar"><input type="date" id="aHDate" value="'+today()+'" onchange="renderDailyHistory()">';
+  html+='<select id="aHShift" onchange="renderDailyHistory()"><option value="">全部</option><option value="白班">白班</option><option value="夜班">夜班</option></select>';
+  if(canViewAll){
+    html+='<select id="aHReporter" onchange="renderDailyHistory()"><option value="">全部人员</option>';
+    var apUsers=getUsersByRole('operator');
+    for(var oi=0;oi<apUsers.length;oi++) html+='<option value="'+apUsers[oi].name+'">'+apUsers[oi].name+'</option>';
+    html+='</select>';
+  }
+  html+='</div>';
+  html+='<div id="aHList" class="loading">加载中...</div>';
+  $('mainContent').innerHTML=html;
+  var dateV=$('aHDate').value;
+  var q="select=*&order=created_at.desc&limit=100&shift_date=eq."+dateV+"&or=(shift_type.eq.操作日报,shift_type.eq.学徒记录)";
+  if(!canViewAll) q+="&reporter=eq."+currentUser.name;
+  sbGet2('shift_records',q).then(function(records){
+    var shiftV=$('aHShift')?$('aHShift').value:'';
+    var reporterV=canViewAll&&$('aHReporter')?$('aHReporter').value:'';
+    var filtered=records.filter(function(r){
+      if(shiftV&&r.shift_type!==shiftV)return false;
+      if(reporterV&&r.reporter!==reporterV)return false;
+      return true;
+    });
+    cachedDailyRecords=filtered;
+    var h='';
+    if(filtered.length===0){h='<div class="empty">暂无操作日报</div>'}
+    else{
+      for(var i=0;i<filtered.length;i++){
+        var r=filtered[i];var pp=r.production_progress||{};
+        h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="card-sub" style="margin:0">'+fmtDate(r.shift_date)+' '+(r.shift_type||'')+' — '+r.reporter+'</div><div style="display:flex;gap:6px">';
+        h+='<button class="btn-blue btn-sm" onclick="copyToClip(fmtDailyText(cachedDailyRecords['+i+']))">复制</button>';
+        if(r.reporter===currentUser.name||canViewAll) h+='<button class="btn-blue btn-sm" onclick="editDailyRecord('+r.id+')">编辑</button><button class="btn-red btn-sm" onclick="delRecord('+r.id+',\'aH\',this)">删除</button>';
+        h+='</div></div>';
+        h+='<div class="ri-row">点检表：<span style="color:'+(pp.inspection_done?'var(--green)':'var(--red)')+'">'+(pp.inspection_done?'已点检':'未点检')+'</span></div>';
+        h+='<div class="ri-row">不良返修：<span style="color:'+(pp.rework_done?'var(--green)':'var(--red)')+'">'+(pp.rework_done?'已完成':'未完成')+'</span></div>';
+        h+='<div class="ri-row">车间5S：<span style="color:'+(pp.s5s_checked?'var(--green)':'var(--red)')+'">'+(pp.s5s_checked?'全部完成':'有未完成')+'</span></div>';
+        if(pp.s5s_items){
+          var _si2=pp.s5s_items;
+          h+='<div style="font-size:12px;color:var(--dim);padding-left:12px;margin-top:2px">';
+          h+='工作台面：<span style="color:'+(_si2.workbench?'var(--green)':'var(--red)')+'">'+(_si2.workbench?'✓':'✗')+'</span> ';
+          h+='5色盒：<span style="color:'+(_si2.color_box?'var(--green)':'var(--red)')+'">'+(_si2.color_box?'✓':'✗')+'</span> ';
+          h+='地面油污：<span style="color:'+(_si2.floor_oil?'var(--green)':'var(--red)')+'">'+(_si2.floor_oil?'✓':'✗')+'</span> ';
+          h+='量具塞棒：<span style="color:'+(_si2.gauges?'var(--green)':'var(--red)')+'">'+(_si2.gauges?'✓':'✗')+'</span> ';
+          h+='工具扳手：<span style="color:'+(_si2.tools_returned?'var(--green)':'var(--red)')+'">'+(_si2.tools_returned?'✓':'✗')+'</span>';
+          h+='</div>';
+        }
+        if(pp.drawings){var dK=Object.keys(pp.drawings);if(dK.length>0){h+='<div class="ri-row" style="margin-top:4px">图号：';for(var dk=0;dk<dK.length;dk++)h+='<span style="margin-right:10px;color:var(--bluel)">'+dK[dk]+':'+pp.drawings[dK[dk]]+'</span>';h+='</div>'}}
+        h+='<div class="ri-row">高压油清洗：<span style="color:'+(pp.oil_clean?'var(--green)':'var(--red)')+'">'+(pp.oil_clean?'已洗':'未洗')+'</span></div>';
+        if(pp.oil_clean&&pp.cleaned_devices&&pp.cleaned_devices.length>0)h+='<div class="ri-row">清洗设备：<span>'+pp.cleaned_devices.join('、')+'</span></div>';
+        h+='<div class="ri-row">二次元投影：<span style="color:'+(pp.projection_done?'var(--green)':'var(--red)')+'">'+(pp.projection_done?'已投影':'未投影')+'</span></div>';
+        if(pp.projection_done&&pp.projection_devices&&pp.projection_devices.length>0){
+          var pds=pp.projection_devices;var isNewF=pds.length>0&&typeof pds[0]==='object';
+          if(isNewF){for(var pd=0;pd<pds.length;pd++){if(pds[pd].status==='issue')h+='<div class="ri-row">'+pds[pd].name+'：<span style="color:var(--red)">'+(pds[pd].issue||'有问题')+'</span></div>';else h+='<div class="ri-row">'+pds[pd].name+'：<span style="color:var(--green)">正常</span></div>'}}
+          else{h+='<div class="ri-row">投影设备：<span>'+pds.join('、')+'</span></div>';if(pp.projection_has_issue)h+='<div class="ri-row">投影问题：<span style="color:var(--red)">'+(pp.projection_issue||'有问题')+'</span></div>';else h+='<div class="ri-row">投影问题：<span style="color:var(--green)">无问题</span></div>'}
+        }
+        h+='</div>';
+      }
+    }
+    $('aHList').innerHTML=h;
+  });
+}
+
+// ====== SETTINGS ======
+function renderSettings(){
+  var html='';
+  html+='<div class="setting-section"><h3>机台管理('+DEVICES.length+'台)</h3><div class="card">';
+  html+='<div style="font-size:12px;color:var(--dim);margin-bottom:10px">机台编号不变，型号固定，图号随产品变化</div>';
+  for(var di=0;di<DEVICES.length;di++){
+    var dv=DEVICES[di];
+    html+='<div class="user-item" style="flex-wrap:wrap;gap:6px">';
+    html+='<input type="text" id="devId_'+di+'" value="'+dv.id+'" style="flex:1;min-width:60px;padding:5px 8px;font-size:13px;font-weight:600" onchange="updateDevId('+di+')">';
+    html+='<select id="devModel_'+di+'" style="flex:1;min-width:0;padding:5px 8px;font-size:13px" onchange="updateDevModel('+di+')">';
+    for(var mi=0;mi<DEVICE_MODELS.length;mi++) html+='<option value="'+DEVICE_MODELS[mi]+'"'+(dv.model===DEVICE_MODELS[mi]?' selected':'')+'>'+DEVICE_MODELS[mi]+'</option>';
+    html+='</select>';
+    html+='<button class="btn-red btn-sm" onclick="delDevice('+di+')" style="flex-shrink:0">删除</button></div>';
+  }
+  html+='<div style="border-top:1px solid var(--bd);padding-top:10px;margin-top:10px">';
+  html+='<div style="font-size:13px;color:var(--dim);margin-bottom:6px">单台添加</div>';
+  html+='<div style="display:flex;gap:8px"><input type="text" id="addDevId" placeholder="编号" style="flex:1">';
+  html+='<select id="addDevModel" style="flex:1;min-width:0;padding:11px 12px;font-size:15px">';
+  for(var mi=0;mi<DEVICE_MODELS.length;mi++) html+='<option value="'+DEVICE_MODELS[mi]+'">'+DEVICE_MODELS[mi]+'</option>';
+  html+='</select>';
+  html+='<button class="btn-gold btn-sm" onclick="addDevice()">添加</button></div></div>';
+  html+='</div></div>';
+
+  var roles=[{key:'admin',label:'管理人员'},{key:'leader',label:'领班'},{key:'operator',label:'操作员'}];
+  for(var ri=0;ri<roles.length;ri++){
+    var ro=roles[ri];
+    var allRoleUsers=cachedUsers.filter(function(u){return mapRole(u.role)===ro.key&&u.role!=='system'&&u.name!=='__devices__'});
+    var activeUsers=allRoleUsers.filter(function(u){return u.status!=='inactive'});
+    var inactiveUsers=allRoleUsers.filter(function(u){return u.status==='inactive'});
+    html+='<div class="setting-section"><h3>'+ro.label+'</h3><div class="card">';
+    html+='<div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" id="addName_'+ro.key+'" placeholder="姓名" style="flex:1">';
+    html+='<button class="btn-gold btn-sm" onclick="addUser(\''+ro.key+'\')">添加</button></div>';
+    for(var i=0;i<activeUsers.length;i++){
+      html+='<div class="user-item"><div><span class="ui-name">'+activeUsers[i].name+'</span></div>';
+      html+='<button class="btn-red btn-sm" onclick="delUser('+activeUsers[i].id+')">停用</button></div>';
+    }
+    if(inactiveUsers.length>0){
+      html+='<div class="recycle-toggle" onclick="toggleHoRecycle(\''+ro.key+'\')">🗑️ 已停用（'+inactiveUsers.length+'人）<span id="ra_'+ro.key+'">▶</span></div>';
+      html+='<div class="recycle-box" id="rb_'+ro.key+'" style="display:none">';
+      for(var j=0;j<inactiveUsers.length;j++){
+        html+='<div class="user-item recycle-row"><div><span class="ui-name" style="opacity:0.5">'+inactiveUsers[j].name+'</span> <span style="font-size:11px;color:#f44336">已停用</span></div>';
+        html+='<button class="btn-sm" style="color:#4caf50" onclick="restoreUser('+inactiveUsers[j].id+')">恢复</button></div>';
+      }
+      html+='</div>';
+    }
+    html+='</div></div>';
+  }
+  $('mainContent').innerHTML=html;
+}
+
+function addUser(role){
+  var inp=$('addName_'+role);var name=inp.value.trim();
+  if(!name){toast('请输入姓名',1);return}
+  hashHoPassword('123456').then(function(hashed){
+    sbPost('users',{name:name,role:role,department:'生产',password:hashed,is_admin:false}).then(function(){
+      loadUsers().then(function(){renderSettings();toast('已添加 '+name+'，默认密码123456')});
+    });
+  });
+}
+function hashHoPassword(pwd){
+  var salt=crypto.getRandomValues(new Uint8Array(8));
+  var saltStr=Array.from(salt).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+  var enc=new TextEncoder();
+  return crypto.subtle.digest('SHA-256',enc.encode(saltStr+pwd)).then(function(buf){
+    var hash=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+    return '$sha256$'+saltStr+'$'+hash;
+  });
+}
+function delUser(id){
+  sbPatch('users','id=eq.'+id,{status:'inactive'}).then(function(){
+    loadUsers().then(function(){renderSettings();toast('已停用')});
+  });
+}
+function restoreUser(id){
+  sbPatch('users','id=eq.'+id,{status:'active'}).then(function(){
+    loadUsers().then(function(){renderSettings();toast('已恢复')});
+  });
+}
+function toggleHoRecycle(key){
+  var box=document.getElementById('rb_'+key);
+  var arrow=document.getElementById('ra_'+key);
+  if(!box)return;
+  if(box.style.display==='none'){
+    box.style.display='block';
+    if(arrow)arrow.textContent='▼';
+  }else{
+    box.style.display='none';
+    if(arrow)arrow.textContent='▶';
+  }
+}
+function addDevice(){
+  var idInp=$('addDevId');var modelInp=$('addDevModel');
+  var id=idInp.value.trim();var model=modelInp?modelInp.value:DEVICE_MODELS[0];
+  if(!id){toast('请输入机台编号',1);return}
+  for(var i=0;i<DEVICES.length;i++){if(DEVICES[i].id===id){toast('机台已存在',1);return}}
+  DEVICES.push({id:id,model:model});DEVICES.sort(function(a,b){return a.id<b.id?-1:1});saveDevices();
+}
+function delDevice(idx){DEVICES.splice(idx,1);saveDevices()}
+function updateDevId(idx){
+  var inp=$('devId_'+idx);if(!inp)return;
+  var newId=inp.value.trim();
+  if(!newId){toast('编号不能为空',1);inp.value=DEVICES[idx].id;return}
+  for(var i=0;i<DEVICES.length;i++){if(i!==idx&&DEVICES[i].id===newId){toast('编号已存在',1);inp.value=DEVICES[idx].id;return}}
+  DEVICES[idx].id=newId;saveDevices();
+}
+function updateDevModel(idx){var sel=$('devModel_'+idx);if(sel)DEVICES[idx].model=sel.value;saveDevices()}
+function batchAddDevice(){
+  var prefix=$('batPrefix').value.trim();var from=parseInt($('batFrom').value);var to=parseInt($('batTo').value);
+  var model=$('batModel')?$('batModel').value:DEVICE_MODELS[0];
+  if(!prefix){toast('请输入编号前缀',1);return}
+  if(isNaN(from)||isNaN(to)||from>to||from<1){toast('起止号不合理',1);return}
+  var added=0;
+  for(var n=from;n<=to;n++){
+    var id=prefix+String(n).padStart(2,'0');var dup=false;
+    for(var i=0;i<DEVICES.length;i++){if(DEVICES[i].id===id){dup=true;break}}
+    if(!dup){DEVICES.push({id:id,model:model});added++}
+  }
+  if(added>0){DEVICES.sort(function(a,b){return a.id<b.id?-1:1});saveDevices();toast('已添加 '+added+' 台')}
+  else{toast('编号均已存在',1)}
+}
+function saveDevices(){
+  sbPatch('users','name=eq.__devices__',{password:JSON.stringify(DEVICES)}).then(function(){
+    toast('机台已更新');renderSettings();
+  });
+}
+
+// ====== ENTER SYSTEM ======
+function enterSystem(){
+  var sp=document.getElementById('splashPage');
+  if(sp){sp.classList.remove('active');sp.style.display='none'}
+  var tagStr=(portalUser&&portalUser.tag)?' · '+portalUser.tag:'';
+  $('mainUser').textContent=currentUser.name+tagStr;
+  initPerms();
+  showPage('mainPage');
+  buildMainNav();
+}
+
+// ====== INIT ======
+(function(){
+  portalUser=readPortalUser();
+  if(portalUser){
+    currentUser={name:portalUser.name,role:portalUser.role};
+  }
+  loadUsers().then(function(){
+    return initSystemEntries();
+  }).then(function(){
+    return loadUsers();
+  }).then(function(){
+    if(currentUser){
+      enterSystem();
+    }else{
+      window.location.href='./index.html';
+    }
+  });
+})();
+</script>
+</body>
+</html>
