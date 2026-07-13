@@ -808,11 +808,10 @@ document.addEventListener('DOMContentLoaded',function(){
   var s=getSession();
   if(s)showHome();
   else showLogin();
-  // 开场画面：2.5秒后淡出
-  setTimeout(function(){
-    var sp=document.getElementById('splash');
-    if(sp){sp.classList.add('hide');setTimeout(function(){sp.remove()},700)}
-  },2500);
+  // 开场画面：仅新登录显示，从子系统返回不显示
+  var _hasSess=(function(){try{var u=new URLSearchParams(location.search).get('zxj_user');if(u)return true;if(localStorage.getItem('zxj_session'))return true}catch(e){}return false})();
+  var sp=document.getElementById('splash');
+  if(sp&&_hasSess){sp.remove()}else if(sp){setTimeout(function(){sp.classList.add('hide');setTimeout(function(){sp.remove()},700)},2500)}
 });
 </script>
 </body>
