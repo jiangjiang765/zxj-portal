@@ -707,12 +707,12 @@ async function loadVolcOrders(){try{_volcOrders=await vsGet('orders','select=*&o
 
 
 <div class="header">
+  <span class="header-back-btn" onclick="location.href='./index.html'" style="font-size:20px;cursor:pointer;padding:0 6px;line-height:1;color:var(--text-dim);flex-shrink:0">◀</span>
   <h1>🔧 走芯机管理系统</h1>
   <div class="header-user" id="header-user" style="display:none">
     <span class="header-user-name" id="header-username"></span>
     <span class="header-help" onclick="showHelp()" style="font-size:16px;cursor:pointer;margin-right:6px">📖</span>
     <span class="header-admin" id="header-admin-btn" onclick="openAdminPanel()" style="display:none;font-size:11px;color:var(--gold);cursor:pointer;padding:4px 8px;border:1px solid var(--gold);border-radius:6px;margin-right:4px">管理</span>
-    <span class="header-back-btn" onclick="location.href='./index.html'" style="font-size:11px;color:var(--text-dim);cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:6px;margin-left:4px">← 返回</span>
   </div>
 </div>
 
