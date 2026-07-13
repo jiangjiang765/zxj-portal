@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0D1B2A">
+<title>走芯机车间门户</title>
+<style>
+:root{
+  --bg:#0D1B2A;--card:#1B2B3D;--input:#243447;--border:#2A3F55;
+  --text:#ECEFF4;--text2:#B0B8C4;--text-dim:#6B7B8E;
+  --gold:#D4A843;--gold2:#E8C46B;
+  --blue:#2563EB;--green:#16A34A;--red:#DC2626;--orange:#EA580C;--purple:#9333ea;
+  --shadow:0 4px 12px rgba(0,0,0,.3);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--text);font-size:16px;line-height:1.5;min-height:100vh;
+  background-image:radial-gradient(circle at 20% 20%,rgba(212,168,67,.08) 0%,transparent 40%),
+                   radial-gradient(circle at 80% 80%,rgba(37,99,235,.08) 0%,transparent 40%);
+}
+.screen{display:none;min-height:100vh}
+.screen.active{display:block}
+
+/* 登录 */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 24px 20px;width:100%;max-width:400px;box-shadow:var(--shadow)}
+.login-logo{font-size:48px;text-align:center;margin-bottom:8px}
+.login-card h1{font-size:22px;text-align:center;color:var(--gold);margin-bottom:4px;font-weight:800;letter-spacing:1px}
+.login-sub{text-align:center;color:var(--text-dim);font-size:12px;margin-bottom:20px}
+
+/* 登录表单 */
+.form-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.form-label{font-size:13px;color:var(--text2);min-width:40px;font-weight:600}
+.form-row input,.form-row select{
+  flex:1;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:11px 12px;
+  color:var(--text);font-size:15px;outline:none;transition:border-color .15s;-webkit-appearance:none;
+}
+.form-row input:focus,.form-row select:focus{border-color:var(--gold)}
+.login-remember{display:flex;align-items:center;gap:6px;color:var(--text2);font-size:13px;margin:12px 0 20px;cursor:pointer}
+.login-remember input{width:16px;height:16px;cursor:pointer}
+.login-btn{width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1a1a;font-weight:700;font-size:16px;padding:14px;border:none;border-radius:10px;cursor:pointer;letter-spacing:2px;box-shadow:0 4px 12px rgba(212,168,67,.3);transition:transform .1s}
+.login-btn:active{transform:scale(.98)}
+.login-err{color:var(--red);font-size:13px;text-align:center;min-height:20px;margin-top:12px}
+.login-tip{margin-top:16px;padding:10px 12px;background:var(--input);border-radius:8px;font-size:12px;color:var(--text-dim);line-height:1.6;text-align:center}
+
+/* 主页 */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;backdrop-filter:blur(10px)}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-avatar{font-size:24px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:50%}
+.topbar-name{font-size:16px;font-weight:700;color:var(--text)}
+.topbar-role{font-size:11px;color:var(--gold);background:rgba(212,168,67,.15);padding:2px 8px;border-radius:8px;display:inline-block;margin-top:2px}
+.topbar-logout{background:transparent;border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;transition:all .15s}
+.topbar-logout:active{background:var(--red);color:#fff;border-color:var(--red)}
+.welcome{padding:20px 20px 8px;font-size:18px;color:var(--text);font-weight:600}
+.card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:14px 20px 30px}
+@media(min-width:600px){.card-grid{grid-template-columns:repeat(3,1fr);max-width:760px;margin:0 auto}}
+.card-tile{border-radius:16px;padding:20px 14px;text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);border:2px solid transparent;transition:all .2s;position:relative;overflow:hidden;animation:cardIn .35s ease-out backwards}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.card-tile:active{transform:scale(.96);border-color:var(--gold)}
+.card-icon{font-size:40px;margin-bottom:8px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.card-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px}
+.card-desc{font-size:11px;color:rgba(255,255,255,.75);line-height:1.4}
+.footer{text-align:center;padding:20px;color:var(--text-dim);font-size:11px;display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;backdrop-filter:blur(4px)}
+.modal-content{background:var(--card);border:1px solid var(--border);border-radius:14px;width:100%;max-width:600px;max-height:85vh;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:16px;color:var(--gold)}
+.modal-close{background:transparent;border:none;color:var(--text2);font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer}
+.modal-close:active{background:var(--border)}
+.modal-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px;max-height:calc(85vh - 60px)}
+
+/* 账号管理 */
+.acct-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1a1a1a;border:none;padding:10px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px}
+.btn-primary:active{transform:scale(.97)}
+.acct-tip{color:var(--text-dim);font-size:12px}
+.acct-list{display:flex;flex-direction:column;gap:8px}
+.acct-row{display:flex;align-items:center;justify-content:space-between;background:var(--input);border:1px solid var(--border);border-radius:10px;padding:12px 14px;gap:10px;flex-wrap:wrap}
+.acct-info{flex:1;min-width:0}
+.acct-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
+.acct-code{color:var(--text-dim);font-weight:400;font-size:12px;font-family:"SFMono-Regular",Consolas,monospace}
+.acct-meta{font-size:11px;color:var(--text2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.badge-ok{background:rgba(22,163,74,.2);color:var(--green);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-off{background:rgba(220,38,38,.2);color:var(--red);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
+.acct-actions{display:flex;gap:4px;flex-shrink:0}
+.btn-sm{background:var(--border);border:none;color:var(--text);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer}
+.btn-sm:active{background:var(--blue);color:#fff}
+.btn-sm.btn-danger:active{background:var(--red);color:#fff}
+
+.recycle-toggle{margin:16px 0 8px;padding:12px 16px;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.2);border-radius:10px;cursor:pointer;font-size:15px;color:var(--text-dim);user-select:none}
+.recycle-toggle:active{background:rgba(255,255,255,.1)}
+.recycle-box .recycle-row{opacity:.7;border-left:3px solid var(--danger)}
+.recycle-box .recycle-row:hover{opacity:1}
+
+.err{color:var(--red);text-align:center;padding:20px;font-size:14px}
+.perm-toggle{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--input);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);transition:.15s}
+.perm-toggle:active{opacity:.8}
+.perm-toggle input{accent-color:var(--gold);width:16px;height:16px}
+.perm-toggle span{user-select:none}
+.mc-sub{margin-left:20px;margin-top:6px;padding-left:10px;border-left:2px solid var(--gold)}
+.mc-sub .perm-toggle{background:rgba(212,168,67,.08);font-size:12px;padding:5px 8px}
+/* custom confirm */
+.cfm-wrap{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:none;align-items:center;justify-content:center}
+.cfm-wrap.show{display:flex}
+.cfm-card{background:#fff;border-radius:14px;width:280px;overflow:hidden}
+.cfm-text{padding:24px 20px 18px;font-size:15px;color:#333;line-height:1.6;white-space:pre-line}
+.cfm-acts{display:flex;border-top:1px solid #eee}
+.cfm-acts button{flex:1;border:none;background:none;font-size:15px;padding:13px 0;cursor:pointer}
+.cfm-no{color:#888;border-right:1px solid #eee}
+.cfm-yes{color:#4A90D9;font-weight:600}
+/* toast */
+.toast{position:fixed;top:56px;left:50%;transform:translateX(-50%);background:rgba(30,40,55,.95);color:var(--text);padding:12px 24px;border-radius:10px;font-size:14px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:toastIn .25s ease-out;max-width:80vw;text-align:center;pointer-events:none}
+.toast.err{background:rgba(220,38,38,.9);color:#fff}
+.toast.ok{background:rgba(22,163,74,.9);color:#fff}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateX(-50%) translateY(-10px)}}
+</style>
+</head>
+<body>
+<div id="cfm" class="cfm-wrap" onclick="if(event.target===this)_cfmR(false)">
+<div class="cfm-card"><div id="cfmT" class="cfm-text"></div>
+<div class="cfm-acts"><button class="cfm-no" onclick="_cfmR(false)">取消</button><button class="cfm-yes" onclick="_cfmR(true)">确定</button></div>
+</div></div>
+
+<!-- 登录屏 -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1 id="login-title">走芯机车间门户</h1>
+      <p class="login-sub" id="login-company">南通迪贝德精密电子有限公司</p>
+
+      <div class="form-row">
+        <span class="form-label">工号</span>
+        <input type="text" id="login-code" placeholder="请输入工号" autocomplete="username">
+      </div>
+      <div class="form-row">
+        <span class="form-label">密码</span>
+        <input type="password" id="login-pwd-input" placeholder="请输入密码" autocomplete="current-password">
+      </div>
+      <label class="login-remember">
+        <input type="checkbox" id="login-remember" checked> 记住我 7 天
+      </label>
+      <button class="login-btn" onclick="doLogin()">登 录</button>
+      <div id="login-err" class="login-err"></div>
+
+      <div class="login-tip">
+        首次登录或忘记密码？联系管理员在「账号管理」重置
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 主页 -->
+<div id="screen-home" class="screen">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-avatar" id="user-avatar">🧑</div>
+      <div>
+        <div class="topbar-name" id="user-name"></div>
+        <div class="topbar-role" id="user-role"></div>
+      </div>
+    </div>
+    <button class="topbar-logout" onclick="doLogout()">退出</button>
+  </div>
+  <div class="welcome" id="welcome-text"></div>
+  <div class="card-grid" id="card-grid"></div>
+  <div class="footer">
+    <span id="footer-title">走芯机车间门户 v2.0</span>
+    <span>·</span>
+    <span id="last-login-tip"></span>
+  </div>
+</div>
+
+<!-- 整合容器：iframe 全屏嵌入各子系统（MIME 类型问题暂时禁用，改用新 tab 跳转） -->
+<!--
+<div id="iframe-wrap" style="display:none;position:fixed;inset:0;background:#000;z-index:9999">
+  <button id="iframe-back" style="position:fixed;top:12px;left:12px;z-index:10000;padding:10px 16px;background:rgba(255,255,255,.95);color:#111;border:0;border-radius:24px;font-size:14px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.4);cursor:pointer">← 返回门户</button>
+  <div id="iframe-title" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:10000;padding:8px 16px;background:rgba(0,0,0,.6);color:#fff;border-radius:20px;font-size:13px;max-width:60%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+  <iframe id="iframe-app" style="width:100%;height:100%;border:0;background:#fff" allow="camera;microphone"></iframe>
+</div>
+-->
+
+<!-- 账号管理 modal -->
+<div id="modal-acct" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-head">
+      <span>⚙️ 账号管理</span>
+      <button class="modal-close" onclick="closeAcctMgr()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="acct-toolbar">
+        <button class="btn-primary" onclick="showAddAcct()">+ 新增账号</button>
+        <span class="acct-tip">账号 = 工号 / 登录名</span>
+      </div>
+      <div id="acct-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 新增/编辑账号 modal -->
+<div id="modal-acct-form" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:400px">
+    <div class="modal-head">
+      <span id="acct-form-title">新增账号</span>
+      <button class="modal-close" onclick="closeAcctForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-acct-id">
+      <div class="form-row">
+        <span class="form-label">姓名</span>
+        <input type="text" id="edit-name" placeholder="真实姓名">
+      </div>
+      <div class="form-row">
+        <span class="form-label">账号</span>
+        <input type="text" id="edit-code" placeholder="登录账号（工号）">
+      </div>
+      <div class="form-row">
+        <span class="form-label">密码</span>
+        <input type="password" id="edit-pwd" placeholder="登录密码">
+      </div>
+      <div class="form-row">
+        <span class="form-label">角色</span>
+        <select id="edit-role">
+          <option value="admin">管理员</option>
+          <option value="leader">领班</option>
+          <option value="operator">操作员</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <span class="form-label">状态</span>
+        <select id="edit-status">
+          <option value="active">启用</option>
+          <option value="inactive">停用（离职）</option>
+        </select>
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:16px" onclick="saveAcct()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* custom confirm */
+var _cfmCb;
+function _cfmR(v){document.getElementById('cfm').classList.remove('show');var cb=_cfmCb;_cfmCb=null;if(cb)cb(v)}
+function cfm(msg,cb){document.getElementById('cfmT').textContent=msg;_cfmCb=cb;document.getElementById('cfm').classList.add('show')}
+/* toast */
+function toast(msg,type){
+  var t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(function(){t.style.animation='toastOut .25s ease-in forwards';setTimeout(function(){t.remove()},260)},2200);
+}
+/* ===== Supabase ===== */
+var SB_URL='https://prqievwybuzwmmcdoqdq.supabase.co';
+var SB_ANON='sb_publishable_QIyZMuUReK3-gudQwrqbfg_7-0z48bw';
+async function sbGet(t,q){
+  var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+(q||''),{headers:{'apikey':SB_ANON,'Authorization':'Bearer '+SB_ANON}});
+  if(!r.ok)throw new Error('GET '+t+': '+r.status);
+  return await r.json();
+}
+async function sbPost(t,d){
+  var r=await fetch(SB_URL+'/rest/v1/'+t,{
+    method:'POST',
+    headers:{'apikey':SB_ANON,'Authorization':'Bearer '+SB_ANON,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify(d)
+  });
+  if(!r.ok)throw new Error('POST '+t+': '+r.status);
+}
+async function sbPatch(t,q,d){
+  var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{
+    method:'PATCH',
+    headers:{'apikey':SB_ANON,'Authorization':'Bearer '+SB_ANON,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify(d)
+  });
+  if(!r.ok)throw new Error('PATCH '+t+': '+r.status);
+}
+async function sbDelete(t,q){
+  var r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{
+    method:'DELETE',
+    headers:{'apikey':SB_ANON,'Authorization':'Bearer '+SB_ANON,'Prefer':'return=minimal'}
+  });
+  if(!r.ok)throw new Error('DELETE '+t+': '+r.status);
+}
+
+/* ===== Session ===== */
+var SESSION_KEY='zxj_session';
+var REMEMBER_KEY='zxj_session_remember';
+function getSession(){
+  try{
+    var s=localStorage.getItem(SESSION_KEY);
+    if(!s)return null;
+    var sess=JSON.parse(s);
+    var age=Date.now()-sess.login_at;
+    var maxAge=localStorage.getItem(REMEMBER_KEY)==='1'?7*24*3600*1000:24*3600*1000;
+    if(age>maxAge){localStorage.removeItem(SESSION_KEY);return null}
+    return sess;
+  }catch(e){return null}
+}
+function setSession(s,remember){
+  s.login_at=Date.now();
+  localStorage.setItem(SESSION_KEY,JSON.stringify(s));
+  if(remember)localStorage.setItem(REMEMBER_KEY,'1');
+  else localStorage.removeItem(REMEMBER_KEY);
+}
+function clearSession(){
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(REMEMBER_KEY);
+}
+
+/* ===== Password Hash (SHA-256 + salt) ===== */
+function _hashPwd(pwd,salt){
+  var enc=new TextEncoder();
+  var data=enc.encode(salt+':'+pwd);
+  return crypto.subtle.digest('SHA-256',data).then(function(buf){
+    return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('')
+  })
+}
+function _randSalt(){
+  return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(function(b){return b.toString(16).padStart(2,'0')}).join('')
+}
+function hashPassword(pwd){
+  var salt=_randSalt();
+  return _hashPwd(pwd,salt).then(function(h){return '$sha256$'+salt+'$'+h})
+}
+function verifyPassword(pwd,stored){
+  if(!stored||!stored.startsWith('$sha256$')){
+    // Legacy plaintext: direct compare, then auto-upgrade
+    return Promise.resolve(stored===pwd)
+  }
+  var parts=stored.split('$'); // ['', 'sha256', salt, hash]
+  var salt=parts[2];
+  return _hashPwd(pwd,salt).then(function(h){return h===parts[3]})
+}
+
+/* ===== Login: 工号+密码 ===== */
+var ROLE_AVATAR={admin:'🧑',leader:'🧑',operator:'🧑'};
+var ROLE_NAMES={admin:'管理员',leader:'领班',operator:'操作员'};
+var MC_KEYS=['machine','product','quote','order','tech','sync'];
+var DEFAULT_MC_CARDS={admin:{machine:true,product:true,quote:true,order:true,tech:true,sync:true},leader:{machine:true,product:true,quote:true,order:true,tech:true,sync:true},operator:{machine:true,product:true,quote:false,order:true,tech:true,sync:false}};
+var WH_KEYS=['tool','raw','spare','product'];
+var DEFAULT_WH={admin:['tool','raw','spare','product'],leader:['tool','raw','spare','product'],operator:['tool','raw','spare','product']};
+var WA_KEYS=['inventory','inbound','outbound','check','report'];
+var DEFAULT_WA={admin:['inventory','inbound','outbound','check','report'],leader:['inventory'],operator:['inventory']};
+var HO_KEYS=['shift_write','shift_view','daily_write','daily_view','cross_shift','settings'];
+var DEFAULT_HO={admin:['shift_write','shift_view','daily_write','daily_view','cross_shift','settings'],leader:['shift_write','shift_view','daily_view','cross_shift'],operator:['daily_write','daily_view','cross_shift']};
+function fixHoKeys(arr){if(!Array.isArray(arr))return arr;return arr.map(function(k){return k.replace(/-/g,'_')})}
+
+function showLogin(){
+  document.getElementById('screen-login').classList.add('active');
+  document.getElementById('screen-home').classList.remove('active');
+  var codeEl=document.getElementById('login-code');
+  if(codeEl)codeEl.value='';
+  var pwdEl=document.getElementById('login-pwd-input');
+  if(pwdEl)pwdEl.value='';
+  var errEl=document.getElementById('login-err');
+  if(errEl)errEl.textContent='';
+}
+
+async function doLogin(){
+  var btn=document.querySelector('.login-btn');
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.textContent='登录中...'}
+  var code=document.getElementById('login-code').value.trim();
+  var pwd=document.getElementById('login-pwd-input').value;
+  var errBox=document.getElementById('login-err');
+  errBox.textContent='';
+  if(!code){errBox.textContent='请输入工号';return}
+  if(!pwd){errBox.textContent='请输入密码';return}
+  try{
+    var users=await sbGet('users','select=id,name,code,role,password,status&code=eq.'+encodeURIComponent(code));
+    if(!users.length){errBox.textContent='工号不存在';return}
+    var u=users[0];
+    if(u.status!=='active'){errBox.textContent='账号已停用';return}
+    var pwdOk=await verifyPassword(pwd,u.password||'');if(!pwdOk){errBox.textContent='密码错误';return}
+    // Auto-upgrade: if password was plaintext, re-hash it
+    if(!(u.password||'').startsWith('$sha256$')){try{var hashed=await hashPassword(pwd);await sbPatch('users','id=eq.'+u.id,{password:hashed})}catch(e){console.error('auto-hash fail',e)}}
+    await sbPatch('users','id=eq.'+u.id,{last_login:new Date().toISOString()});
+    // Load mc card perms
+    var permData=await sbGet('zxj_kv','select=data&id=eq.user_permissions');
+    var allPerms={};
+    if(permData.length){try{allPerms=typeof permData[0].data==='string'?JSON.parse(permData[0].data):permData[0].data}catch(e){}}
+    var uPerms=allPerms[String(u.id)]||{};
+    var mcCards=uPerms.mc_cards||DEFAULT_MC_CARDS[u.role]||{};
+    var whPerms=uPerms.warehouse_wh||DEFAULT_WH[u.role]||[];
+    var waPerms=uPerms.warehouse_actions||DEFAULT_WA[u.role]||[];
+    var hoPerms=fixHoKeys(uPerms.handover_actions||DEFAULT_HO[u.role]||[]);
+    var remember=document.getElementById('login-remember').checked;
+    setSession({id:u.id,name:u.name,code:u.code,role:u.role,mc_cards:mcCards,permissions:{warehouse_wh:whPerms,warehouse_actions:waPerms,handover_actions:hoPerms}},remember);
+    showHome();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='登 录'}
+    if((e.message||'').indexOf('column')>=0&&(e.message||'').indexOf('password')>=0){
+      errBox.textContent='users 表还没加 password 字段，请先跑 SQL';
+    }else{
+      errBox.textContent='登录失败：'+e.message;
+    }
+  }
+}
+function doLogout(){
+  cfm('确定要退出登录吗？',function(ok){
+    if(!ok)return;
+    clearSession();
+    showLogin();
+  });
+}
+
+/* ===== Screens ===== */
+function showHome(){
+  var s=getSession();
+  if(!s){showLogin();return}
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('screen-home').classList.add('active');
+  renderTopbar(s);
+  renderCards(s.role);
+}
+function renderTopbar(s){
+  document.getElementById('user-name').textContent=s.name;
+  document.getElementById('user-role').textContent=ROLE_NAMES[s.role]||s.role;
+  document.getElementById('user-avatar').textContent=ROLE_AVATAR[s.role]||'🧑';
+  var h=new Date().getHours();
+  var greet=h<6?'夜深了，注意休息 🌙':h<12?'早上好 ☀️':h<18?'下午好 🌤️':'晚上好 🌙';
+  document.getElementById('welcome-text').textContent=greet+'，'+s.name;
+}
+
+/* ===== Cards（按身份 + 使用频度排序 + 权限过滤）===== */
+function renderCards(role){
+  var s=getSession();
+  var perms=s?s.permissions:{};
+  var whList=perms.warehouse_wh||DEFAULT_WH[role]||[];
+  var hoList=fixHoKeys(perms.handover_actions||DEFAULT_HO[role]||[]);
+  var mcCards=s?s.mc_cards:DEFAULT_MC_CARDS[role]||{};
+  var CARDS={
+    admin:[
+      {icon:'⚙️',title:'走芯机系统',desc:'报价 / 订单 / 机台 / 派工',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
+      {icon:'📦',title:'仓库系统',desc:'刀具 / 原材料 / 备品 / 成品',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
+      {icon:'🤝',title:'交班系统',desc:'交班记录 / 设备状态',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'},
+      {icon:'🛠️',title:'后台管理',desc:'账号 / 权限 / 门户设置',action:'openAdminPanel()',bg:'linear-gradient(135deg,#374151,#6b7280)',permKey:'admin'}
+    ],
+    leader:[
+      {icon:'⚙️',title:'走芯机系统',desc:'派工 / 机台 / 生产',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
+      {icon:'📦',title:'仓库系统',desc:'领料 / 查库存',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
+      {icon:'🤝',title:'交班系统',desc:'填交班记录',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'}
+    ],
+    operator:[
+      {icon:'⚙️',title:'走芯机系统',desc:'我的工单 / 生产报工',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'📋',title:'生产计划',desc:'我的任务 / 生产进度',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
+      {icon:'📦',title:'仓库系统',desc:'领料 / 查库存',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
+      {icon:'🤝',title:'交班系统',desc:'填交班记录',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'}
+    ]
+  };
+  // Filter by permissions
+  function cardVisible(c){
+    if(c.permKey==='admin') return role==='admin';
+    if(c.permKey==='wh') return whList.length>0;
+    if(c.permKey==='ho') return hoList.length>0;
+    if(c.permKey==='mc'){
+      // Show 走芯机 if at least one mc_cards is true
+      return Object.values(mcCards).some(function(v){return v===true;});
+    }
+    if(c.permKey==='pp') return true; // 生产计划对所有人可见
+    return true;
+  }
+  var list=(CARDS[role]||[]).filter(cardVisible);
+  var html=list.map(function(c,i){
+    var onclick=c.action?c.action:"openCard('"+c.url+"','"+c.title+"')";
+    return '<div class="card-tile" onclick="'+onclick+'" style="background:'+c.bg+';animation-delay:'+(i*0.05)+'s">'
+      +'<div class="card-icon">'+c.icon+'</div>'
+      +'<div class="card-title">'+c.title+'</div>'
+      +'<div class="card-desc">'+c.desc+'</div>'
+      +'</div>';
+  }).join('');
+  document.getElementById('card-grid').innerHTML=html;
+}
+
+function openCard(url,title){
+  var s=getSession();
+  if(!s){showLogin();return}
+  if(url.startsWith('#')){
+    toast('功能开发中：'+url);
+    return;
+  }
+  var sep=url.includes('?')?'&':'?';
+  var target=url+sep+'zxj_user='+encodeURIComponent(JSON.stringify(s));
+  location.href=target;
+}
+
+/* ===== Admin Panel (unified) ===== */
+function openAdminPanel(){
+  var s=getSession();
+  if(!s||s.role!=='admin'){toast('需要管理员权限','err');return}
+  document.getElementById('modal-admin-panel').style.display='flex';
+}
+function closeAdminPanel(){
+  document.getElementById('modal-admin-panel').style.display='none';
+}
+
+/* ===== Account Mgmt ===== */
+async function openAcctMgr(){
+  var s=getSession();
+  if(!s||s.role!=='admin'){toast('需要管理员权限','err');return}
+  document.getElementById('modal-acct').style.display='flex';
+  await loadAcctList();
+}
+function closeAcctMgr(){
+  document.getElementById('modal-acct').style.display='none';
+}
+async function loadAcctList(){
+  try{
+    var users=await sbGet('users','select=id,name,code,role,status,last_login&order=role,code');
+    var roleOrder={admin:0,leader:1,operator:2};
+    users.sort(function(a,b){return (roleOrder[a.role]||9)-(roleOrder[b.role]||9)});
+    var active=users.filter(function(u){return u.status!=='inactive'});
+    var inactive=users.filter(function(u){return u.status==='inactive'});
+    var html='<div class="acct-list">';
+    active.forEach(function(u){
+      var lastLogin=u.last_login?new Date(u.last_login).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'从未登录';
+      var roleBadge=ROLE_AVATAR[u.role]+' '+(ROLE_NAMES[u.role]||u.role);
+      html+='<div class="acct-row">'
+        +'<div class="acct-info">'
+        +'<div class="acct-name">'+esc(u.name)+' <span class="acct-code">@'+esc(u.code)+'</span></div>'
+        +'<div class="acct-meta">'+roleBadge+' · <span class="badge-ok">启用</span> · 最后登录：'+lastLogin+'</div>'
+        +'</div>'
+        +'<div class="acct-actions">'
+        +'<button class="btn-sm" onclick="editAcct(\''+u.id+'\')">编辑</button>'
+        +'<button class="btn-sm" style="color:var(--gold)" onclick="openPerm(\''+u.id+'\',\''+esc(u.name).replace(/'/g,"\\'")+'\',\''+u.role+'\')">权限</button>'
+        +'<button class="btn-sm" onclick="toggleAcct(\''+u.id+'\',\''+u.status+'\')">停用</button>'
+        +'</div>'
+        +'</div>';
+    });
+    if(inactive.length){
+      html+='<div class="recycle-toggle" onclick="toggleRecycle()" id="recycle-toggle">\uD83D\uDDD1\uFE0F 已停用账号（'+inactive.length+'人）<span id="recycle-arrow">▶</span></div>';
+      html+='<div class="recycle-box" id="recycle-box" style="display:none">';
+      inactive.forEach(function(u){
+        var roleBadge=ROLE_AVATAR[u.role]+' '+(ROLE_NAMES[u.role]||u.role);
+        html+='<div class="acct-row recycle-row">'
+          +'<div class="acct-info">'
+          +'<div class="acct-name" style="opacity:0.6">'+esc(u.name)+' <span class="acct-code">@'+esc(u.code)+'</span></div>'
+          +'<div class="acct-meta">'+roleBadge+' · <span class="badge-off">停用</span></div>'
+          +'</div>'
+          +'<div class="acct-actions">'
+          +'<button class="btn-sm" style="color:#4caf50" onclick="toggleAcct(\''+u.id+'\',\'inactive\')">恢复启用</button>'
+          +'</div>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
+    html+='</div>';
+    document.getElementById('acct-list').innerHTML=html;
+  }catch(e){
+    document.getElementById('acct-list').innerHTML='<div class="err">加载失败：'+e.message+'</div>';
+  }
+}
+function toggleRecycle(){
+  var box=document.getElementById('recycle-box');
+  var arrow=document.getElementById('recycle-arrow');
+  if(!box)return;
+  if(box.style.display==='none'){
+    box.style.display='block';
+    if(arrow)arrow.textContent='▼';
+  }else{
+    box.style.display='none';
+    if(arrow)arrow.textContent='▶';
+  }
+}
+function showAddAcct(){
+  document.getElementById('edit-acct-id').value='';
+  document.getElementById('acct-form-title').textContent='新增账号';
+  document.getElementById('edit-name').value='';
+  document.getElementById('edit-code').value='';
+  document.getElementById('edit-pwd').value='';
+  document.getElementById('edit-role').value='operator';
+  document.getElementById('edit-status').value='active';
+  resetPermToggles('operator');
+  document.getElementById('modal-acct-form').style.display='flex';
+  setTimeout(function(){document.getElementById('edit-name').focus()},100);
+}
+function resetPermToggles(role){
+  var def=DEFAULT_MC_CARDS[role]||{};
+  MC_KEYS.forEach(function(k){
+    var el=document.getElementById('mc-'+k);
+    if(el)el.checked=def[k]!==false;
+  });
+  var whDef=DEFAULT_WH[role]||[];
+  WH_KEYS.forEach(function(k){
+    var el=document.getElementById('wh-'+k);
+    if(el)el.checked=whDef.indexOf(k)>=0;
+  });
+  var waDef=DEFAULT_WA[role]||[];
+  WA_KEYS.forEach(function(k){
+    var el=document.getElementById('wa-'+k);
+    if(el)el.checked=waDef.indexOf(k)>=0;
+  });
+  var hoDef=DEFAULT_HO[role]||[];
+  HO_KEYS.forEach(function(k){
+    var el=document.getElementById('ho-'+k);
+    if(el)el.checked=hoDef.indexOf(k)>=0;
+  });
+}
+async function editAcct(id){
+  try{
+    var users=await sbGet('users','select=id,name,code,password,role,status&id=eq.'+id);
+    if(!users.length)return;
+    var u=users[0];
+    document.getElementById('edit-acct-id').value=u.id;
+    document.getElementById('acct-form-title').textContent='编辑账号 - '+u.name;
+    document.getElementById('edit-name').value=u.name;
+    document.getElementById('edit-code').value=u.code;
+    document.getElementById('edit-pwd').value='';
+    document.getElementById('edit-pwd').placeholder=u.password?'已设置(留空不改)':'请输入密码';
+    document.getElementById('edit-role').value=u.role;
+    document.getElementById('edit-status').value=u.status;
+    document.getElementById('modal-acct-form').style.display='flex';
+  }catch(e){toast('加载失败：'+e.message,'err')}
+}
+async function saveAcct(){
+  var id=document.getElementById('edit-acct-id').value;
+  var pwdVal=document.getElementById('edit-pwd').value;
+  var data={
+    name:document.getElementById('edit-name').value.trim(),
+    code:document.getElementById('edit-code').value.trim(),
+    role:document.getElementById('edit-role').value,
+    status:document.getElementById('edit-status').value
+  };
+  if(pwdVal){data.password=await hashPassword(pwdVal)}
+  if(!data.name||!data.code){toast('姓名/账号不能为空','err');return}
+  if(!id&&!pwdVal){toast('新账号必须设置密码','err');return}
+  if(!['admin','leader','operator'].includes(data.role)){toast('角色不合法','err');return}
+  try{
+    if(id){
+      var patchData=Object.assign({},data);
+      await sbPatch('users','id=eq.'+id,patchData);
+    }else{
+      var exist=await sbGet('users','select=id&code=eq.'+encodeURIComponent(data.code));
+      if(exist.length){toast('账号已存在','err');return}
+      await sbPost('users',data);
+    }
+    closeAcctForm();
+    await loadAcctList();
+  }catch(e){toast('保存失败：'+e.message,'err')}
+}
+function closeAcctForm(){
+  document.getElementById('modal-acct-form').style.display='none';
+}
+/* 权限设置弹窗 */
+var PM_MC=['machine','product','quote','order','tech','sync'];
+var PM_WH=['tool','raw','spare','product'];
+var PM_WA=['inventory','inbound','outbound','check','report'];
+var PM_HO=['shift_write','shift_view','daily_write','daily_view','cross_shift','settings'];
+async function openPerm(id,name,role){
+  function toggleAllPerm(prefix,arr){var el=document.getElementById(prefix+'-all');var v=el?el.checked:true;arr.forEach(function(k){var c=document.getElementById(prefix+'-'+k);if(c)c.checked=v})}
+  window.toggleAllPerm=toggleAllPerm;
+  document.getElementById('perm-user-id').value=id;
+  document.getElementById('perm-title').textContent=name+' - 权限设置';
+  try{
+    var permData=await sbGet('zxj_kv','select=data&id=eq.user_permissions');
+    var allPerms=permData.length?(typeof permData[0].data==='string'?JSON.parse(permData[0].data):permData[0].data):{};
+    var uP=allPerms[String(id)]||{};
+    var mc=uP.mc_cards||DEFAULT_MC_CARDS[role]||{};
+    var wh=uP.warehouse_wh||DEFAULT_WH[role]||[];
+    var wa=uP.warehouse_actions||DEFAULT_WA[role]||[];
+    var ho=fixHoKeys(uP.handover_actions||DEFAULT_HO[role]||[]);
+    PM_MC.forEach(function(k){var el=document.getElementById('pm-'+k);if(el)el.checked=mc[k]!==false});
+    PM_WH.forEach(function(k){var el=document.getElementById('pw-'+k);if(el)el.checked=wh.indexOf(k)>=0});
+    PM_WA.forEach(function(k){var el=document.getElementById('pa-'+k);if(el)el.checked=wa.indexOf(k)>=0});
+    PM_HO.forEach(function(k){var el=document.getElementById('ph-'+k);if(el)el.checked=ho.indexOf(k)>=0});
+    /* sync select-all checkboxes */
+    ['pm','pw','pa','ph'].forEach(function(prefix){
+      var arr=prefix==='pm'?PM_MC:prefix==='pw'?PM_WH:prefix==='pa'?PM_WA:PM_HO;
+      var allEl=document.getElementById(prefix+'-all');
+      if(allEl)allEl.checked=arr.every(function(k){var c=document.getElementById(prefix+'-'+k);return c&&c.checked});
+    });
+  }catch(e){}
+  document.getElementById('modal-perm').style.display='flex';
+}
+function closePerm(){
+  document.getElementById('modal-perm').style.display='none';
+}
+async function savePerm(){
+  var id=document.getElementById('perm-user-id').value;
+  var mcCards={};PM_MC.forEach(function(k){var el=document.getElementById('pm-'+k);mcCards[k]=el?el.checked:true});
+  var whList=[];PM_WH.forEach(function(k){var el=document.getElementById('pw-'+k);if(el&&el.checked)whList.push(k)});
+  var waList=[];PM_WA.forEach(function(k){var el=document.getElementById('pa-'+k);if(el&&el.checked)waList.push(k)});
+  var hoList=[];PM_HO.forEach(function(k){var el=document.getElementById('ph-'+k);if(el&&el.checked)hoList.push(k)});
+  try{
+    await saveUserPerms(id,{mc_cards:mcCards,warehouse_wh:whList,warehouse_actions:waList,handover_actions:hoList});
+    closePerm();
+  }catch(e){toast('保存失败：'+e.message,'err')}
+}
+async function saveUserPerms(userId,perms){
+  var permData=await sbGet('zxj_kv','select=data&id=eq.user_permissions');
+  var allPerms={};
+  if(permData.length){
+    try{allPerms=typeof permData[0].data==='string'?JSON.parse(permData[0].data):permData[0].data}catch(e){allPerms={}}
+  }
+  var uid=String(userId);
+  if(!allPerms[uid])allPerms[uid]={};
+  Object.keys(perms).forEach(function(k){allPerms[uid][k]=perms[k]});
+  if(permData.length){
+    await sbPatch('zxj_kv','id=eq.user_permissions',{data:JSON.stringify(allPerms)});
+  }else{
+    await sbPost('zxj_kv',{id:'user_permissions',data:JSON.stringify(allPerms)});
+  }
+}
+async function toggleAcct(id,curStatus){
+  var newStatus=curStatus==='active'?'inactive':'active';
+  var action=newStatus==='inactive'?'停用':'启用';
+  cfm('确定要'+action+'这个账号吗？',function(ok){
+    if(!ok)return;
+    sbPatch('users','id=eq.'+id,{status:newStatus}).then(function(){loadAcctList()}).catch(function(e){toast('操作失败：'+e.message,'err')});
+  });
+}
+// 停用账号（原deleteAcct，已改为停用而非删除）
+async function disableAcct(id,name){
+  cfm('确定要停用账号「'+name+'」吗？\n（停用后该用户无法登录，数据保留）',function(ok){
+    if(!ok)return;
+    sbPatch('users','id=eq.'+id,{status:'inactive'}).then(function(){loadAcctList()}).catch(function(e){toast('停用失败：'+e.message,'err')});
+  });
+}
+function esc(s){
+  return String(s||'').replace(/[<>&"']/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]});
+}
+
+/* ===== 系统设置 ===== */
+var SYS_DEFAULTS={portal_name:'走芯机车间门户',company_name:'南通迪贝德精密电子有限公司'};
+var SYS_SETTINGS=null;
+async function loadSysSettings(){
+  try{
+    var d=await sbGet('zxj_kv','select=data&id=eq.system_settings');
+    if(d.length){SYS_SETTINGS=typeof d[0].data==='string'?JSON.parse(d[0].data):d[0].data}
+    else{SYS_SETTINGS={}}
+  }catch(e){SYS_SETTINGS={}}
+  applySysSettings();
+}
+function applySysSettings(){
+  var pn=SYS_SETTINGS.portal_name||SYS_DEFAULTS.portal_name;
+  var cn=SYS_SETTINGS.company_name||SYS_DEFAULTS.company_name;
+  var el1=document.getElementById('login-title');if(el1)el1.textContent=pn;
+  var el2=document.getElementById('login-company');if(el2)el2.textContent=cn;
+  var el3=document.getElementById('footer-title');if(el3)el3.textContent=pn+' v2.0';
+  document.title=pn;
+}
+function openSysSettings(){
+  var s=getSession();
+  if(!s||s.role!=='admin'){toast('需要管理员权限','err');return}
+  document.getElementById('set-portal-name').value=SYS_SETTINGS.portal_name||SYS_DEFAULTS.portal_name;
+  document.getElementById('set-company-name').value=SYS_SETTINGS.company_name||SYS_DEFAULTS.company_name;
+  document.getElementById('modal-sys-settings').style.display='flex';
+}
+function closeSysSettings(){
+  document.getElementById('modal-sys-settings').style.display='none';
+}
+async function saveSysSettings(){
+  var pn=document.getElementById('set-portal-name').value.trim();
+  var cn=document.getElementById('set-company-name').value.trim();
+  if(!pn){toast('门户名称不能为空','err');return}
+  if(!cn){toast('公司名称不能为空','err');return}
+  var data={portal_name:pn,company_name:cn};
+  try{
+    var exist=await sbGet('zxj_kv','select=data&id=eq.system_settings');
+    if(exist.length){
+      await sbPatch('zxj_kv','id=eq.system_settings',{data:JSON.stringify(data)});
+    }else{
+      try{await sbPost('zxj_kv',{id:'system_settings',data:JSON.stringify(data)})}
+      catch(e){if(e.message.indexOf('409')>=0||e.message.indexOf('405')>=0){await sbPatch('zxj_kv','id=eq.system_settings',{data:JSON.stringify(data)})}else throw e}
+    }
+    SYS_SETTINGS=data;
+    applySysSettings();
+    closeSysSettings();
+    toast('设置已保存','ok');
+  }catch(e){toast('保存失败：'+e.message,'err')}
+}
+
+/* ===== Init ===== */
+document.addEventListener('DOMContentLoaded',function(){
+  ['login-code','login-pwd-input'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.addEventListener('keypress',function(e){if(e.key==='Enter')doLogin()});
+  });
+  loadSysSettings();
+  var s=getSession();
+  if(s)showHome();
+  else showLogin();
+});
+</script>
+</body>
+</html>
+
+<!-- 权限设置弹窗 -->
+<div id="modal-perm" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:400px">
+    <div class="modal-head">
+      <span id="perm-title">权限设置</span>
+      <button class="modal-close" onclick="closePerm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="perm-user-id">
+      <div style="font-size:13px;color:var(--gold);font-weight:600;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🏭 走芯机权限 <label class="perm-toggle" style="font-size:12px;color:var(--dim);font-weight:400"><input type="checkbox" id="pm-all" onchange="toggleAllPerm('pm',PM_MC)">全选</label></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <label class="perm-toggle"><input type="checkbox" id="pm-machine" checked><span>🏭 机台管理</span></label>
+        <label class="perm-toggle"><input type="checkbox" id="pm-product" checked><span>📋 产品管理</span></label>
+        <label class="perm-toggle"><input type="checkbox" id="pm-quote" checked><span>💰 产品报价</span></label>
+        <label class="perm-toggle"><input type="checkbox" id="pm-order" checked><span>📦 订单汇总</span></label>
+        <label class="perm-toggle"><input type="checkbox" id="pm-tech" checked><span>🔧 技术支持</span></label>
+        <label class="perm-toggle"><input type="checkbox" id="pm-sync" checked><span>☁️ 数据同步</span></label>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;color:var(--gold);font-weight:600;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">📦 仓库权限 <label class="perm-toggle" style="font-size:12px;color:var(--dim);font-weight:400"><input type="checkbox" id="wh-all" onchange="toggleAllPerm('pw',PM_WH);toggleAllPerm('pa',PM_WA)">全选</label></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <label class="perm-toggle"><input type="checkbox" id="pw-tool" checked><span>🔧 刀具仓</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="pw-raw" checked><span>🧱 原材料仓</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="pw-spare" checked><span>⚙️ 备品仓</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="pw-product" checked><span>📦 成品仓</span></label>
+        </div>
+        <div style="margin-top:8px">
+          <div style="font-size:12px;color:var(--dim);margin-bottom:4px">仓库操作</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <label class="perm-toggle"><input type="checkbox" id="pa-inventory" checked><span>📋 查库存</span></label>
+            <label class="perm-toggle"><input type="checkbox" id="pa-inbound" checked><span>📥 入库</span></label>
+            <label class="perm-toggle"><input type="checkbox" id="pa-outbound" checked><span>📤 出库</span></label>
+            <label class="perm-toggle"><input type="checkbox" id="pa-check" checked><span>✅ 盘点</span></label>
+            <label class="perm-toggle"><input type="checkbox" id="pa-report" checked><span>📊 报表</span></label>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;color:var(--gold);font-weight:600;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">🤝 交班权限 <label class="perm-toggle" style="font-size:12px;color:var(--dim);font-weight:400"><input type="checkbox" id="ho-all" onchange="toggleAllPerm('ph',PM_HO)">全选</label></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <label class="perm-toggle"><input type="checkbox" id="ph-shift_write" checked><span>📝 填交接班</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="ph-shift_view" checked><span>👁 查交接班</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="ph-daily_write" checked><span>📝 填操作日报</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="ph-daily_view" checked><span>👁 查操作日报</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="ph-cross_shift" checked><span>🔄 对班查看</span></label>
+          <label class="perm-toggle"><input type="checkbox" id="ph-settings" checked><span>⚙️ 设置</span></label>
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:16px" onclick="savePerm()">保存权限</button>
+    </div>
+  </div>
+</div>
+
+<!-- 系统设置弹窗 -->
+<div id="modal-sys-settings" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:400px">
+    <div class="modal-head">
+      <span>🏢 系统设置</span>
+      <button class="modal-close" onclick="closeSysSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <span class="form-label">门户名</span>
+        <input type="text" id="set-portal-name" placeholder="门户名称">
+      </div>
+      <div class="form-row">
+        <span class="form-label">公司名</span>
+        <input type="text" id="set-company-name" placeholder="公司全称">
+      </div>
+      <button class="btn-primary" style="width:100%;margin-top:16px" onclick="saveSysSettings()">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- 后台管理弹窗 -->
+<div id="modal-admin-panel" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:400px">
+    <div class="modal-head">
+      <span>🛠️ 后台管理</span>
+      <button class="modal-close" onclick="closeAdminPanel()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="admin-panel-btn" onclick="closeAdminPanel();openAcctMgr()" style="background:linear-gradient(135deg,#374151,#4b5563);border-radius:12px;padding:20px 12px;text-align:center;cursor:pointer">
+          <div style="font-size:28px;margin-bottom:6px">👤</div>
+          <div style="font-weight:600;font-size:15px">账号管理</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:4px">增删 / 改密 / 权限</div>
+        </div>
+        <div class="admin-panel-btn" onclick="closeAdminPanel();openSysSettings()" style="background:linear-gradient(135deg,#78350f,#92400e);border-radius:12px;padding:20px 12px;text-align:center;cursor:pointer">
+          <div style="font-size:28px;margin-bottom:6px">🏢</div>
+          <div style="font-weight:600;font-size:15px">系统设置</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:4px">门户名 / 公司名</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
