@@ -61,8 +61,8 @@ body.theme-wine{
 }
 body{background:var(--bg-deep);color:var(--text)}
 
-.header{text-align:center;padding:14px 0 4px}
-.header h1{font-size:20px;color:var(--gold);letter-spacing:2px;text-shadow:0 0 20px rgba(212,168,67,.15)}
+.header{display:flex;align-items:center;justify-content:center;padding:14px 0 4px;position:relative}
+.header h1{font-size:20px;color:var(--gold);letter-spacing:2px;text-shadow:0 0 20px rgba(212,168,67,.15);flex:1;text-align:center}
 .header p{display:none}
 
 /* 底部固定导航栏 */
@@ -707,7 +707,7 @@ async function loadVolcOrders(){try{_volcOrders=await vsGet('orders','select=*&o
 
 
 <div class="header">
-  <span class="header-back-btn" onclick="location.href='./index.html'" style="font-size:20px;cursor:pointer;padding:0 6px;line-height:1;color:var(--text-dim);flex-shrink:0">◀</span>
+  <span class="header-back-btn" onclick="location.href='./index.html'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:20px;cursor:pointer;padding:6px 8px;line-height:1;color:var(--text-dim)">◀</span>
   <h1>🔧 走芯机管理系统</h1>
   <div class="header-user" id="header-user" style="display:none">
     <span class="header-user-name" id="header-username"></span>
