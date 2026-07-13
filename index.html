@@ -23,6 +23,19 @@ body{
 .screen{display:none;min-height:100vh}
 .screen.active{display:block}
 
+/* 开场画面 */
+.splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#0D1B2A 0%,#162538 40%,#1a3050 70%,#0D1B2A 100%);transition:opacity .6s ease,transform .6s ease}
+.splash.hide{opacity:0;transform:scale(1.05);pointer-events:none}
+.splash-glow{position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(212,168,67,.15) 0%,transparent 70%);animation:splashPulse 2s ease-in-out infinite}
+@keyframes splashPulse{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+.splash-icon{font-size:72px;margin-bottom:20px;animation:splashIn .8s ease-out;position:relative;z-index:1;filter:drop-shadow(0 4px 20px rgba(212,168,67,.4))}
+.splash-title{font-size:28px;font-weight:800;color:var(--gold);letter-spacing:3px;animation:splashIn .8s ease-out .15s both;position:relative;z-index:1}
+.splash-line{width:60px;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:16px 0;border-radius:2px;animation:splashIn .8s ease-out .3s both;position:relative;z-index:1}
+.splash-desc{font-size:14px;color:var(--text2);letter-spacing:2px;animation:splashIn .8s ease-out .4s both;position:relative;z-index:1}
+.splash-company{font-size:12px;color:var(--text-dim);margin-top:12px;animation:splashIn .8s ease-out .55s both;position:relative;z-index:1}
+.splash-ver{position:absolute;bottom:30px;font-size:11px;color:var(--text-dim);opacity:.5;animation:splashIn .8s ease-out .7s both}
+@keyframes splashIn{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+
 /* 登录 */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 24px 20px;width:100%;max-width:400px;box-shadow:var(--shadow)}
@@ -120,6 +133,17 @@ body{
 </style>
 </head>
 <body>
+<!-- 开场画面 -->
+<div id="splash" class="splash">
+  <div class="splash-glow"></div>
+  <div class="splash-icon">⚙️</div>
+  <div class="splash-title">走芯机车间门户</div>
+  <div class="splash-line"></div>
+  <div class="splash-desc">智能生产 · 高效管理</div>
+  <div class="splash-company">南通迪贝德精密电子有限公司</div>
+  <div class="splash-ver">v2.0</div>
+</div>
+
 <div id="cfm" class="cfm-wrap" onclick="if(event.target===this)_cfmR(false)">
 <div class="cfm-card"><div id="cfmT" class="cfm-text"></div>
 <div class="cfm-acts"><button class="cfm-no" onclick="_cfmR(false)">取消</button><button class="cfm-yes" onclick="_cfmR(true)">确定</button></div>
@@ -786,6 +810,11 @@ document.addEventListener('DOMContentLoaded',function(){
   var s=getSession();
   if(s)showHome();
   else showLogin();
+  // 开场画面：2.5秒后淡出
+  setTimeout(function(){
+    var sp=document.getElementById('splash');
+    if(sp){sp.classList.add('hide');setTimeout(function(){sp.remove()},700)}
+  },2500);
 });
 </script>
 </body>
