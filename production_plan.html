@@ -547,6 +547,61 @@ function addCustomerFromForm(){
   toast('客户已添加','ok');
 }
 
+function editOrder(orderNo){
+  var items=cachedOrders.filter(function(o){return o.order_no===orderNo});
+  if(!items.length)return;
+  var first=items[0];
+  // Populate customer select
+  var custs=getDict('pp_customers');
+  var sel=document.getElementById('of_customer');
+  sel.innerHTML='<option value="">请选择客户</option>'+custs.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join('');
+  sel.value=first.customer||'';
+  document.getElementById('of_customer_new').value='';
+  document.getElementById('of_drawing').value=first.drawing_no||'';
+  document.getElementById('of_qty').value=first.quantity||'';
+  document.getElementById('of_deadline').value=first.deadline?first.deadline.substring(0,10):'';
+  document.getElementById('of_priority').value=first.priority||'普通';
+  document.getElementById('of_remark').value=first.notes||'';
+  document.getElementById('of_material').value=first.material_spec||'易切削钢';
+  // Store edit mode: store all order ids in this group
+  document.getElementById('of_id').value=items.map(function(o){return o.id}).join(',');
+  document.getElementById('orderFormTitle').textContent='修改订单 '+orderNo;
+  closeModal('modal-order-detail');
+  document.getElementById('modal-order').style.display='flex';
+}
+
+async function deleteOrder(orderNo){
+  var items=cachedOrders.filter(function(o){return o.order_no===orderNo});
+  if(!items.length)return;
+  // Check if has dispatches
+  var hasDispatches=cachedSchedules.filter(function(d){return items.some(function(o){return o.id===d.order_id})}).length;
+  var msg='确认删除订单 '+orderNo+'？';
+  if(hasDispatches)msg='订单 '+orderNo+' 有'+hasDispatches+'条排产记录，删除订单将同时删除关联排产。确认删除？';
+  if(!confirm(msg))return;
+  try{
+    // Delete related dispatches first
+    if(hasDispatches){
+      for(var i=0;i<items.length;i++){
+        try{await sbDelete('dispatches','order_id=eq.'+items[i].id)}catch(e){}
+      }
+    }
+    // Delete order
+    await sbDelete('orders','order_no=eq.'+encodeURIComponent(orderNo));
+    toast('订单已删除：'+orderNo,'ok');
+  }catch(e){
+    // Local fallback
+    cachedOrders=cachedOrders.filter(function(o){return o.order_no!==orderNo});
+    cachedSchedules=cachedSchedules.filter(function(d){return !items.some(function(o){return o.id===d.order_id})});
+    localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
+    localStorage.setItem('pp_schedules',JSON.stringify(cachedSchedules));
+    toast('订单已删除(本地)','ok');
+  }
+  closeModal('modal-order-detail');
+  await loadOrders();
+  await loadSchedules();
+  renderOrders();
+}
+
 async function saveOrder(){
   var customer=document.getElementById('of_customer').value||document.getElementById('of_customer_new').value.trim();
   if(!customer){toast('请选择或输入客户','err');return}
@@ -559,37 +614,62 @@ async function saveOrder(){
   var priority=document.getElementById('of_priority').value||'普通';
   var notes=document.getElementById('of_remark').value.trim()||null;
 
-  // Generate order_no: same customer on same day shares order_no
-  var orderNo=genOrderNo();
-
-  var data={
-    order_no:orderNo,
-    drawing_no:drawingNo,
-    customer:customer,
-    quantity:qty,
-    completed:0,
-    deadline:deadline,
-    priority:priority,
-    status:'待排产',
-    material_spec:material,
-    notes:notes,
-    created_by:_user?_user.name:null
-  };
-
-  try{
-    await sbPost('orders',data);
-    toast('订单创建成功：'+orderNo,'ok');
+  var editIds=document.getElementById('of_id').value;
+  if(editIds){
+    // Edit mode: update all items in the group
+    var ids=editIds.split(',').filter(function(s){return s});
+    var updateData={customer:customer,deadline:deadline,priority:priority,material_spec:material,notes:notes};
+    // If only one item, also update drawing_no and quantity
+    if(ids.length===1){
+      updateData.drawing_no=drawingNo;
+      updateData.quantity=qty;
+    }
+    try{
+      for(var i=0;i<ids.length;i++){
+        await sbPatch('orders','id=eq.'+ids[i],updateData);
+      }
+      toast('订单修改成功','ok');
+    }catch(e){
+      cachedOrders.filter(function(o){return ids.indexOf(String(o.id))>=0}).forEach(function(o){
+        Object.keys(updateData).forEach(function(k){o[k]=updateData[k]});
+      });
+      localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
+      toast('订单已修改(本地)','ok');
+    }
     closeModal('modal-order');
     await loadOrders();
     renderOrders();
-  }catch(e){
-    data.id=Date.now();
-    cachedOrders.unshift(data);
-    localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
-    toast('订单已保存(本地)：'+orderNo,'ok');
-    closeModal('modal-order');
-    updatePendingBadge();
-    renderOrders();
+  }else{
+    // Create mode
+    var orderNo=genOrderNo();
+    var data={
+      order_no:orderNo,
+      drawing_no:drawingNo,
+      customer:customer,
+      quantity:qty,
+      completed:0,
+      deadline:deadline,
+      priority:priority,
+      status:'待排产',
+      material_spec:material,
+      notes:notes,
+      created_by:_user?_user.name:null
+    };
+    try{
+      await sbPost('orders',data);
+      toast('订单创建成功：'+orderNo,'ok');
+      closeModal('modal-order');
+      await loadOrders();
+      renderOrders();
+    }catch(e){
+      data.id=Date.now();
+      cachedOrders.unshift(data);
+      localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
+      toast('订单已保存(本地)：'+orderNo,'ok');
+      closeModal('modal-order');
+      updatePendingBadge();
+      renderOrders();
+    }
   }
 }
 
@@ -634,6 +714,11 @@ function showOrderGroup(orderNo){
       });
       html+='</div>';
     }
+    // Edit & Delete buttons
+    html+='<div style="margin-top:10px;display:flex;gap:8px">';
+    html+='<button class="btn btn-blue" style="flex:1" onclick="editOrder(\''+orderNo+'\')">✏️ 修改订单</button>';
+    html+='<button class="btn btn-red" style="flex:1" onclick="deleteOrder(\''+orderNo+'\')">🗑️ 删除订单</button>';
+    html+='</div>';
   }
 
   document.getElementById('orderDetailBody').innerHTML=html;
