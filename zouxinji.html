@@ -483,6 +483,14 @@ var VS_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjIwODg3MTksInJvbG
 async function vsGet(t,q){var r=await fetch(VS_URL+'/rest/v1/'+t+'?'+(q||''),{headers:{'apikey':VS_ANON,'Authorization':'Bearer '+VS_ANON}});if(!r.ok)throw new Error('VS GET '+t+': '+r.status);return await r.json()}
 var _volcOrders=[];
 async function loadVolcOrders(){try{_volcOrders=await vsGet('orders','select=*&order=created_at.desc&limit=500')}catch(e){_volcOrders=[]}}
+/* ===== 数据贯通：排产/刀具/交班 ===== */
+var _dispatches=[];
+var _toolIssues=[];
+var _shiftRecords=[];
+async function loadDispatches(){try{_dispatches=await vsGet('dispatches','select=*&order=created_at.desc&limit=500')}catch(e){_dispatches=[]}}
+async function loadToolIssues(){try{_toolIssues=await vsGet('inventory_log','select=*&log_type=in.("领用出库","报废出库")&order=created_at.desc&limit=1000')}catch(e){_toolIssues=[]}}
+async function loadShiftRecords(){try{_shiftRecords=await vsGet('shift_records','select=*&order=created_at.desc&limit=500')}catch(e){_shiftRecords=[]}}
+function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=machineNo.toUpperCase().replace(/[^A-Z0-9]/g,'');var did=deviceId.toUpperCase();if(mn===did)return true;if(mn.length>2&&did.length>1&&mn.indexOf(did)>=0)return true;var mnSuffix=mn.replace(/^[A-Z]*/,'');var didSuffix=did.replace(/^[A-Z]*/,'');if(mnSuffix&&didSuffix&&mnSuffix===didSuffix)return true;return false}
 /* Anti-flash: hide login overlay immediately if Portal session exists */try{if(localStorage.getItem('zxj_session')){document.documentElement.classList.add('portal-auto')}}catch(e){}</script>
 <!-- 登录页 -->
 <div class="login-overlay" id="login-overlay">
@@ -1793,7 +1801,7 @@ async function pullFromCloud(){
       if(typeof renderAll==='function'){try{renderAll();}catch(e){}}
       if(typeof refreshSelects==='function'){try{refreshSelects();}catch(e){}}
       if(typeof refreshDeviceSelect==='function'){try{refreshDeviceSelect();}catch(e){}}
-      if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}
+      if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}if(typeof loadDispatches==='function'){try{loadDispatches();}catch(e){}}if(typeof loadToolIssues==='function'){try{loadToolIssues();}catch(e){}}if(typeof loadShiftRecords==='function'){try{loadShiftRecords();}catch(e){}}
       if(typeof refreshProductList==='function'){try{refreshProductList();}catch(e){}}
       if(typeof refreshScrapTuhaoList==='function'){try{refreshScrapTuhaoList();}catch(e){}}
       if(typeof refreshScrapRecordList==='function'){try{refreshScrapRecordList();}catch(e){}}
@@ -1820,7 +1828,7 @@ function bootCloudSync(){
       if(typeof renderAll==='function'){try{renderAll();}catch(e){}}
       if(typeof refreshSelects==='function'){try{refreshSelects();}catch(e){}}
       if(typeof refreshDeviceSelect==='function'){try{refreshDeviceSelect();}catch(e){}}
-      if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}
+      if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}if(typeof loadDispatches==='function'){try{loadDispatches();}catch(e){}}if(typeof loadToolIssues==='function'){try{loadToolIssues();}catch(e){}}if(typeof loadShiftRecords==='function'){try{loadShiftRecords();}catch(e){}}
       if(typeof refreshProductList==='function'){try{refreshProductList();}catch(e){}}
       if(typeof refreshScrapTuhaoList==='function'){try{refreshScrapTuhaoList();}catch(e){}}
       if(typeof refreshScrapRecordList==='function'){try{refreshScrapRecordList();}catch(e){}}
@@ -1963,7 +1971,7 @@ function restoreAllData(data){
   if(typeof setTheme==='function')setTheme(localStorage.getItem('appTheme')||'');
   if(typeof refreshSelects==='function'){try{refreshSelects();}catch(e){}}
   if(typeof refreshDeviceSelect==='function'){try{refreshDeviceSelect();}catch(e){}}
-  if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}
+  if(typeof loadVolcOrders==='function'){try{loadVolcOrders();}catch(e){}}if(typeof loadDispatches==='function'){try{loadDispatches();}catch(e){}}if(typeof loadToolIssues==='function'){try{loadToolIssues();}catch(e){}}if(typeof loadShiftRecords==='function'){try{loadShiftRecords();}catch(e){}}
   if(typeof refreshProductList==='function'){try{refreshProductList();}catch(e){}}
   if(typeof refreshScrapTuhaoList==='function'){try{refreshScrapTuhaoList();}catch(e){}}
   if(typeof refreshScrapRecordList==='function'){try{refreshScrapRecordList();}catch(e){}}
@@ -2018,7 +2026,7 @@ function restoreFromBackupCode(code){
     if(data.machines){sd('machines',data.machines);if(data.machinesVer)localStorage.setItem('machinesVer',data.machinesVer);}
     if(data.appTheme){localStorage.setItem('appTheme',data.appTheme);setTheme(data.appTheme);}
     // 刷新所有页面
-    refreshSelects();refreshDeviceSelect();loadVolcOrders();refreshProductList();
+    refreshSelects();refreshDeviceSelect();loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();refreshProductList();
     refreshScrapTuhaoList();refreshScrapRecordList();// refreshDailyList removed with daily pagerenderMachinesPage();
     return true;
   }catch(e){
@@ -2086,7 +2094,7 @@ function importDataText(){
     if(data.scrapRecords){sd('scrapRecords',data.scrapRecords);count++;}
     if(data.machines){sd('machines',data.machines);count++;if(data.machinesVer)localStorage.setItem('machinesVer',data.machinesVer);}
     if(data.appTheme){localStorage.setItem('appTheme',data.appTheme);setTheme(data.appTheme);}
-    refreshSelects();refreshDeviceSelect();loadVolcOrders();refreshProductList();
+    refreshSelects();refreshDeviceSelect();loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();refreshProductList();
     refreshScrapTuhaoList();refreshScrapRecordList();renderMachinesPage();refreshConsoleStats();
     msg.style.color='#4CAF50';
     msg.textContent='导入成功 ✓ 恢复了'+count+'类数据';
@@ -3112,9 +3120,18 @@ function renderMachinesPage(){
       if(avgTime>0)infoHtml+=`<div class="mc-info">${avgTime.toFixed(0)}秒/件 | 参考日产量: ~${Math.floor(79200/avgTime)}件</div>`;
     }
 
+    // 数据贯通徽标
+    var _dispatchBadge=0;
+    try{_dispatchBadge=_dispatches.filter(function(d){return d.status==='已排产'&&matchMachineNo(d.machine_no,deviceId)}).length}catch(e){}
+    var _shiftBadge=0;
+    try{_shiftRecords.forEach(function(sr){if(sr.equipment_status){var recs=typeof sr.equipment_status==='string'?JSON.parse(sr.equipment_status):sr.equipment_status;if(recs&&recs.records){recs.records.forEach(function(r){if(r.device===deviceId&&r.issue&&r.issue.trim())_shiftBadge++})}}})}catch(e){}
+    var _badgeHtml='';
+    if(_dispatchBadge>0)_badgeHtml+='<span style="display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;background:#FF8C00;color:#fff;margin-left:4px">📋待接产 '+_dispatchBadge+'</span>';
+    if(_shiftBadge>=3)_badgeHtml+='<span style="display:inline-block;font-size:10px;padding:1px 5px;border-radius:4px;background:#EF5350;color:#fff;margin-left:4px">⚠️异常'+_shiftBadge+'次</span>';
+
 html+=`<div class="machine-card" data-device="${deviceId}">
       <div class="mc-head" onclick="toggleMachineDetail('${deviceId}')" style="cursor:pointer">
-        <div><span class="mc-id">${deviceId}</span><span class="mc-model">${mach.model?' | '+mach.model:''}</span></div>
+        <div><span class="mc-id">${deviceId}</span><span class="mc-model">${mach.model?' | '+mach.model:''}</span>${_badgeHtml}</div>
         <div style="display:flex;align-items:center;gap:4px">
           <div class="mc-status ${statusClass}"><span class="dot"></span>${status}</div>
           <div class="mc-status-toggle">
@@ -3283,7 +3300,115 @@ function renderMachineDetail(deviceId){
     html+='</div>';
   }
 
+  // ===== 模块1：待接产（排产→走芯机） =====
+  try{
+    var _pendDispatches=_dispatches.filter(function(d){return d.status==='已排产'&&matchMachineNo(d.machine_no,deviceId)});
+    if(_pendDispatches.length>0){
+      html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">';
+      html+='<div class="mc-detail-title">📋 待接产 <span style="font-size:11px;color:var(--text-dim)">（'+_pendDispatches.length+'条排产）</span></div>';
+      _pendDispatches.forEach(function(d){
+        var dDate='';
+        if(d.dispatch_date)dDate=d.dispatch_date;
+        else if(d.plan_date)dDate=d.plan_date;
+        else if(d.created_at)dDate=d.created_at.slice(0,10);
+        html+='<div style="background:#1a1a2e;border-radius:6px;padding:8px;margin-bottom:4px;border-left:3px solid #FF8C00">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center">';
+        html+='<span style="font-size:12px;color:var(--gold);font-weight:600">'+(d.drawing_no||d.order_no||'-')+'</span>';
+        html+='<button style="font-size:10px;padding:2px 8px;border-radius:4px;background:#FF8C00;color:#fff;border:none;cursor:pointer" onclick="importDispatch(\''+deviceId+'\',\''+((d.drawing_no||'').replace(/'/g,"\\'"))+'\',\''+(d.order_id||d.id||'')+'\')">📌 导入派工</button>';
+        html+='</div>';
+        if(d.customer)html+='<div style="font-size:11px;color:var(--text-dim);margin-top:2px">客户: '+d.customer+'</div>';
+        if(d.plan_qty||d.qty)html+='<div style="font-size:11px;color:var(--text-dim)">计划数量: <b style="color:var(--blue-light)">'+(d.plan_qty||d.qty||'-')+'</b>件</div>';
+        if(dDate)html+='<div style="font-size:11px;color:var(--text-dim)">排产日期: '+dDate+'</div>';
+        if(d.shift||d.class_type)html+='<div style="font-size:11px;color:var(--text-dim)">班次: '+(d.shift||d.class_type||'-')+'</div>';
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+  }catch(e){}
+
+  // ===== 模块2：刀具消耗（仓库→走芯机） =====
+  try{
+    var _machineTools=_toolIssues.filter(function(t){return t.reason===deviceId});
+    if(_machineTools.length>0){
+      html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">';
+      html+='<div class="mc-detail-title">🔧 刀具消耗 <span style="font-size:11px;color:var(--text-dim)">（'+_machineTools.length+'条记录）</span></div>';
+      var _toolTotal=0;
+      _machineTools.forEach(function(t){
+        var tInfo={tool_name:'-',model:'-',price:0,unit:'个',ob_type:'-'};
+        try{if(t.related_order){var ro=typeof t.related_order==='string'?JSON.parse(t.related_order):t.related_order;if(ro){tInfo=Object.assign(tInfo,ro)}}}catch(e2){}
+        var qty=t.quantity||t.qty||1;
+        var cost=(tInfo.price||0)*qty;
+        _toolTotal+=cost;
+        html+='<div style="background:#1a1a2e;border-radius:6px;padding:6px 8px;margin-bottom:3px;border-left:3px solid var(--blue-light)">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center">';
+        html+='<span style="font-size:12px;color:var(--gold)">'+(tInfo.tool_name||'-')+'</span>';
+        html+='<span style="font-size:11px;color:var(--blue-light)">¥'+cost.toFixed(2)+'</span>';
+        html+='</div>';
+        html+='<div style="font-size:11px;color:var(--text-dim)">';
+        if(tInfo.model)html+=tInfo.model+' | ';
+        html+='数量: <b>'+qty+'</b>'+(tInfo.unit?' '+tInfo.unit:'')+' | 单价: ¥'+(tInfo.price||0).toFixed(2);
+        html+='</div>';
+        if(t.operator||t.created_by)html+='<div style="font-size:10px;color:var(--text-dark)">领用人: '+(t.operator||t.created_by||'-')+' | '+(t.created_at?t.created_at.slice(0,10):'-')+'</div>';
+        html+='</div>';
+      });
+      html+='<div style="text-align:right;padding:6px 0;font-size:13px;color:var(--gold);font-weight:600">刀具总费用: ¥'+_toolTotal.toFixed(2)+'</div>';
+      html+='</div>';
+    }
+  }catch(e){}
+
+  // ===== 模块3：设备异常（交班→走芯机） =====
+  try{
+    var _machineIssues=[];
+    _shiftRecords.forEach(function(sr){
+      if(!sr.equipment_status)return;
+      var recs=typeof sr.equipment_status==='string'?JSON.parse(sr.equipment_status):sr.equipment_status;
+      if(!recs||!recs.records)return;
+      recs.records.forEach(function(r){
+        if(r.device===deviceId&&r.issue&&r.issue.trim()){
+          _machineIssues.push({date:sr.shift_date||sr.created_at?sr.shift_date||(sr.created_at||'').slice(0,10):'',issue:r.issue,cause:r.cause||'',measure:r.measure||'',status:r.status||'',notes:r.notes||''});
+        }
+      });
+    });
+    if(_machineIssues.length>0){
+      var _lastIssueDate=_machineIssues.length>0?_machineIssues[0].date:'-';
+      html+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">';
+      html+='<div class="mc-detail-title">⚠️ 设备异常历史</div>';
+      html+='<div style="display:flex;gap:12px;margin-bottom:6px;font-size:11px">';
+      html+='<span style="color:#EF5350;font-weight:600">总异常: '+_machineIssues.length+'次</span>';
+      html+='<span style="color:var(--text-dim)">最近: '+_lastIssueDate+'</span>';
+      html+='</div>';
+      _machineIssues.slice(0,10).forEach(function(iss){
+        html+='<div style="background:#1a1a2e;border-radius:6px;padding:6px 8px;margin-bottom:3px;border-left:3px solid #EF5350">';
+        html+='<div style="font-size:11px;color:var(--text-dim)">'+(iss.date||'-')+'</div>';
+        html+='<div style="font-size:12px;color:#EF5350">'+iss.issue+'</div>';
+        if(iss.cause)html+='<div style="font-size:11px;color:var(--text-dim)">原因: '+iss.cause+'</div>';
+        if(iss.measure)html+='<div style="font-size:11px;color:var(--text-dim)">措施: '+iss.measure+'</div>';
+        html+='</div>';
+      });
+      if(_machineIssues.length>10)html+='<div style="font-size:11px;color:var(--text-dark);text-align:center">...仅显示最近10条</div>';
+      html+='</div>';
+    }
+  }catch(e){}
+
   document.getElementById('mc-detail-content-'+deviceId).innerHTML=html;
+}
+
+/* ===== 数据贯通：从排产导入派工 ===== */
+function importDispatch(deviceId,drawingNo,orderId){
+  try{
+    openAssign(deviceId);
+    setTimeout(function(){
+      var tuhaoInput=document.getElementById('assign-tuhao');
+      if(tuhaoInput&&drawingNo){tuhaoInput.value=drawingNo}
+      var orderSelect=document.getElementById('assign-order');
+      if(orderSelect&&orderId){
+        for(var i=0;i<orderSelect.options.length;i++){
+          if(orderSelect.options[i].value===orderId){orderSelect.selectedIndex=i;break}
+        }
+      }
+      showToast('📋 已填入排产信息，请确认后提交');
+    },300);
+  }catch(e){showToast('❌ 导入失败：'+e.message)}
 }
 
 const MGR_MODELS=['Star SB-20R','Star SR-20R','Star SR-32R','Star ECAS-12','Star SR-10J','Tsugami B0206','Tsugami B0205','Tsugami B0325','Tsugami SS207','Citizen L20','Citizen A20','Citizen M32','Citizen K16','其他'];
@@ -4211,7 +4336,7 @@ function refreshSelects(){
   if(document.getElementById('d-order'))document.getElementById('d-order').innerHTML=orderOpts;
   
   refreshDeviceSelect();
-  loadVolcOrders();
+  loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();
 }
 
 // ========== 产品录入-刀具费明细 ==========
@@ -6977,7 +7102,7 @@ function init(){
   }catch(e){}
   refreshSelects();
   refreshDeviceSelect();
-  loadVolcOrders();
+  loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();
   refreshProductList();
   refreshScrapTuhaoList();
   refreshScrapRecordList();
