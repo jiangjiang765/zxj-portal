@@ -276,7 +276,7 @@ button:active{transform:scale(.97)}
       <div class="form-group" style="display:flex;gap:8px;align-items:center"><input id="of_customer_new" placeholder="或输入新客户" style="flex:1"><button class="btn-sm btn-gold" onclick="addCustomerFromForm()">添加</button></div>
       <div class="form-row"><div class="form-group"><label>交期</label><input type="date" id="of_deadline"></div><div class="form-group"><label>优先级</label><select id="of_priority"><option value="普通">普通</option><option value="加急">加急</option><option value="特急">特急</option></select></div></div>
       <div class="form-group"><label>图号 *</label><input id="of_drawing" placeholder="如 TH-2024-001"></div>
-      <div class="form-row"><div class="form-group"><label>数量 *</label><input type="number" id="of_qty" inputmode="numeric" placeholder="如 1000"></div><div class="form-group"><label>材料</label><input id="of_material" value="易切削钢"></div></div>
+      <div class="form-row"><div class="form-group"><label>数量 *</label><input type="number" id="of_qty" inputmode="numeric" placeholder="如 1000"></div><div class="form-group"><label>材料</label><select id="of_material" onchange="if(this.value==='__custom__'){document.getElementById('of_material_custom').style.display='block';document.getElementById('of_material_custom').focus()}else{document.getElementById('of_material_custom').style.display='none'}"><option value="易切削钢">易切削钢</option><option value="紫铜">紫铜</option><option value="黄铜">黄铜</option><option value="铝合金">铝合金</option><option value="不锈钢">不锈钢</option><option value="钛合金">钛合金</option><option value="__custom__">手动输入...</option></select><input id="of_material_custom" style="display:none;margin-top:4px" placeholder="输入材料名称"></div></div>
       <div class="form-group" style="margin-top:12px"><label>备注</label><textarea id="of_remark" rows="2" placeholder="选填"></textarea></div>
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border)"><button class="btn btn-gold" onclick="saveOrder()">保存订单</button></div>
@@ -537,6 +537,8 @@ function openOrderForm(){
   document.getElementById('of_remark').value='';
   document.getElementById('of_customer_new').value='';
   document.getElementById('of_material').value='易切削钢';
+  document.getElementById('of_material_custom').style.display='none';
+  document.getElementById('of_material_custom').value='';
   document.getElementById('orderFormTitle').textContent='新建订单';
   // Populate customer select
   var custs=getDict('pp_customers');
@@ -574,7 +576,12 @@ function editOrder(orderNo){
   document.getElementById('of_deadline').value=first.deadline?first.deadline.substring(0,10):'';
   document.getElementById('of_priority').value=first.priority||'普通';
   document.getElementById('of_remark').value=first.notes||'';
-  document.getElementById('of_material').value=first.material_spec||'易切削钢';
+  // Set material: match existing option or use custom
+  var matVal=first.material_spec||'易切削钢';
+  var matSel=document.getElementById('of_material');
+  var matOpt=Array.from(matSel.options).find(function(o){return o.value===matVal});
+  if(matOpt){matSel.value=matVal;document.getElementById('of_material_custom').style.display='none'}
+  else{matSel.value='__custom__';document.getElementById('of_material_custom').style.display='block';document.getElementById('of_material_custom').value=matVal}
   // Store edit mode: store all order ids in this group
   document.getElementById('of_id').value=items.map(function(o){return o.id}).join(',');
   document.getElementById('orderFormTitle').textContent='修改订单 '+orderNo;
@@ -628,7 +635,9 @@ async function saveOrder(){
   if(!drawingNo){toast('请输入图号','err');return}
   var qty=parseInt(document.getElementById('of_qty').value)||0;
   if(qty<=0){toast('请输入数量','err');return}
-  var material=document.getElementById('of_material').value.trim()||'易切削钢';
+  var material=document.getElementById('of_material').value;
+  if(material==='__custom__')material=document.getElementById('of_material_custom').value.trim();
+  material=material||'易切削钢';
   var deadline=document.getElementById('of_deadline').value||null;
   var priority=document.getElementById('of_priority').value||'普通';
   var notes=document.getElementById('of_remark').value.trim()||null;
@@ -763,7 +772,7 @@ var cachedSchedules=[];
 
 async function loadSchedules(){
   try{
-    cachedSchedules=await sbGet('dispatches','select=*&order=created_at desc&limit=500');
+    cachedSchedules=await sbGet('dispatches','select=*&order=created_at.desc&limit=500');
   }catch(e){
     cachedSchedules=JSON.parse(localStorage.getItem('pp_schedules')||'[]');
   }
@@ -850,6 +859,7 @@ function renderSchedule(){
       html+='<div class="sched-card">';
       html+='<div class="sc-head"><span class="sc-drawing">'+esc(drawingNo||'未知图号')+'</span>'+statusBadge(s.status)+'</div>';
       html+='<div class="sc-info">🔧 '+esc(s.machine_no||'')+(customer?' · 👤 '+esc(customer):'')+(s.operator?' · '+esc(s.operator):'')+'</div>';
+      html+='<div style="font-size:13px;color:var(--gold);margin-top:2px">计划 '+(s.plan_qty||0)+' 件</div>';
       html+='<div class="oc-bar"><div class="oc-bar-fill" style="width:'+pct+'%;background:'+(pct>=80?'var(--green)':pct>=30?'var(--orange)':'var(--red)')+'"></div></div>';
       html+='<div class="oc-footer"><span>'+(s.done_qty||0)+'/'+(s.plan_qty||0)+' ('+pct+'%)</span><span>';
       if(s.status==='已排产'||s.status==='生产中')html+='<button class="btn-sm btn-green" onclick="event.stopPropagation();openReportWork('+s.id+')">报工</button> ';
