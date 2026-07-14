@@ -302,6 +302,40 @@ input,select,textarea,button{font-family:inherit;}
 <div id="toast" style="display:none"></div>
 
 <script>
+// ============ 火山引擎 Supabase (刀具领用云同步) ============
+var VS_URL='https://br-glad-kite-fa945c96.supabase2.aidap-global.cn-beijing.volces.com';
+var VS_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjIwODg3MTksInJvbGUiOiJhbm9uIn0.JPc7B41GXEoiXoAchqjMB47RB4c4BktPWbn4uchKin8';
+var VS_MACHINES=['A01','A02','A03','A04','A05','A06','A07','A08','A09','A10','A11','A12','A13','A14','A15','B01','B02','B03','B04','B05','B06','B07','B08','B09'];
+
+async function vsGet(t,q){var r=await fetch(VS_URL+'/rest/v1/'+t+'?'+(q||''),{headers:{'apikey':VS_ANON,'Authorization':'Bearer '+VS_ANON}});if(!r.ok)throw new Error('VS GET '+t+': '+r.status);return await r.json()}
+async function vsPost(t,d){var r=await fetch(VS_URL+'/rest/v1/'+t,{method:'POST',headers:{'apikey':VS_ANON,'Authorization':'Bearer '+VS_ANON,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error('VS POST '+t+': '+r.status);return await r.json()}
+async function vsPatch(t,q,d){var r=await fetch(VS_URL+'/rest/v1/'+t+'?'+q,{method:'PATCH',headers:{'apikey':VS_ANON,'Authorization':'Bearer '+VS_ANON,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});if(!r.ok)throw new Error('VS PATCH '+t+': '+r.status);return await r.json()}
+
+// 同步刀具领用到云端 (inventory + inventory_log)
+async function syncToolIssue(item,qty,operator,machineNo,obType,price,model,unit){
+  if(!machineNo) return; // 没选机台不同步
+  try{
+    // 1. 查找或创建 inventory 记录
+    var exist=await vsGet('inventory','select=id,quantity&name=eq.'+encodeURIComponent(item.name)+'&spec=eq.'+encodeURIComponent(item.model||''));
+    var invId;
+    if(exist&&exist.length){
+      invId=exist[0].id;
+    }else{
+      var newInv=await vsPost('inventory',{
+        category:'刀具',name:item.name,spec:item.model||'',quantity:item.stock+qty,unit:unit||'支',
+        location:'刀具仓',warning_qty:item.safeStock||0,notes:''
+      });
+      invId=newInv[0].id;
+    }
+    // 2. 写入 inventory_log (reason=机台号, related_order=刀具详情JSON)
+    var detail=JSON.stringify({tool_name:item.name,model:item.model||'',price:price||0,unit:unit||'',ob_type:obType});
+    await vsPost('inventory_log',{
+      inventory_id:invId,log_type:obType||'领用出库',quantity:qty,operator:operator||'',
+      reason:machineNo,related_order:detail
+    });
+  }catch(e){ console.warn('云同步失败:',e.message); }
+}
+
 // ============ WAREHOUSE CONFIGS ============
 var WH = {
   tool: {
@@ -323,6 +357,7 @@ var WH = {
     ],
     obExtra: [
       {key:'operator',label:'领用人',type:'person'},
+      {key:'machineNo',label:'领用机台',type:'select',options:VS_MACHINES},
       {key:'dept',label:'领用部门',type:'select',options:['走芯机','CNC'],def:'走芯机'},
       {key:'obType',label:'出库类型',type:'select',options:['领用出库','报废出库'],def:'领用出库'}
     ],
@@ -860,7 +895,19 @@ function doOutbound(){
     if(el) rec[f.key]=f.type==='number'?(parseFloat(el.value)||0):el.value;
   });
   var recs=getObRecs(); recs.unshift(rec); setObRecs(recs);
-  toast('出库成功：'+it.name+' -'+qty+' '+(it.unit||''));
+  // 刀具仓出库同步到云端
+  if(currentWh==='tool'){
+    var machineNo=rec.machineNo||'';
+    var obType=rec.obType||'领用出库';
+    var operator=rec.operator||'';
+    var price=0;
+    // 从入库记录找单价
+    var ibRecs=getIbRecs();
+    var ibMatch=ibRecs.find(function(r){return r[c.itemIdField]===selId;});
+    if(ibMatch&&ibMatch.price) price=parseFloat(ibMatch.price)||0;
+    syncToolIssue(it,qty,operator,machineNo,obType,price,it.model,it.unit);
+  }
+  toast('出库成功：'+it.name+' -'+qty+' '+(it.unit||'')+(rec.machineNo?(' → '+rec.machineNo):''));
   document.getElementById('obItemSel').value='';
   document.getElementById('obItemInfo').style.display='none';
   document.getElementById('obQty').value='1';
@@ -873,7 +920,7 @@ function renderObRecent(){
   var items=getItems(), c=cfg();
   document.getElementById('obRecent').innerHTML=recs.map(function(r){
     var it=items.find(function(x){return x.id===r[c.itemIdField];});
-    return '<div class="rec-item outbound"><div class="ri-top"><span class="ri-name">'+(it?it.name:'已删除')+(r.operator?' → '+r.operator:'')+(r.person?' → '+r.person:'')+'</span><span class="ri-qty">-'+r.qty+'</span></div><div class="ri-info">'+r.date+(r.note?' '+r.note:'')+'</div></div>';
+    return '<div class="rec-item outbound"><div class="ri-top"><span class="ri-name">'+(it?it.name:'已删除')+(r.operator?' → '+r.operator:'')+(r.machineNo?' ['+r.machineNo+']':'')+(r.person?' → '+r.person:'')+'</span><span class="ri-qty">-'+r.qty+'</span></div><div class="ri-info">'+r.date+(r.note?' '+r.note:'')+'</div></div>';
   }).join('')||'<div style="color:var(--text3);font-size:13px;">暂无出库记录</div>';
 }
 
