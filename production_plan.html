@@ -256,6 +256,18 @@ button:active{transform:scale(.97)}
 
 <!-- ============ ORDER FORM MODAL ============ -->
 <div id="modal-order" class="modal" style="display:none">
+<div id="modal-confirm" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:320px">
+    <div class="modal-head"><span>确认操作</span><button class="modal-close" onclick="cancelConfirm()">✕</button></div>
+    <div class="modal-body">
+      <div id="confirmMsg" style="font-size:14px;line-height:1.6;white-space:pre-line"></div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <button class="btn" style="flex:1;background:rgba(255,255,255,.1);color:var(--text2)" onclick="cancelConfirm()">取消</button>
+      <button class="btn btn-red" style="flex:1" onclick="doConfirm()">确定</button>
+    </div>
+  </div>
+</div>
   <div class="modal-content">
     <div class="modal-head"><span id="orderFormTitle">新建订单</span><button class="modal-close" onclick="closeModal('modal-order')">✕</button></div>
     <div class="modal-body">
@@ -570,36 +582,43 @@ function editOrder(orderNo){
   document.getElementById('modal-order').style.display='flex';
 }
 
+var _confirmCb=null;
+function showConfirm(msg,cb){
+  document.getElementById('confirmMsg').textContent=msg;
+  document.getElementById('modal-confirm').style.display='flex';
+  _confirmCb=cb;
+}
+function doConfirm(){document.getElementById('modal-confirm').style.display='none';if(_confirmCb){var cb=_confirmCb;_confirmCb=null;cb()}}
+function cancelConfirm(){document.getElementById('modal-confirm').style.display='none';_confirmCb=null}
+
 async function deleteOrder(orderNo){
   var items=cachedOrders.filter(function(o){return o.order_no===orderNo});
   if(!items.length)return;
-  // Check if has dispatches
-  var hasDispatches=cachedSchedules.filter(function(d){return items.some(function(o){return o.id===d.order_id})}).length;
-  var msg='确认删除订单 '+orderNo+'？';
-  if(hasDispatches)msg='订单 '+orderNo+' 有'+hasDispatches+'条排产记录，删除订单将同时删除关联排产。确认删除？';
-  if(!confirm(msg))return;
-  try{
-    // Delete related dispatches first
-    if(hasDispatches){
-      for(var i=0;i<items.length;i++){
-        try{await sbDelete('dispatches','order_id=eq.'+items[i].id)}catch(e){}
+  var ids=items.map(function(o){return o.id});
+  showConfirm('确认删除订单 '+orderNo+'？\n关联的排产记录将一并删除。',function(){
+    (async function(){
+      try{
+        // Always try to delete related dispatches first (by order_id)
+        for(var i=0;i<ids.length;i++){
+          try{await sbDelete('dispatches','order_id=eq.'+ids[i])}catch(e){}
+        }
+        // Delete order
+        await sbDelete('orders','order_no=eq.'+encodeURIComponent(orderNo));
+        toast('订单已删除：'+orderNo,'ok');
+      }catch(e){
+        // Local fallback
+        cachedOrders=cachedOrders.filter(function(o){return o.order_no!==orderNo});
+        cachedSchedules=cachedSchedules.filter(function(d){return ids.indexOf(d.order_id)<0});
+        localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
+        localStorage.setItem('pp_schedules',JSON.stringify(cachedSchedules));
+        toast('订单已删除(本地)','ok');
       }
-    }
-    // Delete order
-    await sbDelete('orders','order_no=eq.'+encodeURIComponent(orderNo));
-    toast('订单已删除：'+orderNo,'ok');
-  }catch(e){
-    // Local fallback
-    cachedOrders=cachedOrders.filter(function(o){return o.order_no!==orderNo});
-    cachedSchedules=cachedSchedules.filter(function(d){return !items.some(function(o){return o.id===d.order_id})});
-    localStorage.setItem('pp_orders',JSON.stringify(cachedOrders));
-    localStorage.setItem('pp_schedules',JSON.stringify(cachedSchedules));
-    toast('订单已删除(本地)','ok');
-  }
-  closeModal('modal-order-detail');
-  await loadOrders();
-  await loadSchedules();
-  renderOrders();
+      closeModal('modal-order-detail');
+      await loadOrders();
+      await loadSchedules();
+      renderOrders();
+    })();
+  });
 }
 
 async function saveOrder(){
@@ -825,9 +844,12 @@ function renderSchedule(){
     html+='<div class="card"><div class="card-title">📅 '+date+'</div>';
     groups[date].forEach(function(s){
       var pct=s.plan_qty>0?Math.round((s.done_qty||0)/s.plan_qty*100):0;
+      var order=cachedOrders.find(function(o){return o.id===s.order_id});
+      var drawingNo=order?order.drawing_no:'';
+      var customer=order?order.customer:'';
       html+='<div class="sched-card">';
-      html+='<div class="sc-head"><span class="sc-drawing">'+esc(s.machine_no||'')+'</span>'+statusBadge(s.status)+'</div>';
-      html+='<div class="sc-info">🔧 '+esc(s.machine_no||'')+' · 👤 '+(esc(s.operator)||'未分配')+'</div>';
+      html+='<div class="sc-head"><span class="sc-drawing">'+esc(drawingNo||'未知图号')+'</span>'+statusBadge(s.status)+'</div>';
+      html+='<div class="sc-info">🔧 '+esc(s.machine_no||'')+(customer?' · 👤 '+esc(customer):'')+(s.operator?' · '+esc(s.operator):'')+'</div>';
       html+='<div class="oc-bar"><div class="oc-bar-fill" style="width:'+pct+'%;background:'+(pct>=80?'var(--green)':pct>=30?'var(--orange)':'var(--red)')+'"></div></div>';
       html+='<div class="oc-footer"><span>'+(s.done_qty||0)+'/'+(s.plan_qty||0)+' ('+pct+'%)</span><span>';
       if(s.status==='已排产'||s.status==='生产中')html+='<button class="btn-sm btn-green" onclick="event.stopPropagation();openReportWork('+s.id+')">报工</button> ';
@@ -869,9 +891,11 @@ function showDeviceSchedule(deviceId){
   }else{
     scheds.slice(0,10).forEach(function(s){
       var pct=s.plan_qty>0?Math.round((s.done_qty||0)/s.plan_qty*100):0;
+      var order=cachedOrders.find(function(o){return o.id===s.order_id});
+      var drawingNo=order?order.drawing_no:'';
       html+='<div class="sched-card">';
-      html+='<div class="sc-head"><span class="sc-drawing">'+esc(s.machine_no||'')+'</span>'+statusBadge(s.status)+'</div>';
-      html+='<div class="sc-info">'+s.schedule_date+' · '+(s.done_qty||0)+'/'+(s.plan_qty||0)+'</div>';
+      html+='<div class="sc-head"><span class="sc-drawing">'+esc(drawingNo||s.machine_no||'')+'</span>'+statusBadge(s.status)+'</div>';
+      html+='<div class="sc-info">'+(s.start_time||s.created_at||'').slice(0,10)+' · '+(s.done_qty||0)+'/'+(s.plan_qty||0)+'</div>';
       html+='</div>';
     });
   }
