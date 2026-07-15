@@ -112,21 +112,37 @@ body{background:var(--bg-deep);color:var(--text)}
 .home-card.hc-sync{background:linear-gradient(135deg,#2a4a6a,#4a8ab5)}
 .hc-kanban{background:linear-gradient(135deg,#0d47a1,#1976d2)}
 
-/* 生产看板 */
-.kb-stats{display:flex;gap:8px;margin-bottom:8px}
-.kb-stat{flex:1;text-align:center;padding:8px 4px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border);font-size:12px;color:var(--text-dim)}
-.kb-stat b{display:block;font-size:18px;color:var(--text);margin-bottom:2px}
-.kb-stat-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;vertical-align:middle}
-.kb-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.kb-tile{border-radius:8px;padding:6px 8px;cursor:pointer;transition:transform .1s;background:var(--bg-card);border:1px solid var(--border)}
-.kb-tile:active{transform:scale(.95)}
-.kb-tile-head{font-size:13px;color:var(--text);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
-.kb-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.kb-tile-job{font-size:12px;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kb-run{border-left:3px solid var(--running)}.kb-run .kb-dot{background:var(--running)}
-.kb-wait{border-left:3px solid #FFB300}.kb-wait .kb-dot{background:#FFB300}
-.kb-fault{border-left:3px solid #EF5350}.kb-fault .kb-dot{background:#EF5350}
-.kb-idle .kb-dot{background:var(--text-dim)}
+/* 生产看板 - 车间大屏风格 */
+.kb-wrap{padding:10px;background:linear-gradient(180deg,#0a1628 0%,#0f2035 40%,#0a1628 100%);min-height:100vh}
+.kb-title{font-size:20px;font-weight:800;color:#fff;text-align:center;letter-spacing:2px;margin-bottom:10px;text-shadow:0 0 20px rgba(33,150,243,.3)}
+.kb-stats{display:flex;gap:6px;margin-bottom:12px}
+.kb-stat{flex:1;text-align:center;padding:10px 4px 8px;border-radius:10px;font-size:11px;color:rgba(255,255,255,.6);position:relative;overflow:hidden}
+.kb-stat b{display:block;font-size:22px;color:#fff;margin-bottom:2px;font-weight:800}
+.kb-stat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle;box-shadow:0 0 6px currentColor}
+.kb-stat:nth-child(1){background:linear-gradient(135deg,#0d3320,#1b5e20);border:1px solid #2e7d32}
+.kb-stat:nth-child(2){background:linear-gradient(135deg,#3e2723,#5d4037);border:1px solid #8d6e63}
+.kb-stat:nth-child(3){background:linear-gradient(135deg,#3e0a0a,#b71c1c);border:1px solid #e53935}
+.kb-stat:nth-child(4){background:linear-gradient(135deg,#1a1a2e,#283593);border:1px solid #5c6bc0}
+.kb-section{margin-bottom:14px}
+.kb-section-title{font-size:13px;font-weight:700;color:#64b5f6;margin-bottom:6px;padding-left:2px;letter-spacing:1px;display:flex;align-items:center;gap:6px}
+.kb-section-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#1e88e5,transparent)}
+.kb-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.kb-tile{border-radius:10px;padding:7px 6px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.kb-tile:active{transform:scale(.93);filter:brightness(.8)}
+.kb-tile-head{font-size:14px;color:#fff;display:flex;align-items:center;gap:5px;font-weight:700}
+.kb-dot{display:inline-block;width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px currentColor}
+.kb-tile-model{font-size:9px;color:rgba(255,255,255,.45);font-weight:400}
+.kb-tile-job{font-size:11px;margin:3px 0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ffd54f;font-weight:600}
+.kb-tile-info{font-size:10px;color:rgba(255,255,255,.55);line-height:1.4}
+.kb-run{background:linear-gradient(135deg,#0d2f1a,#1b5e20);border:1px solid rgba(76,175,80,.4);box-shadow:0 0 12px rgba(76,175,80,.15)}
+.kb-run .kb-dot{background:#4caf50;color:#4caf50}
+.kb-wait{background:linear-gradient(135deg,#2e1a00,#e65100);border:1px solid rgba(255,152,0,.4);box-shadow:0 0 12px rgba(255,152,0,.15)}
+.kb-wait .kb-dot{background:#ff9800;color:#ff9800}
+.kb-fault{background:linear-gradient(135deg,#2a0a0a,#c62828);border:1px solid rgba(244,67,54,.4);box-shadow:0 0 12px rgba(244,67,54,.2)}
+.kb-fault .kb-dot{background:#f44336;color:#f44336}
+.kb-idle{background:linear-gradient(135deg,#1a1a2e,#263238);border:1px solid rgba(96,125,139,.3)}
+.kb-idle .kb-dot{background:#607d8b;color:#607d8b}
+.kb-empty-job{color:rgba(255,255,255,.3);font-weight:400}
 
 /* 车间控制台导航 */
 .console{margin:0 12px 12px}
@@ -878,18 +894,22 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 
 <div class="page" id="page-kanban">
   <button class="page-back" onclick="showNav()">← 返回</button>
-  <div style="padding:8px">
-    <div style="font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">📊 生产看板</div>
+  <div class="kb-wrap">
+    <div class="kb-title">⚙ 生产看板</div>
     <div class="kb-stats">
-      <div class="kb-stat" onclick="goMachineFilter('running')"><span class="kb-stat-dot" style="background:var(--running)"></span><b id="kb-run">0</b> 运行</div>
-      <div class="kb-stat" onclick="goMachineFilter('waiting')"><span class="kb-stat-dot" style="background:#FFB300"></span><b id="kb-wait">0</b> 待料</div>
-      <div class="kb-stat" onclick="goMachineFilter('fault')"><span class="kb-stat-dot" style="background:#EF5350"></span><b id="kb-fault">0</b> 故障</div>
-      <div class="kb-stat" onclick="goMachineFilter('idle')"><span class="kb-stat-dot" style="background:var(--text-dim)"></span><b id="kb-idle">0</b> 空闲</div>
+      <div class="kb-stat" onclick="goMachineFilter('running')"><span class="kb-stat-dot" style="background:#4caf50;color:#4caf50"></span><b id="kb-run">0</b>运行中</div>
+      <div class="kb-stat" onclick="goMachineFilter('waiting')"><span class="kb-stat-dot" style="background:#ff9800;color:#ff9800"></span><b id="kb-wait">0</b>待料</div>
+      <div class="kb-stat" onclick="goMachineFilter('fault')"><span class="kb-stat-dot" style="background:#f44336;color:#f44336"></span><b id="kb-fault">0</b>故障</div>
+      <div class="kb-stat" onclick="goMachineFilter('idle')"><span class="kb-stat-dot" style="background:#607d8b;color:#607d8b"></span><b id="kb-idle">0</b>空闲</div>
     </div>
-    <div style="font-size:13px;color:var(--text);margin:8px 0 4px;font-weight:600">A 区（A01-A15）</div>
-    <div class="kb-grid" id="kb-grid-a"></div>
-    <div style="font-size:13px;color:var(--text);margin:10px 0 4px;font-weight:600">B 区（B01-B09）</div>
-    <div class="kb-grid" id="kb-grid-b"></div>
+    <div class="kb-section">
+      <div class="kb-section-title">🏭 A 区</div>
+      <div class="kb-grid" id="kb-grid-a"></div>
+    </div>
+    <div class="kb-section">
+      <div class="kb-section-title">🏭 B 区</div>
+      <div class="kb-grid" id="kb-grid-b"></div>
+    </div>
   </div>
 </div>
 
@@ -4299,26 +4319,27 @@ function renderKanbanTiles(list,dayByDev){
     else if(m.status==='fault'){statusClass='kb-fault';}
     else if(m.currentTuhao){statusClass='kb-run';}
     var tuhao=m.currentTuhao||'';
-    var model=m.model?'<span style="font-size:10px;color:var(--text-dim)">'+esc(m.model)+'</span>':'';
+    var modelTag=m.model?'<span class="kb-tile-model">'+esc(m.model)+'</span>':'';
     var dispatchInfo='';
     try{
       var dp=_dispatches.filter(function(d){return d.status==='已排产'&&matchMachineNo(d.machine_no,m.id)});
       if(dp.length>0){
         var totalPlan=dp.reduce(function(s,d){return s+(d.plan_qty||0)},0);
-        dispatchInfo='<div style="font-size:10px;color:#FF8C00">📋'+totalPlan+'件</div>';
+        dispatchInfo='<span style="color:#ff9800">📋'+totalPlan+'件</span>';
       }
     }catch(e){}
     var dayQty=dayByDev[m.id]||0;
     var dayLine='';
-    if(dayQty>0){dayLine='<div style="font-size:10px;color:var(--green)">⚡'+dayQty+'件</div>';}
+    if(dayQty>0){dayLine='<span style="color:#4caf50">⚡'+dayQty+'件</span>';}
     else if(m.currentTuhao&&m.pieceTime>0){
       var est=Math.floor(79200/m.pieceTime);
-      dayLine='<div style="font-size:10px;color:var(--text-dim)">~'+est+'件/日</div>';
+      dayLine='<span style="color:rgba(255,255,255,.4)">~'+est+'件/日</span>';
     }
+    var infoParts=[dispatchInfo,dayLine].filter(function(x){return x});
     html+='<div class="kb-tile '+statusClass+'" onclick="navTo(\'machines\')">';
-    html+='<div class="kb-tile-head"><span class="kb-dot"></span><b>'+esc(m.id)+'</b> '+model+'</div>';
-    html+='<div class="kb-tile-job">'+(tuhao?'<span style="color:var(--gold)">'+esc(tuhao)+'</span>':'<span style="color:var(--text-dim)">—</span>')+'</div>';
-    html+=dispatchInfo+dayLine;
+    html+='<div class="kb-tile-head"><span class="kb-dot"></span>'+esc(m.id)+' '+modelTag+'</div>';
+    html+='<div class="kb-tile-job">'+(tuhao?esc(tuhao):'<span class="kb-empty-job">空闲</span>')+'</div>';
+    if(infoParts.length)html+='<div class="kb-tile-info">'+infoParts.join(' · ')+'</div>';
     html+='</div>';
   });
   return html;
