@@ -9713,7 +9713,8 @@ function submitQuickQC(){
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">基于当前订单和机台状态，AI自动给出排产建议</div>
       <div class="ai-key-row">
         <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">API Key:</span>
-        <input type="password" id="ai-api-key" placeholder="DeepSeek API Key（首次需配置）">
+        <input type="text" id="ai-api-key" placeholder="粘贴DeepSeek API Key" autocomplete="off" style="font-size:12px">
+        <button onclick="var e=document.getElementById('ai-api-key');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🔒'" style="padding:4px 6px;font-size:14px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim)" title="显示/隐藏">👁</button>
         <button class="btn btn-blue" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="aiSaveKey()">保存</button>
       </div>
       <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">💡 去 <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--gold)">platform.deepseek.com</a> 注册获取Key，新用户送500万token</div>
