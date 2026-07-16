@@ -9580,6 +9580,9 @@ async function aiSchedule(){
     });
     if(!res.ok){
       var errText = await res.text();
+      if(res.status===401){resultEl.innerHTML='❌ Key无效，请检查API Key是否完整复制';return;}
+      if(res.status===402){resultEl.innerHTML='❌ DeepSeek余额不足，去<a href="https://platform.deepseek.com" target="_blank" style="color:var(--gold)">platform.deepseek.com</a>充值（1元就够用很久，支持支付宝）';return;}
+      if(res.status===429){resultEl.innerHTML='❌ 请求太频繁，稍等几秒再试';return;}
       resultEl.innerHTML = '❌ API调用失败('+res.status+')：'+errText;
       return;
     }
