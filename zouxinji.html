@@ -1649,13 +1649,13 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   </div>
   <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj,.gltf,.glb" style="display:none" onchange="handleV3dFile(this)">
   <div id="v3d-status" style="display:none;font-size:13px;margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:8px;color:var(--text)"></div>
-  <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative"></div>
-  <div id="v3d-dimensions" style="display:none;margin-top:8px;padding:10px 14px;background:var(--bg-input);border-radius:10px;font-size:13px;line-height:1.6"></div>
-  <div id="v3d-measure" style="display:none;margin-top:6px;padding:8px 14px;background:rgba(30,136,229,.12);border:1px solid rgba(30,136,229,.3);border-radius:10px;font-size:12px;color:#64b5f6;line-height:1.5"></div>
-  <div id="v3d-controls" style="display:none;margin-top:8px;flex-wrap:wrap;text-align:center;gap:8px">
+  <div id="v3d-controls" style="display:none;margin-bottom:8px;flex-wrap:wrap;text-align:center;gap:8px">
     <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:80px" onclick="v3dToggleMeasure()">📏 测量</button>
     <button class="btn" style="background:#e74c3c;color:#fff;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
   </div>
+  <div id="v3d-dimensions" style="display:none;margin-bottom:8px;padding:10px 14px;background:var(--bg-input);border-radius:10px;font-size:13px;line-height:1.6"></div>
+  <div id="v3d-measure" style="display:none;margin-bottom:8px;padding:8px 14px;background:rgba(30,136,229,.12);border:1px solid rgba(30,136,229,.3);border-radius:10px;font-size:12px;color:#64b5f6;line-height:1.5"></div>
+  <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative"></div>
 </div>
 
 <div class="page" id="page-data">
