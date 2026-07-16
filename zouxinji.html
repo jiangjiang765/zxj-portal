@@ -1642,7 +1642,7 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 <div class="page" id="page-viewer3d">
   <button class="page-back" onclick="showNav()">← 返回</button>
   <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">📊 3D图纸查看</div>
-  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式，拖拽或点击上传</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式（STEP首次加载需下载解析引擎约10秒），拖拽或点击上传</div>
   <div id="v3d-upload-area" onclick="document.getElementById('v3d-file').click()" style="border:2px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all .2s">
     <div style="font-size:36px;margin-bottom:8px">📁</div>
     <div style="font-size:14px;color:var(--text);font-weight:600">点击选择文件</div>
@@ -4309,6 +4309,7 @@ function queryProcess(){
 
 // ========== 3D图纸查看器 ==========
 var v3dScene=null,v3dCamera=null,v3dRenderer=null,v3dControls=null,v3dMesh=null,v3dWireframe=false;
+var _occtModule=null; // occt-import-js WASM module cache
 function v3dShowStatus(msg,color){
   var el=document.getElementById('v3d-status');el.style.display='block';el.innerHTML=msg;el.style.color=color||'var(--text)';
 }
@@ -4332,22 +4333,115 @@ function initV3d(){
   return true;
 }
 function animateV3d(){requestAnimationFrame(animateV3d);if(v3dControls)v3dControls.update();if(v3dRenderer)v3dRenderer.render(v3dScene,v3dCamera);}
+// Load occt-import-js (OpenCASCADE WASM) for STEP parsing - lazy load
+function loadOcctJs(){
+  return new Promise(function(resolve,reject){
+    if(_occtModule){resolve(_occtModule);return;}
+    if(typeof occtimportjs==='function'){
+      v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
+      occtimportjs().then(function(occt){_occtModule=occt;resolve(occt);}).catch(reject);
+      return;
+    }
+    v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
+    s.onload=function(){
+      if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
+      v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
+      occtimportjs().then(function(occt){_occtModule=occt;resolve(occt);}).catch(reject);
+    };
+    s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
+    document.head.appendChild(s);
+  });
+}
+// Convert occt-import-js result to Three.js Group
+function occtResultToThree(result){
+  var group=new THREE.Group();
+  function addNode(node){
+    if(node.meshes&&node.meshes.length){
+      for(var i=0;i<node.meshes.length;i++){
+        var mIdx=node.meshes[i];if(mIdx>=result.meshes.length)continue;
+        var m=result.meshes[mIdx];
+        var geom=new THREE.BufferGeometry();
+        var pos=m.attributes.position.array;
+        var posArr=new Float32Array(pos.length);
+        for(var j=0;j<pos.length;j++)posArr[j]=pos[j];
+        geom.setAttribute('position',new THREE.BufferAttribute(posArr,3));
+        if(m.attributes.normal){
+          var norm=m.attributes.normal.array;
+          var normArr=new Float32Array(norm.length);
+          for(var j=0;j<norm.length;j++)normArr[j]=norm[j];
+          geom.setAttribute('normal',new THREE.BufferAttribute(normArr,3));
+        }else{geom.computeVertexNormals();}
+        if(m.attributes.index){
+          var idx=m.attributes.index.array;
+          var idxArr=new Uint32Array(idx.length);
+          for(var j=0;j<idx.length;j++)idxArr[j]=idx[j];
+          geom.setIndex(new THREE.BufferAttribute(idxArr,1));
+        }
+        var color=0x4488cc;
+        if(m.color&&m.color.length>=3){color=new THREE.Color(m.color[0],m.color[1],m.color[2]);}
+        var mat=new THREE.MeshPhongMaterial({color:color,specular:0x222222,shininess:60});
+        if(v3dWireframe)mat.wireframe=true;
+        var mesh=new THREE.Mesh(geom,mat);
+        if(m.name)mesh.name=m.name;
+        group.add(mesh);
+      }
+    }
+    if(node.children&&node.children.length){
+      for(var i=0;i<node.children.length;i++)addNode(node.children[i]);
+    }
+  }
+  if(result.root)addNode(result.root);
+  return group;
+}
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
   var name=file.name,ext=name.split('.').pop().toLowerCase();
   v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f6');
-  // STEP not supported in browser
-  if(ext==='step'||ext==='stp'){
-    v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br><br>⚠️ STEP/STP格式暂不支持浏览器直接预览<br>💡 建议用CAD软件导出为 <b>STL格式</b> 后再上传查看<br>（SolidWorks/UG/Mastercam 均可导出STL）','#ff9800');
-    document.getElementById('v3d-container').style.display='none';
-    document.getElementById('v3d-controls').style.display='none';
-    input.value='';return;
-  }
   if(typeof THREE==='undefined'){v3dShowStatus('⚠️ 3D引擎未加载，请刷新页面重试','#f44336');input.value='';return;}
   document.getElementById('v3d-container').style.display='block';
   document.getElementById('v3d-controls').style.display='flex';
   if(!initV3d()){input.value='';return;}
   if(v3dMesh){v3dScene.remove(v3dMesh);v3dMesh=null;}
+  // STEP/STP - use occt-import-js (OpenCASCADE WASM)
+  if(ext==='step'||ext==='stp'){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var buf=new Uint8Array(e.target.result);
+      v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ 正在解析 STEP 文件...','#64b5f6');
+      loadOcctJs().then(function(occt){
+        v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
+        try{
+          var result=occt.ReadStepFile(buf,null);
+          if(!result||!result.success){
+            v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
+            return;
+          }
+          var group=occtResultToThree(result);
+          if(group.children.length===0){
+            v3dShowStatus('⚠️ STEP 解析成功但无网格数据（可能是空装配体）','#ff9800');
+            return;
+          }
+          v3dMesh=group;
+          var box=new THREE.Box3().setFromObject(group);
+          var center=new THREE.Vector3();box.getCenter(center);
+          group.position.sub(center);v3dScene.add(group);
+          fitV3dCamera(box);
+          var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
+          v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ STEP 加载成功（'+meshCount+' 个网格）','#4caf50');
+        }catch(err){
+          v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
+        }
+      }).catch(function(err){
+        v3dShowStatus('❌ STEP引擎加载失败: '+err.message+'<br>💡 请检查网络连接后重试，或用CAD导出STL上传','#f44336');
+        document.getElementById('v3d-container').style.display='none';
+        document.getElementById('v3d-controls').style.display='none';
+      });
+    };
+    reader.readAsArrayBuffer(file);
+    input.value='';return;
+  }
   if(ext==='stl'){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -4382,7 +4476,7 @@ function handleV3dFile(input){
     };
     reader.readAsText(file);
   }else{
-    v3dShowStatus('❌ 不支持的格式: .'+ext+'，请上传 STL 或 OBJ 文件','#f44336');
+    v3dShowStatus('❌ 不支持的格式: .'+ext+'，请上传 STEP/STL/OBJ 文件','#f44336');
   }
   input.value='';
 }
@@ -4406,6 +4500,7 @@ function v3dClear(){
   document.getElementById('v3d-controls').style.display='none';
   document.getElementById('v3d-status').style.display='none';
   v3dWireframe=false;
+  // don't reset _occtModule - keep WASM cached for reuse
 }
 function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
 // drag & drop
