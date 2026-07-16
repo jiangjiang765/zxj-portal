@@ -533,12 +533,7 @@ html.portal-auto .login-overlay{display:none!important}
 .header-logout:active{color:#EF5350;border-color:#EF5350}
 
 </style>
-<!-- Three.js for 3D viewer -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/STLLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/OBJLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
-<!-- STEP引擎: loadOcctJs() uses dynamic import() with fallback chain -->
+<!-- 3D引擎: Online3DViewer (O3DV) v0.18.0 懒加载，含Three.js+occt-import-js，支持STEP/STL/OBJ/glTF等 -->
 
 </head>
 <body>
@@ -1644,23 +1639,19 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   <button class="page-back" onclick="showNav()">← 返回</button>
   <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">📊 3D图纸查看</div>
   <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;line-height:1.5">
-    <b style="color:var(--gold)">推荐格式：STL</b>（CAD软件导出，渲染最精确）<br>
-    也支持 STEP/STP/OBJ（STEP首次需下载引擎约10秒，复杂零件可能显示不完整）
+    支持 <b style="color:var(--gold)">STEP/STP/STL/OBJ/glTF/GLB</b> 等格式<br>
+    首次加载3D引擎约5秒，之后秒开
   </div>
   <div id="v3d-upload-area" onclick="document.getElementById('v3d-file').click()" style="border:2px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all .2s">
     <div style="font-size:36px;margin-bottom:8px">📁</div>
     <div style="font-size:14px;color:var(--text);font-weight:600">点击选择文件</div>
     <div style="font-size:11px;color:var(--text-dim);margin-top:4px">或拖拽文件到此处</div>
   </div>
-  <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj" style="display:none" onchange="handleV3dFile(this)">
+  <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj,.gltf,.glb" style="display:none" onchange="handleV3dFile(this)">
   <div id="v3d-status" style="display:none;font-size:13px;margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:8px;color:var(--text)"></div>
-  <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative">
-    <canvas id="v3d-canvas" style="width:100%;height:100%;display:block"></canvas>
-  </div>
-  <div id="v3d-controls" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn" style="background:var(--blue);color:#fff;flex:1;min-width:80px" onclick="v3dResetView()">🔄 重置视角</button>
-    <button class="btn" style="background:var(--blue);color:#fff;flex:1;min-width:80px" onclick="v3dToggleWireframe()">🔲 线框模式</button>
-    <button class="btn" style="background:#e74c3c;color:#fff;flex:1;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
+  <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative"></div>
+  <div id="v3d-controls" style="display:none;margin-top:8px;flex-wrap:wrap;text-align:center">
+    <button class="btn" style="background:#e74c3c;color:#fff;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
   </div>
 </div>
 
@@ -4311,306 +4302,67 @@ function queryProcess(){
 }
 
 
-// ========== 3D图纸查看器 ==========
-var v3dScene=null,v3dCamera=null,v3dRenderer=null,v3dControls=null,v3dMesh=null,v3dWireframe=false;
-var _occtModule=null; // occt-import-js WASM module cache
+// ========== 3D图纸查看器 (Online3DViewer引擎) ==========
+var _o3dvViewer=null;
+var _o3dvLoading=false;
 function v3dShowStatus(msg,color){
   var el=document.getElementById('v3d-status');el.style.display='block';el.innerHTML=msg;el.style.color=color||'var(--text)';
 }
-function v3dResize(){
-  if(!v3dRenderer)return;
-  var c=document.getElementById('v3d-canvas');
-  var w=c.clientWidth||300,h=c.clientHeight||300;
-  v3dRenderer.setSize(w,h,false);
-  v3dCamera.aspect=w/h;
-  v3dCamera.updateProjectionMatrix();
-}
-function initV3d(){
-  if(typeof THREE==='undefined'){v3dShowStatus('⚠️ 3D引擎加载失败，请检查网络连接后刷新页面','#f44336');return false;}
-  if(v3dRenderer){v3dResize();return true;}
-  var c=document.getElementById('v3d-canvas');
-  var w=c.clientWidth||300,h=c.clientHeight||300;
-  v3dScene=new THREE.Scene();
-  v3dScene.background=new THREE.Color(0x1a1a2e);
-  v3dCamera=new THREE.PerspectiveCamera(60,w/h,0.1,100000);
-  v3dCamera.position.set(100,80,100);
-  v3dRenderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
-  v3dRenderer.setSize(w,h);
-  v3dRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-  if(typeof THREE.OrbitControls==='function'){v3dControls=new THREE.OrbitControls(v3dCamera,v3dRenderer.domElement);v3dControls.enableDamping=true;v3dControls.dampingFactor=0.1;}
-  v3dScene.add(new THREE.HemisphereLight(0x8899bb,0x443322,0.7));
-  var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(80,120,60);v3dScene.add(dl);
-  var dl2=new THREE.DirectionalLight(0x6688ff,0.6);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
-  var dl3=new THREE.DirectionalLight(0xffddaa,0.4);dl3.position.set(0,-60,40);v3dScene.add(dl3);
-  v3dScene.add(new THREE.GridHelper(200,20,0x333355,0x222244));
-  animateV3d();
-  return true;
-}
-function animateV3d(){requestAnimationFrame(animateV3d);if(v3dControls)v3dControls.update();if(v3dRenderer)v3dRenderer.render(v3dScene,v3dCamera);}
-// Load occt-import-js (OpenCASCADE WASM) for STEP parsing
-// Strategy: dynamic import() @sunbox v0.0.25 (OCCT newer, better mesh) → fallback v0.0.23
-function loadOcctJs(){
-  if(_occtModule){return Promise.resolve(_occtModule);}
-  // Try @sunbox v0.0.25 via dynamic import() — newer OCCT, better tessellation
-  return loadOcctJsSunbox().catch(function(e1){
-    v3dShowStatus('⏳ @sunbox引擎加载失败('+e1.message+')，尝试备用引擎...','#ff9800');
-    return loadOcctJsFallback();
-  });
-}
-function loadOcctJsSunbox(){
+function loadO3dvEngine(){
   return new Promise(function(resolve,reject){
-    v3dShowStatus('⏳ 正在加载 STEP 高精度引擎（@sunbox v0.0.28）...','#64b5f6');
-    // Dynamic import() — works in Chrome 63+ / Huawei Chromium
-    import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.28/dist/occt-import-js.js')
-      .then(function(m){
-        var factory=m.default||m;
-        v3dShowStatus('⏳ @sunbox JS已加载，初始化WASM...','#64b5f6');
-        return factory();
-      })
-      .then(function(occt){
-        if(!occt||typeof occt.ReadStepFile!=='function'){
-          reject(new Error('ReadStepFile不存在'));
-          return;
-        }
-        _occtModule=occt;
-        window._occtVersion='sunbox';
-        v3dShowStatus('✅ @sunbox STEP引擎就绪','#4caf50');
-        resolve(occt);
-      })
-      .catch(function(e){reject(e);});
-  });
-}
-function loadOcctJsFallback(){
-  return new Promise(function(resolve,reject){
-    if(typeof occtimportjs==='function'){
-      v3dShowStatus('⏳ 正在初始化 STEP 备用引擎（v0.0.23）...','#64b5f6');
-      occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+    if(window.OV&&OV.EmbeddedViewer){resolve();return;}
+    if(_o3dvLoading){
+      var ck=setInterval(function(){if(window.OV&&OV.EmbeddedViewer){clearInterval(ck);resolve();}},200);
       return;
     }
-    v3dShowStatus('⏳ 正在下载 STEP 备用引擎（v0.0.23，首次约10秒）...','#64b5f6');
+    _o3dvLoading=true;
+    v3dShowStatus('⏳ 正在加载3D引擎（首次约5秒）...','#64b5f6');
     var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
+    s.src='https://cdn.jsdelivr.net/npm/online-3d-viewer@0.18.0/build/engine/o3dv.min.js';
     s.onload=function(){
-      if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
-      v3dShowStatus('⏳ 正在初始化 STEP 备用引擎...','#64b5f6');
-      occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+      _o3dvLoading=false;
+      if(window.OV&&OV.EmbeddedViewer){v3dShowStatus('✅ 3D引擎就绪','#4caf50');resolve();}
+      else{reject(new Error('O3DV引擎加载异常'));}
     };
-    s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
+    s.onerror=function(){_o3dvLoading=false;reject(new Error('3D引擎下载失败，请检查网络'));};
     document.head.appendChild(s);
   });
 }
-// Render STEP result → direct BufferGeometry (following 3dviewer.net pipeline)
-function stepResultToThree(result){
-  var allMeshes=result.meshes||[];
-  if(allMeshes.length===0) return null;
-  // Walk hierarchy to get ordered mesh list (same as O3DV ImportNode)
-  var orderedMeshes=[];
-  if(result.root){
-    (function walkNode(node){
-      if(node.meshes&&node.meshes.length){
-        for(var i=0;i<node.meshes.length;i++){
-          var idx=node.meshes[i];
-          if(idx>=0&&idx<allMeshes.length) orderedMeshes.push(allMeshes[idx]);
-        }
-      }
-      if(node.children&&node.children.length){
-        for(var i=0;i<node.children.length;i++) walkNode(node.children[i]);
-      }
-    })(result.root);
-  }
-  // Fallback: use flat array if hierarchy walk yielded nothing
-  var meshes=orderedMeshes.length>0?orderedMeshes:allMeshes;
-  if(meshes.length===0) return null;
-  var group=new THREE.Group();
-  var defaultMat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.35,metalness:0.6,side:THREE.DoubleSide});
-  if(v3dWireframe) defaultMat.wireframe=true;
-  for(var mi=0;mi<meshes.length;mi++){
-    try{
-      var m=meshes[mi];
-      if(!m||!m.attributes||!m.attributes.position||!m.attributes.position.array) continue;
-      var posArr=m.attributes.position.array;
-      if(posArr.length<9) continue; // need at least 1 triangle
-      var vCount=Math.floor(posArr.length/3);
-      // Build position Float32Array (ensure proper type)
-      var positions=(posArr instanceof Float32Array)?posArr:new Float32Array(posArr);
-      var geom=new THREE.BufferGeometry();
-      geom.setAttribute('position',new THREE.BufferAttribute(positions,3));
-      // Index buffer (if present)
-      var idxArr=(m.attributes.index&&m.attributes.index.array)?m.attributes.index.array:null;
-      if(idxArr&&idxArr.length>=3){
-        var maxIdx=0;
-        for(var k=0;k<idxArr.length;k++){if(idxArr[k]>maxIdx)maxIdx=idxArr[k];}
-        if(maxIdx<vCount){
-          if(idxArr instanceof Uint32Array){
-            geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idxArr),1));
-          }else if(idxArr instanceof Uint16Array){
-            geom.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr),1));
-          }else{
-            geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idxArr),1));
-          }
-        }else{
-          // indices out of range → un-index to avoid crash
-          geom=geom.toNonIndexed();
-        }
-      }
-      // Normals — use original normals from OCCT (same as 3dviewer.net)
-      var normArr=(m.attributes.normal&&m.attributes.normal.array)?m.attributes.normal.array:null;
-      if(normArr&&normArr.length>=positions.length){
-        var normals=(normArr instanceof Float32Array)?normArr:new Float32Array(normArr);
-        geom.setAttribute('normal',new THREE.BufferAttribute(normals,3));
-      }else{
-        geom.computeVertexNormals();
-      }
-      // Material per mesh — handle brep_faces for per-face colors (like 3dviewer.net)
-      var mat=defaultMat;
-      var mats=null;
-      if(m.brep_faces&&m.brep_faces.length>0){
-        var faceMats=[defaultMat];
-        for(var fi=0;fi<m.brep_faces.length;fi++){
-          var bf=m.brep_faces[fi];
-          if(!bf.color)continue;
-          var fr=Math.round(bf.color[0]*255),fg=Math.round(bf.color[1]*255),fb=Math.round(bf.color[2]*255);
-          var fc=(fr<<16)|(fg<<8)|fb;
-          var fmi=-1;
-          for(var mi2=0;mi2<faceMats.length;mi2++){if(faceMats[mi2]._fc===fc){fmi=mi2;break;}}
-          if(fmi===-1){
-            fmi=faceMats.length;
-            var fm=new THREE.MeshStandardMaterial({color:fc,roughness:0.35,metalness:0.6,side:THREE.DoubleSide});
-            fm._fc=fc; if(v3dWireframe) fm.wireframe=true;
-            faceMats.push(fm);
-          }
-          geom.addGroup(bf.first*3,(bf.last-bf.first+1)*3,fmi);
-        }
-        if(faceMats.length>1) mats=faceMats;
-        else mat=faceMats[0]!==defaultMat?faceMats[0]:mat;
-      }else if(m.color&&m.color.length>=3){
-        var r=Math.round(m.color[0]*255),g=Math.round(m.color[1]*255),b=Math.round(m.color[2]*255);
-        mat=new THREE.MeshStandardMaterial({color:(r<<16)|(g<<8)|b,roughness:0.35,metalness:0.6,side:THREE.DoubleSide});
-        if(v3dWireframe) mat.wireframe=true;
-      }
-      var meshObj=mats?new THREE.Mesh(geom,mats):new THREE.Mesh(geom,mat);
-      group.add(meshObj);
-    }catch(eMesh){
-      // skip bad mesh, continue with others
-    }
-  }
-  return group.children.length>0?group:null;
-}
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
-  var name=file.name,ext=name.split('.').pop().toLowerCase();
+  var name=file.name;
   v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f6');
-  if(typeof THREE==='undefined'){v3dShowStatus('⚠️ 3D引擎未加载，请刷新页面重试','#f44336');input.value='';return;}
-  document.getElementById('v3d-container').style.display='block';
-  document.getElementById('v3d-controls').style.display='flex';
-  if(!initV3d()){input.value='';return;}
-  if(v3dMesh){v3dScene.remove(v3dMesh);v3dMesh=null;}
-  // STEP/STP - use occt-import-js (OpenCASCADE WASM)
-  if(ext==='step'||ext==='stp'){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var buf=new Uint8Array(e.target.result);
-      v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ 正在解析 STEP 文件...','#64b5f6');
-      loadOcctJs().then(function(occt){
-        v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
-        try{
-          // Match Online3DViewer (3dviewer.net) reference params
-          var stepParams={linearUnit:'millimeter',linearDeflectionType:'bounding_box_ratio',linearDeflection:0.001,angularDeflection:0.5};
-          var result=occt.ReadStepFile(buf,stepParams);
-          if(!result||!result.success){
-            v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
-            return;
-          }
-          // Convert STEP result → Three.js BufferGeometry directly
-          var group=stepResultToThree(result);
-          if(!group||group.children.length===0){
-            v3dShowStatus('⚠️ STEP 解析成功但无网格数据（可能是空装配体）','#ff9800');
-            return;
-          }
-          v3dMesh=group;
-          var box=new THREE.Box3().setFromObject(group);
-          var center=new THREE.Vector3();box.getCenter(center);
-          group.position.sub(center);v3dScene.add(group);
-          fitV3dCamera(box);
-          // ensure canvas is properly sized after async load
-          requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
-          var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
-          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+(window._occtVersion==='sunbox'?'@sunbox v0.0.28':'legacy v0.0.23')+'）','#4caf50');
-        }catch(err){
-          v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
-        }
-      }).catch(function(err){
-        v3dShowStatus('❌ STEP引擎加载失败: '+err.message+'<br>💡 请检查网络连接后重试，或用CAD导出STL上传','#f44336');
-        document.getElementById('v3d-container').style.display='none';
-        document.getElementById('v3d-controls').style.display='none';
+  loadO3dvEngine().then(function(){
+    var container=document.getElementById('v3d-container');
+    container.style.display='block';
+    document.getElementById('v3d-controls').style.display='block';
+    // 清除旧viewer
+    container.innerHTML='';
+    _o3dvViewer=null;
+    try{
+      var viewer=new OV.EmbeddedViewer(container,{
+        backgroundColor:new OV.RGBAColor(26,26,46,255),
+        defaultColor:new OV.RGBColor(136,170,204)
       });
-    };
-    reader.readAsArrayBuffer(file);
-    input.value='';return;
-  }
-  if(ext==='stl'){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      try{
-        var loader=new THREE.STLLoader();
-        var geom=loader.parse(e.target.result);
-        var mat=new THREE.MeshPhongMaterial({color:0x4488cc,specular:0x222222,shininess:60});
-        if(v3dWireframe)mat.wireframe=true;
-        v3dMesh=new THREE.Mesh(geom,mat);
-        geom.computeBoundingBox();
-        var center=new THREE.Vector3();geom.boundingBox.getCenter(center);
-        v3dMesh.position.sub(center);v3dScene.add(v3dMesh);
-        fitV3dCamera(geom.boundingBox);
-        requestAnimationFrame(function(){v3dResize();});
-        v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
-      }catch(err){v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');}
-    };
-    reader.readAsArrayBuffer(file);
-  }else if(ext==='obj'){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      try{
-        var loader=new THREE.OBJLoader();
-        var obj=loader.parse(e.target.result);
-        obj.traverse(function(child){if(child.isMesh){child.material=new THREE.MeshPhongMaterial({color:0x4488cc,specular:0x222222,shininess:60});if(v3dWireframe)child.material.wireframe=true;}});
-        v3dMesh=obj;
-        var box=new THREE.Box3().setFromObject(obj);
-        var center=new THREE.Vector3();box.getCenter(center);
-        obj.position.sub(center);v3dScene.add(obj);
-        fitV3dCamera(box);
-        requestAnimationFrame(function(){v3dResize();});
-        v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
-      }catch(err){v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');}
-    };
-    reader.readAsText(file);
-  }else{
-    v3dShowStatus('❌ 不支持的格式: .'+ext+'，请上传 STEP/STL/OBJ 文件','#f44336');
-  }
+      _o3dvViewer=viewer;
+      viewer.LoadModelFromFileList([file]);
+      // O3DV内部异步渲染，延迟更新状态
+      setTimeout(function(){v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');},1500);
+    }catch(err){
+      v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');
+    }
+  }).catch(function(err){
+    v3dShowStatus('❌ '+err.message+'<br>💡 请检查网络连接后重试','#f44336');
+  });
   input.value='';
 }
-function fitV3dCamera(box){
-  if(!box)return;var size=new THREE.Vector3();box.getSize(size);
-  var maxDim=Math.max(size.x,size.y,size.z);if(maxDim<0.001)maxDim=10;
-  var dist=maxDim*1.5;
-  v3dCamera.position.set(dist*0.6,dist*0.45,dist*0.6);
-  v3dCamera.lookAt(0,0,0);if(v3dControls){v3dControls.target.set(0,0,0);v3dControls.update();}
-}
-function v3dResetView(){
-  if(v3dMesh){var box=new THREE.Box3().setFromObject(v3dMesh);fitV3dCamera(box);}
-  else{v3dCamera.position.set(100,80,100);v3dCamera.lookAt(0,0,0);if(v3dControls){v3dControls.target.set(0,0,0);v3dControls.update();}}
-  v3dResize();
-}
-function v3dToggleWireframe(){
-  v3dWireframe=!v3dWireframe;
-  if(v3dMesh){v3dMesh.traverse(function(c){if(c.isMesh)c.material.wireframe=v3dWireframe;});}
-}
 function v3dClear(){
-  if(v3dMesh){v3dScene.remove(v3dMesh);v3dMesh=null;}
-  document.getElementById('v3d-container').style.display='none';
+  var container=document.getElementById('v3d-container');
+  container.innerHTML='';
+  container.style.display='none';
   document.getElementById('v3d-controls').style.display='none';
   document.getElementById('v3d-status').style.display='none';
-  v3dWireframe=false;
-  // don't reset _occtModule - keep WASM cached for reuse
+  _o3dvViewer=null;
 }
 function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
 // drag & drop
@@ -4637,7 +4389,7 @@ function conNav(pg){
   if(pg==='product'){refreshProductList();}
   if(pg==='scrap'){refreshScrapTuhaoList();refreshScrapRecordList();}
   if(pg==='programming'){initProgrammingPage();}
-  if(pg==='viewer3d'){initV3d();}
+  // viewer3d: O3DV引擎懒加载，不需要页面进入时初始化
 }
 function navTo(page){
   if(page==='home'){
