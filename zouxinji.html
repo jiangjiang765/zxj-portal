@@ -4399,16 +4399,36 @@ function _o3dvPostProcess(viewer,name,file){
   }
 }
 // ===== 测量功能 =====
+var _v3dTouchStart=null;
+function _v3dOnTouchStart(e){
+  var t=e.touches[0];
+  _v3dTouchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+}
+function _v3dOnTouchEnd(e){
+  if(!_v3dMeasuring||!_v3dTouchStart)return;
+  var t=e.changedTouches[0];
+  var dx=t.clientX-_v3dTouchStart.x,dy=t.clientY-_v3dTouchStart.y;
+  var dt=Date.now()-_v3dTouchStart.time;
+  if(dt>400||Math.sqrt(dx*dx+dy*dy)>20)return;
+  e.preventDefault();
+  var v=_o3dvViewer.GetViewer();
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var mc={x:t.clientX-rect.left,y:t.clientY-rect.top};
+  _v3dMeasureClick(mc);
+}
 function v3dToggleMeasure(){
   if(!_o3dvViewer)return;
   var btn=document.getElementById('v3d-btn-measure');
   var mel=document.getElementById('v3d-measure');
+  var ctr=document.getElementById('v3d-container');
   if(_v3dMeasuring){
     _v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
     var v=_o3dvViewer.GetViewer();if(v)v.SetMouseClickHandler(null);
     if(btn)btn.style.background='#1e88e5';
     mel.style.display='none';
     v3dClearMeasureMarkers();
+    if(ctr){ctr.removeEventListener('touchstart',_v3dOnTouchStart);ctr.removeEventListener('touchend',_v3dOnTouchEnd);}
   }else{
     _v3dMeasuring=true;_v3dMeasureA=null;_v3dMeasureB=null;
     if(btn)btn.style.background='#ff9800';
@@ -4416,6 +4436,7 @@ function v3dToggleMeasure(){
     mel.innerHTML='📍 请点击模型上的<b>第一个测量点</b>';
     var v=_o3dvViewer.GetViewer();
     if(v)v.SetMouseClickHandler(function(mc){_v3dMeasureClick(mc);});
+    if(ctr){ctr.addEventListener('touchstart',_v3dOnTouchStart,{passive:true});ctr.addEventListener('touchend',_v3dOnTouchEnd,{passive:false});}
   }
 }
 function _v3dMeasureClick(mouseCoords){
