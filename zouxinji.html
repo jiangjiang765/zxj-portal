@@ -4338,10 +4338,10 @@ function initV3d(){
   v3dRenderer.setSize(w,h);
   v3dRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   if(typeof THREE.OrbitControls==='function'){v3dControls=new THREE.OrbitControls(v3dCamera,v3dRenderer.domElement);v3dControls.enableDamping=true;v3dControls.dampingFactor=0.1;}
-  v3dScene.add(new THREE.AmbientLight(0x808898,0.8));
-  var dl=new THREE.DirectionalLight(0xffffff,1.0);dl.position.set(80,120,60);v3dScene.add(dl);
-  var dl2=new THREE.DirectionalLight(0x6688ff,0.5);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
-  var dl3=new THREE.DirectionalLight(0xffaa66,0.3);dl3.position.set(0,-60,0);v3dScene.add(dl3);
+  v3dScene.add(new THREE.HemisphereLight(0x8899bb,0x443322,0.7));
+  var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(80,120,60);v3dScene.add(dl);
+  var dl2=new THREE.DirectionalLight(0x6688ff,0.6);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
+  var dl3=new THREE.DirectionalLight(0xffddaa,0.4);dl3.position.set(0,-60,40);v3dScene.add(dl3);
   v3dScene.add(new THREE.GridHelper(200,20,0x333355,0x222244));
   animateV3d();
   return true;
@@ -4359,9 +4359,9 @@ function loadOcctJs(){
 }
 function loadOcctJsSunbox(){
   return new Promise(function(resolve,reject){
-    v3dShowStatus('⏳ 正在加载 STEP 高精度引擎（@sunbox v0.0.25）...','#64b5f6');
+    v3dShowStatus('⏳ 正在加载 STEP 高精度引擎（@sunbox v0.0.28）...','#64b5f6');
     // Dynamic import() — works in Chrome 63+ / Huawei Chromium
-    import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js')
+    import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.28/dist/occt-import-js.js')
       .then(function(m){
         var factory=m.default||m;
         v3dShowStatus('⏳ @sunbox JS已加载，初始化WASM...','#64b5f6');
@@ -4418,7 +4418,7 @@ function stepResultToThree(result){
   }
   if(meshes.length===0) return null;
   var group=new THREE.Group();
-  var defaultMat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+  var defaultMat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.35,metalness:0.6,side:THREE.DoubleSide});
   if(v3dWireframe) defaultMat.wireframe=true;
   for(var mi=0;mi<meshes.length;mi++){
     try{
@@ -4449,19 +4449,13 @@ function stepResultToThree(result){
           geom=geom.toNonIndexed();
         }
       }
-      // Normals
-      var normArr=(m.attributes.normal&&m.attributes.normal.array)?m.attributes.normal.array:null;
-      if(normArr&&normArr.length>=positions.length){
-        var normals=(normArr instanceof Float32Array)?normArr:new Float32Array(normArr);
-        geom.setAttribute('normal',new THREE.BufferAttribute(normals,3));
-      }else{
-        geom.computeVertexNormals();
-      }
+      // Normals — always recompute for smooth shading (STEP normals often inconsistent)
+      geom.computeVertexNormals();
       // Material per mesh (color support)
       var mat=defaultMat;
       if(m.color&&m.color.length>=3){
         var r=Math.round(m.color[0]*255),g=Math.round(m.color[1]*255),b=Math.round(m.color[2]*255);
-        mat=new THREE.MeshStandardMaterial({color:(r<<16)|(g<<8)|b,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+        mat=new THREE.MeshStandardMaterial({color:(r<<16)|(g<<8)|b,roughness:0.35,metalness:0.6,side:THREE.DoubleSide});
         if(v3dWireframe) mat.wireframe=true;
       }
       var meshObj=new THREE.Mesh(geom,mat);
@@ -4490,8 +4484,8 @@ function handleV3dFile(input){
       loadOcctJs().then(function(occt){
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
         try{
-          // Both @sunbox v0.0.25 AND legacy v0.0.23 support linearDeflection/angularDeflection
-          var stepParams={linearDeflectionType:'bounding_box_ratio',linearDeflection:0.001,angularDeflection:0.1,computeNormalsMeshingAngle:10};
+          // Tight tessellation for production-quality STEP rendering
+          var stepParams={linearDeflectionType:'absolute_value',linearDeflection:0.01,angularDeflection:0.05,computeNormalsMeshingAngle:5};
           var result=occt.ReadStepFile(buf,stepParams);
           if(!result||!result.success){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
@@ -4511,7 +4505,7 @@ function handleV3dFile(input){
           // ensure canvas is properly sized after async load
           requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
           var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
-          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+(window._occtVersion==='sunbox'?'@sunbox v0.0.25':'legacy v0.0.23')+'）','#4caf50');
+          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+(window._occtVersion==='sunbox'?'@sunbox v0.0.28':'legacy v0.0.23')+'）','#4caf50');
         }catch(err){
           v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
         }
