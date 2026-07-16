@@ -4367,61 +4367,82 @@ function loadOcctJs(){
     document.head.appendChild(s);
   });
 }
-// Convert occt-import-js result to Three.js Group
-function occtResultToThree(result){
-  var group=new THREE.Group();
+// Convert occt-import-js result → binary STL ArrayBuffer, then use STLLoader
+function stepResultToStlBuffer(result){
   var meshes=result.meshes||[];
+  // collect meshes from hierarchy if flat array is empty
   if(meshes.length===0&&result.root){
-    // fallback: try hierarchical
-    function addNode(node){
+    (function addNode(node){
       if(node.meshes&&node.meshes.length){
         for(var i=0;i<node.meshes.length;i++){
-          var mIdx=node.meshes[i];if(mIdx>=meshes.length)continue;
-          meshes.push(result.meshes[mIdx]);
+          var mIdx=node.meshes[i];
+          if(mIdx>=0&&result.meshes&&mIdx<result.meshes.length) meshes.push(result.meshes[mIdx]);
         }
       }
       if(node.children&&node.children.length){
-        for(var i=0;i<node.children.length;i++)addNode(node.children[i]);
+        for(var i=0;i<node.children.length;i++) addNode(node.children[i]);
       }
-    }
-    addNode(result.root);
+    })(result.root);
   }
+  // count total triangles
+  var totalTri=0;
   for(var i=0;i<meshes.length;i++){
     var m=meshes[i];
-    try{
-      var geom=new THREE.BufferGeometry();
-      var pos=m.attributes.position.array;
-      var vCount=pos.length/3;
-      var posArr=new Float32Array(pos.length);
-      for(var j=0;j<pos.length;j++)posArr[j]=pos[j];
-      geom.setAttribute('position',new THREE.BufferAttribute(posArr,3));
-      // index
-      if(m.attributes.index){
-        var idx=m.attributes.index.array;
-        var useUint16=(vCount<=65536);
-        var idxArr=useUint16?new Uint16Array(idx.length):new Uint32Array(idx.length);
-        for(var j=0;j<idx.length;j++){
-          idxArr[j]=idx[j];
-          if(idx[j]>=vCount){idxArr[j]=0;} // clamp out-of-range
-        }
-        geom.setIndex(new THREE.BufferAttribute(idxArr,1));
-      }
-      // always recompute normals for reliability
-      geom.computeVertexNormals();
-      var color=0x88aacc;
-      if(m.color&&m.color.length>=3){
-        var r=m.color[0],g=m.color[1],b=m.color[2];
-        // brighten dark colors
-        if(r+g+b<0.6){r=Math.min(r*1.8,1);g=Math.min(g*1.8,1);b=Math.min(b*1.8,1);}
-        color=new THREE.Color(r,g,b);
-      }
-      var mat=new THREE.MeshStandardMaterial({color:color,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
-      if(v3dWireframe)mat.wireframe=true;
-      var meshObj=new THREE.Mesh(geom,mat);
-      if(m.name)meshObj.name=m.name;
-      group.add(meshObj);
-    }catch(e){console.warn('STEP mesh '+i+' failed:',e);}
+    if(m.attributes.index) totalTri+=m.attributes.index.array.length/3;
+    else totalTri+=m.attributes.position.array.length/9;
   }
+  if(totalTri===0) return null;
+  // binary STL: 80 header + 4 triCount + 50*N
+  var buf=new ArrayBuffer(84+totalTri*50);
+  var dv=new DataView(buf);
+  var hdr='STEP converted to STL by occt-import-js';
+  for(var i=0;i<80;i++) dv.setUint8(i,i<hdr.length?hdr.charCodeAt(i):0);
+  dv.setUint32(80,totalTri,true);
+  var off=84;
+  for(var mi=0;mi<meshes.length;mi++){
+    var m=meshes[mi];
+    var pos=m.attributes.position.array;
+    var idx=m.attributes.index?m.attributes.index.array:null;
+    var triCount=idx?idx.length/3:pos.length/9;
+    for(var t=0;t<triCount;t++){
+      var i0,i1,i2;
+      if(idx){i0=idx[t*3];i1=idx[t*3+1];i2=idx[t*3+2];}
+      else{i0=t*3;i1=t*3+1;i2=t*3+2;}
+      // clamp indices
+      var vc=pos.length/3;
+      if(i0>=vc||i1>=vc||i2>=vc){i0=0;i1=0;i2=0;}
+      var ax=pos[i0*3],ay=pos[i0*3+1],az=pos[i0*3+2];
+      var bx=pos[i1*3],by=pos[i1*3+1],bz=pos[i1*3+2];
+      var cx=pos[i2*3],cy=pos[i2*3+1],cz=pos[i2*3+2];
+      // face normal = (b-a) × (c-a)
+      var e1x=bx-ax,e1y=by-ay,e1z=bz-az;
+      var e2x=cx-ax,e2y=cy-ay,e2z=cz-az;
+      var nx=e1y*e2z-e1z*e2y,ny=e1z*e2x-e1x*e2z,nz=e1x*e2y-e1y*e2x;
+      var len=Math.sqrt(nx*nx+ny*ny+nz*nz);
+      if(len>1e-10){nx/=len;ny/=len;nz/=len;}
+      dv.setFloat32(off,nx,true);off+=4;
+      dv.setFloat32(off,ny,true);off+=4;
+      dv.setFloat32(off,nz,true);off+=4;
+      dv.setFloat32(off,ax,true);off+=4;dv.setFloat32(off,ay,true);off+=4;dv.setFloat32(off,az,true);off+=4;
+      dv.setFloat32(off,bx,true);off+=4;dv.setFloat32(off,by,true);off+=4;dv.setFloat32(off,bz,true);off+=4;
+      dv.setFloat32(off,cx,true);off+=4;dv.setFloat32(off,cy,true);off+=4;dv.setFloat32(off,cz,true);off+=4;
+      dv.setUint16(off,0,true);off+=2;
+    }
+  }
+  return buf;
+}
+// Render STEP result via STL conversion (uses battle-tested STLLoader)
+function stepResultToThree(result){
+  var stlBuf=stepResultToStlBuffer(result);
+  if(!stlBuf){return null;}
+  var loader=new THREE.STLLoader();
+  var geom=loader.parse(stlBuf);
+  geom.computeVertexNormals();
+  var mat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+  if(v3dWireframe)mat.wireframe=true;
+  var mesh=new THREE.Mesh(geom,mat);
+  var group=new THREE.Group();
+  group.add(mesh);
   return group;
 }
 function handleV3dFile(input){
@@ -4447,8 +4468,9 @@ function handleV3dFile(input){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
             return;
           }
-          var group=occtResultToThree(result);
-          if(group.children.length===0){
+          // Convert STEP → STL buffer → STLLoader (proven rendering path)
+          var group=stepResultToThree(result);
+          if(!group||group.children.length===0){
             v3dShowStatus('⚠️ STEP 解析成功但无网格数据（可能是空装配体）','#ff9800');
             return;
           }
