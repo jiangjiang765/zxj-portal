@@ -538,6 +538,19 @@ html.portal-auto .login-overlay{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/OBJLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+<!-- @sunbox/occt-import-js (ES module) — better STEP tessellation with linearDeflection/angularDeflection -->
+<script type="module">
+try{
+  const m=await import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js');
+  const occt=m.default||m;
+  await occt.ready;
+  window._occtSunbox=occt;
+  window._occtSunboxReady=true;
+}catch(e){
+  window._occtSunboxReady=false;
+  window._occtSunboxError=e.message;
+}
+</script>
 
 </head>
 <body>
@@ -4346,26 +4359,51 @@ function initV3d(){
   return true;
 }
 function animateV3d(){requestAnimationFrame(animateV3d);if(v3dControls)v3dControls.update();if(v3dRenderer)v3dRenderer.render(v3dScene,v3dCamera);}
-// Load occt-import-js (OpenCASCADE WASM) for STEP parsing - lazy load
+// Load occt-import-js (OpenCASCADE WASM) for STEP parsing
+// Priority: @sunbox v0.0.25 (ES module, better tessellation) → fallback v0.0.23 (script tag)
 function loadOcctJs(){
   return new Promise(function(resolve,reject){
     if(_occtModule){resolve(_occtModule);return;}
-    if(typeof occtimportjs==='function'){
-      v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
-      occtimportjs().then(function(occt){_occtModule=occt;resolve(occt);}).catch(reject);
+    // Check if @sunbox module is already ready
+    if(window._occtSunboxReady===true&&window._occtSunbox){
+      _occtModule=window._occtSunbox;
+      window._occtVersion='sunbox';
+      resolve(_occtModule);
       return;
     }
-    v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
-    var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
-    s.onload=function(){
-      if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
-      v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
-      occtimportjs().then(function(occt){_occtModule=occt;resolve(occt);}).catch(reject);
-    };
-    s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
-    document.head.appendChild(s);
+    // Wait for @sunbox module (it loads async via <script type="module">)
+    var waited=0, pollInterval=200, maxWait=8000;
+    var poll=setInterval(function(){
+      waited+=pollInterval;
+      if(window._occtSunboxReady===true&&window._occtSunbox){
+        clearInterval(poll);
+        _occtModule=window._occtSunbox;
+        window._occtVersion='sunbox';
+        resolve(_occtModule);
+      }else if(window._occtSunboxReady===false||waited>=maxWait){
+        // @sunbox failed or timeout — fallback to v0.0.23
+        clearInterval(poll);
+        loadOcctJsFallback(resolve,reject);
+      }
+    },pollInterval);
   });
+}
+function loadOcctJsFallback(resolve,reject){
+  if(typeof occtimportjs==='function'){
+    v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
+    occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+    return;
+  }
+  v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
+  s.onload=function(){
+    if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
+    v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
+    occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+  };
+  s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
+  document.head.appendChild(s);
 }
 // Render STEP result → direct BufferGeometry (no STL middleman)
 function stepResultToThree(result){
@@ -4458,7 +4496,12 @@ function handleV3dFile(input){
       loadOcctJs().then(function(occt){
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
         try{
-          var result=occt.ReadStepFile(buf,{computeNormalsMeshingAngle:10});
+          // @sunbox v0.0.25: linearDeflection/angularDeflection for high-quality tessellation
+          // legacy v0.0.23: only computeNormalsMeshingAngle
+          var stepParams=(window._occtVersion==='sunbox')?
+            {linearDeflectionType:'bounding_box_ratio',linearDeflection:0.001,angularDeflection:0.1,computeNormalsMeshingAngle:10}:
+            {computeNormalsMeshingAngle:10};
+          var result=occt.ReadStepFile(buf,stepParams);
           if(!result||!result.success){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
             return;
@@ -4477,7 +4520,8 @@ function handleV3dFile(input){
           // ensure canvas is properly sized after async load
           requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
           var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
-          v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ STEP 加载成功（'+meshCount+' 个网格）','#4caf50');
+          var engineLabel=(window._occtVersion==='sunbox')?'高质量':'标准';
+          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+engineLabel+'精度）','#4caf50');
         }catch(err){
           v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
         }
