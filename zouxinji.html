@@ -1642,7 +1642,10 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 <div class="page" id="page-viewer3d">
   <button class="page-back" onclick="showNav()">← 返回</button>
   <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">📊 3D图纸查看</div>
-  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式（STEP首次加载需下载解析引擎约10秒），拖拽或点击上传<br>💡 STEP渲染如不精确，建议用CAD导出STL再上传</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;line-height:1.5">
+    <b style="color:var(--gold)">推荐格式：STL</b>（CAD软件导出，渲染最精确）<br>
+    也支持 STEP/STP/OBJ（STEP首次需下载引擎约10秒，复杂零件可能显示不完整）
+  </div>
   <div id="v3d-upload-area" onclick="document.getElementById('v3d-file').click()" style="border:2px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all .2s">
     <div style="font-size:36px;margin-bottom:8px">📁</div>
     <div style="font-size:14px;color:var(--text);font-weight:600">点击选择文件</div>
@@ -4354,7 +4357,7 @@ function loadOcctJs(){
     }
     v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
     var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js';
+    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
     s.onload=function(){
       if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
       v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
@@ -4439,11 +4442,7 @@ function handleV3dFile(input){
       loadOcctJs().then(function(occt){
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
         try{
-          var result=occt.ReadStepFile(buf,{
-            linearDeflectionType:'bounding_box_ratio',
-            linearDeflection:0.005,
-            angularDeflection:0.3
-          });
+          var result=occt.ReadStepFile(buf,{computeNormalsMeshingAngle:10});
           if(!result||!result.success){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
             return;
