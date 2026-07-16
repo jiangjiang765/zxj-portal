@@ -4497,11 +4497,8 @@ function handleV3dFile(input){
       loadOcctJs().then(function(occt){
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
         try{
-          // @sunbox v0.0.25: linearDeflection/angularDeflection for high-quality tessellation
-          // legacy v0.0.23: only computeNormalsMeshingAngle
-          var stepParams=(window._occtVersion==='sunbox')?
-            {linearDeflectionType:'bounding_box_ratio',linearDeflection:0.001,angularDeflection:0.1,computeNormalsMeshingAngle:10}:
-            {computeNormalsMeshingAngle:10};
+          // Both @sunbox v0.0.25 AND legacy v0.0.23 support linearDeflection/angularDeflection
+          var stepParams={linearDeflectionType:'bounding_box_ratio',linearDeflection:0.001,angularDeflection:0.1,computeNormalsMeshingAngle:10};
           var result=occt.ReadStepFile(buf,stepParams);
           if(!result||!result.success){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
@@ -4521,8 +4518,7 @@ function handleV3dFile(input){
           // ensure canvas is properly sized after async load
           requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
           var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
-          var engineLabel=(window._occtVersion==='sunbox')?'高质量':'标准';
-          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+engineLabel+'精度）','#4caf50');
+          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · 高精度）','#4caf50');
         }catch(err){
           v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
         }
