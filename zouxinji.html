@@ -538,20 +538,7 @@ html.portal-auto .login-overlay{display:none!important}
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/OBJLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
-<!-- @sunbox/occt-import-js (ES module) — better STEP tessellation with linearDeflection/angularDeflection -->
-<script type="module">
-try{
-  const m=await import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js');
-  const factory=m.default||m;
-  // factory is the constructor function — call it to get the WASM instance
-  const occt=await factory();
-  window._occtSunbox=occt;
-  window._occtSunboxReady=true;
-}catch(e){
-  window._occtSunboxReady=false;
-  window._occtSunboxError=e.message;
-}
-</script>
+<!-- STEP引擎: loadOcctJs() uses dynamic import() with fallback chain -->
 
 </head>
 <body>
@@ -4361,50 +4348,56 @@ function initV3d(){
 }
 function animateV3d(){requestAnimationFrame(animateV3d);if(v3dControls)v3dControls.update();if(v3dRenderer)v3dRenderer.render(v3dScene,v3dCamera);}
 // Load occt-import-js (OpenCASCADE WASM) for STEP parsing
-// Priority: @sunbox v0.0.25 (ES module, better tessellation) → fallback v0.0.23 (script tag)
+// Strategy: dynamic import() @sunbox v0.0.25 (OCCT newer, better mesh) → fallback v0.0.23
 function loadOcctJs(){
-  return new Promise(function(resolve,reject){
-    if(_occtModule){resolve(_occtModule);return;}
-    // Check if @sunbox module is already ready
-    if(window._occtSunboxReady===true&&window._occtSunbox){
-      _occtModule=window._occtSunbox;
-      window._occtVersion='sunbox';
-      resolve(_occtModule);
-      return;
-    }
-    // Wait for @sunbox module (it loads async via <script type="module">)
-    var waited=0, pollInterval=200, maxWait=8000;
-    var poll=setInterval(function(){
-      waited+=pollInterval;
-      if(window._occtSunboxReady===true&&window._occtSunbox){
-        clearInterval(poll);
-        _occtModule=window._occtSunbox;
-        window._occtVersion='sunbox';
-        resolve(_occtModule);
-      }else if(window._occtSunboxReady===false||waited>=maxWait){
-        // @sunbox failed or timeout — fallback to v0.0.23
-        clearInterval(poll);
-        loadOcctJsFallback(resolve,reject);
-      }
-    },pollInterval);
+  if(_occtModule){return Promise.resolve(_occtModule);}
+  // Try @sunbox v0.0.25 via dynamic import() — newer OCCT, better tessellation
+  return loadOcctJsSunbox().catch(function(e1){
+    v3dShowStatus('⏳ @sunbox引擎加载失败('+e1.message+')，尝试备用引擎...','#ff9800');
+    return loadOcctJsFallback();
   });
 }
-function loadOcctJsFallback(resolve,reject){
-  if(typeof occtimportjs==='function'){
-    v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
-    occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
-    return;
-  }
-  v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
-  var s=document.createElement('script');
-  s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
-  s.onload=function(){
-    if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
-    v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
-    occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
-  };
-  s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
-  document.head.appendChild(s);
+function loadOcctJsSunbox(){
+  return new Promise(function(resolve,reject){
+    v3dShowStatus('⏳ 正在加载 STEP 高精度引擎（@sunbox v0.0.25）...','#64b5f6');
+    // Dynamic import() — works in Chrome 63+ / Huawei Chromium
+    import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js')
+      .then(function(m){
+        var factory=m.default||m;
+        v3dShowStatus('⏳ @sunbox JS已加载，初始化WASM...','#64b5f6');
+        return factory();
+      })
+      .then(function(occt){
+        if(!occt||typeof occt.ReadStepFile!=='function'){
+          reject(new Error('ReadStepFile不存在'));
+          return;
+        }
+        _occtModule=occt;
+        window._occtVersion='sunbox';
+        v3dShowStatus('✅ @sunbox STEP引擎就绪','#4caf50');
+        resolve(occt);
+      })
+      .catch(function(e){reject(e);});
+  });
+}
+function loadOcctJsFallback(){
+  return new Promise(function(resolve,reject){
+    if(typeof occtimportjs==='function'){
+      v3dShowStatus('⏳ 正在初始化 STEP 备用引擎（v0.0.23）...','#64b5f6');
+      occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+      return;
+    }
+    v3dShowStatus('⏳ 正在下载 STEP 备用引擎（v0.0.23，首次约10秒）...','#64b5f6');
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
+    s.onload=function(){
+      if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
+      v3dShowStatus('⏳ 正在初始化 STEP 备用引擎...','#64b5f6');
+      occtimportjs().then(function(occt){_occtModule=occt;window._occtVersion='legacy';resolve(occt);}).catch(reject);
+    };
+    s.onerror=function(){reject(new Error('STEP引擎下载失败，请检查网络'));};
+    document.head.appendChild(s);
+  });
 }
 // Render STEP result → direct BufferGeometry (no STL middleman)
 function stepResultToThree(result){
@@ -4518,7 +4511,7 @@ function handleV3dFile(input){
           // ensure canvas is properly sized after async load
           requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
           var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
-          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · 高精度）','#4caf50');
+          v3dShowStatus('📄 '+esc(name)+' — ✅ STEP 加载成功（'+meshCount+' 个网格 · '+(window._occtVersion==='sunbox'?'@sunbox v0.0.25':'legacy v0.0.23')+'）','#4caf50');
         }catch(err){
           v3dShowStatus('❌ STEP 解析出错: '+err.message,'#f44336');
         }
