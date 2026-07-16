@@ -1650,7 +1650,7 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   </div>
   <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj" style="display:none" onchange="handleV3dFile(this)">
   <div id="v3d-status" style="display:none;font-size:13px;margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:8px;color:var(--text)"></div>
-  <div id="v3d-container" style="display:none;width:100%;height:400px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative">
+  <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative">
     <canvas id="v3d-canvas" style="width:100%;height:100%;display:block"></canvas>
   </div>
   <div id="v3d-controls" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
@@ -4317,7 +4317,7 @@ function v3dResize(){
   if(!v3dRenderer)return;
   var c=document.getElementById('v3d-canvas');
   var w=c.clientWidth||300,h=c.clientHeight||300;
-  v3dRenderer.setSize(w,h);
+  v3dRenderer.setSize(w,h,false);
   v3dCamera.aspect=w/h;
   v3dCamera.updateProjectionMatrix();
 }
@@ -4334,9 +4334,10 @@ function initV3d(){
   v3dRenderer.setSize(w,h);
   v3dRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   if(typeof THREE.OrbitControls==='function'){v3dControls=new THREE.OrbitControls(v3dCamera,v3dRenderer.domElement);v3dControls.enableDamping=true;v3dControls.dampingFactor=0.1;}
-  v3dScene.add(new THREE.AmbientLight(0x606080));
-  var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(80,120,60);v3dScene.add(dl);
-  var dl2=new THREE.DirectionalLight(0x4488ff,0.4);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
+  v3dScene.add(new THREE.AmbientLight(0x808898,0.8));
+  var dl=new THREE.DirectionalLight(0xffffff,1.0);dl.position.set(80,120,60);v3dScene.add(dl);
+  var dl2=new THREE.DirectionalLight(0x6688ff,0.5);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
+  var dl3=new THREE.DirectionalLight(0xffaa66,0.3);dl3.position.set(0,-60,0);v3dScene.add(dl3);
   v3dScene.add(new THREE.GridHelper(200,20,0x333355,0x222244));
   animateV3d();
   return true;
@@ -4390,7 +4391,7 @@ function occtResultToThree(result){
         }
         var color=0x4488cc;
         if(m.color&&m.color.length>=3){color=new THREE.Color(m.color[0],m.color[1],m.color[2]);}
-        var mat=new THREE.MeshPhongMaterial({color:color,specular:0x222222,shininess:60});
+        var mat=new THREE.MeshPhongMaterial({color:color,specular:0x333333,shininess:40,side:THREE.DoubleSide});
         if(v3dWireframe)mat.wireframe=true;
         var mesh=new THREE.Mesh(geom,mat);
         if(m.name)mesh.name=m.name;
@@ -4495,8 +4496,9 @@ function handleV3dFile(input){
 }
 function fitV3dCamera(box){
   if(!box)return;var size=new THREE.Vector3();box.getSize(size);
-  var maxDim=Math.max(size.x,size.y,size.z);var dist=maxDim*1.8;
-  v3dCamera.position.set(dist*0.7,dist*0.5,dist*0.7);
+  var maxDim=Math.max(size.x,size.y,size.z);if(maxDim<0.001)maxDim=10;
+  var dist=maxDim*1.5;
+  v3dCamera.position.set(dist*0.6,dist*0.45,dist*0.6);
   v3dCamera.lookAt(0,0,0);if(v3dControls){v3dControls.target.set(0,0,0);v3dControls.update();}
 }
 function v3dResetView(){
