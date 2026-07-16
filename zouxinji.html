@@ -4313,16 +4313,25 @@ var _occtModule=null; // occt-import-js WASM module cache
 function v3dShowStatus(msg,color){
   var el=document.getElementById('v3d-status');el.style.display='block';el.innerHTML=msg;el.style.color=color||'var(--text)';
 }
+function v3dResize(){
+  if(!v3dRenderer)return;
+  var c=document.getElementById('v3d-canvas');
+  var w=c.clientWidth||300,h=c.clientHeight||300;
+  v3dRenderer.setSize(w,h);
+  v3dCamera.aspect=w/h;
+  v3dCamera.updateProjectionMatrix();
+}
 function initV3d(){
   if(typeof THREE==='undefined'){v3dShowStatus('⚠️ 3D引擎加载失败，请检查网络连接后刷新页面','#f44336');return false;}
-  if(v3dRenderer)return true;
+  if(v3dRenderer){v3dResize();return true;}
   var c=document.getElementById('v3d-canvas');
+  var w=c.clientWidth||300,h=c.clientHeight||300;
   v3dScene=new THREE.Scene();
   v3dScene.background=new THREE.Color(0x1a1a2e);
-  v3dCamera=new THREE.PerspectiveCamera(60,c.clientWidth/c.clientHeight,0.1,10000);
+  v3dCamera=new THREE.PerspectiveCamera(60,w/h,0.1,100000);
   v3dCamera.position.set(100,80,100);
   v3dRenderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
-  v3dRenderer.setSize(c.clientWidth,c.clientHeight);
+  v3dRenderer.setSize(w,h);
   v3dRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   if(typeof THREE.OrbitControls==='function'){v3dControls=new THREE.OrbitControls(v3dCamera,v3dRenderer.domElement);v3dControls.enableDamping=true;v3dControls.dampingFactor=0.1;}
   v3dScene.add(new THREE.AmbientLight(0x606080));
@@ -4428,6 +4437,8 @@ function handleV3dFile(input){
           var center=new THREE.Vector3();box.getCenter(center);
           group.position.sub(center);v3dScene.add(group);
           fitV3dCamera(box);
+          // ensure canvas is properly sized after async load
+          requestAnimationFrame(function(){v3dResize();fitV3dCamera(box);});
           var meshCount=0;group.traverse(function(c){if(c.isMesh)meshCount++;});
           v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ STEP 加载成功（'+meshCount+' 个网格）','#4caf50');
         }catch(err){
@@ -4455,6 +4466,7 @@ function handleV3dFile(input){
         var center=new THREE.Vector3();geom.boundingBox.getCenter(center);
         v3dMesh.position.sub(center);v3dScene.add(v3dMesh);
         fitV3dCamera(geom.boundingBox);
+        requestAnimationFrame(function(){v3dResize();});
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
       }catch(err){v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');}
     };
@@ -4471,6 +4483,7 @@ function handleV3dFile(input){
         var center=new THREE.Vector3();box.getCenter(center);
         obj.position.sub(center);v3dScene.add(obj);
         fitV3dCamera(box);
+        requestAnimationFrame(function(){v3dResize();});
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
       }catch(err){v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');}
     };
@@ -4489,6 +4502,7 @@ function fitV3dCamera(box){
 function v3dResetView(){
   if(v3dMesh){var box=new THREE.Box3().setFromObject(v3dMesh);fitV3dCamera(box);}
   else{v3dCamera.position.set(100,80,100);v3dCamera.lookAt(0,0,0);if(v3dControls){v3dControls.target.set(0,0,0);v3dControls.update();}}
+  v3dResize();
 }
 function v3dToggleWireframe(){
   v3dWireframe=!v3dWireframe;
