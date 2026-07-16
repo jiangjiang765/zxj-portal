@@ -854,11 +854,6 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
         <div class="hc-name">数据同步</div>
         <div class="hc-desc">云端备份与恢复</div>
       </div>
-      <div class="home-card hc-ai" onclick="navTo('ai')">
-        <div class="hc-icon">🤖</div>
-        <div class="hc-name">AI排产</div>
-        <div class="hc-desc">智能排产建议</div>
-      </div>
       <div class="home-card hc-quality" onclick="navTo('quality')">
         <div class="hc-icon">✅</div>
         <div class="hc-name">质检记录</div>
@@ -1612,6 +1607,11 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
       <div class="hc-icon">✨</div>
       <div class="hc-name">电镀计算</div>
       <div class="hc-desc">电镀成本报价</div>
+    </div>
+    <div class="home-card" style="background:linear-gradient(135deg,#4a1a6b,#7c3aed)" onclick="aiQuote()">
+      <div class="hc-icon">🤖</div>
+      <div class="hc-name">AI报价</div>
+      <div class="hc-desc">AI智能建议报价</div>
     </div>
   </div>
 </div>
@@ -5092,7 +5092,6 @@ function navTo(page){
   if(page==='product')refreshProductList();
   if(page==='order'){location.href='./production_plan.html';return;}
   if(page==='tech'){/* tech page static */}
-  if(page==='ai'){aiLoadKey();aiRenderOrders();aiRenderMachines();}
   if(page==='quality'){qcLoadDeviceList();loadQualityRecords().then(function(){qcRenderStats();qcRenderHistory();});}
 }
 
@@ -9497,105 +9496,7 @@ setTimeout(function(){
   if(typeof bootCloudSync==='function')bootCloudSync();
 },800);
 
-// ========== AI排产 & 质检记录 ==========
-
-// --- AI排产 ---
-var _aiKey = localStorage.getItem('qwen_api_key') || '';
-function aiSaveKey(){
-  var k = document.getElementById('ai-api-key').value.trim();
-  if(!k){ showToast('请输入Key'); return; }
-  _aiKey = k;
-  localStorage.setItem('qwen_api_key', k);
-  showToast('✅ Key已保存');
-}
-function aiLoadKey(){
-  var el = document.getElementById('ai-api-key');
-  if(el && _aiKey) el.value = _aiKey;
-}
-function aiRenderOrders(){
-  var el = document.getElementById('ai-orders-list');
-  if(!el) return;
-  if(!_volcOrders || !_volcOrders.length){
-    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px">暂无订单（请在生产计划系统添加）</div>';
-    return;
-  }
-  var pending = _volcOrders.filter(function(o){ return o.status==='pending' || o.status==='进行中' || !o.status; });
-  if(!pending.length){
-    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px">所有订单已排产 ✅</div>';
-    return;
-  }
-  var html = '';
-  pending.forEach(function(o){
-    var dl = o.deadline ? o.deadline.substring(0,10) : '无';
-    var pri = o.priority==='high'?'🔴急':o.priority==='low'?'🟢低':'🟡中';
-    html += '<div class="ai-order-item"><b>'+(o.drawing_no||o.order_no||'—')+'</b> '+(o.customer?'· '+o.customer:'')+' · 需'+(o.quantity||0)+'件 · 交期'+dl+' '+pri+(o.material_spec?' · '+(o.material_spec||''):'')+'</div>';
-  });
-  el.innerHTML = html;
-}
-function aiRenderMachines(){
-  var el = document.getElementById('ai-machines-list');
-  if(!el) return;
-  var ms = (typeof getMachines==='function') ? getMachines() : [];
-  if(!ms.length){
-    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">暂无机台数据</div>';
-    return;
-  }
-  var html = '';
-  ms.forEach(function(m){
-    var cls = m.status==='fault'?'fault':(m.currentTuhao?'busy':'idle');
-    var lbl = m.id + (m.model?' ('+m.model+')':'');
-    if(m.currentTuhao) lbl += ' → '+m.currentTuhao;
-    else if(m.status==='fault') lbl += ' ⚠故障';
-    else lbl += ' 空闲';
-    html += '<span class="ai-machine-item '+cls+'">'+lbl+'</span>';
-  });
-  el.innerHTML = html;
-}
-async function aiSchedule(){
-  if(!_aiKey){
-    var kEl = document.getElementById('ai-api-key');
-    if(kEl && kEl.value.trim()){ _aiKey = kEl.value.trim(); localStorage.setItem('qwen_api_key',_aiKey); }
-    else{ showToast('请先配置百炼 API Key'); return; }
-  }
-  var resultEl = document.getElementById('ai-result');
-  if(!resultEl) return;
-  resultEl.className = 'ai-result active';
-  resultEl.innerHTML = '<span class="ai-thinking">🤖 AI正在分析订单和机台，请稍候...</span>';
-  // 收集数据
-  var orders = (_volcOrders||[]).filter(function(o){ return o.status==='pending'||o.status==='进行中'||!o.status; });
-  var machines = (typeof getMachines==='function') ? getMachines() : [];
-  var orderText = orders.map(function(o){
-    return '- 图号:'+(o.drawing_no||'?')+' 客户:'+(o.customer||'?')+' 数量:'+(o.quantity||0)+' 交期:'+(o.deadline?o.deadline.substring(0,10):'无')+' 优先级:'+(o.priority==='high'?'急':o.priority==='low'?'低':'中')+' 材料:'+(o.material_spec||'未知');
-  }).join('\n') || '（暂无待排产订单）';
-  var machText = machines.map(function(m){
-    var s = m.status==='fault'?'故障':(m.currentTuhao?'加工中('+m.currentTuhao+')':'空闲');
-    return '- '+m.id+(m.model?' '+m.model:'')+' 状态:'+s;
-  }).join('\n') || '（暂无机台数据）';
-  var prompt = '你是走芯机车间的资深排产专家。请根据以下信息给出排产建议：\n\n【待排产订单】\n'+orderText+'\n\n【机台状态（共'+machines.length+'台）】\n'+machText+'\n\n【车间规则】\n1. 走芯机一人看3-4台，换线需调机时间\n2. 同材料同规格尽量连续加工，减少换线\n3. 急单优先排产\n4. 注意交期，快要到期的先排\n5. 故障机台不能排\n\n请给出：\n1. 每台空闲机台分配什么订单\n2. 建议加工顺序（考虑换线最少）\n3. 预计完成时间\n4. 注意事项和风险提示\n\n用简洁的中文回答，适合手机屏幕阅读。';
-  try{
-    var res = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+_aiKey},
-      body:JSON.stringify({model:'qwen-plus',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2000})
-    });
-    if(!res.ok){
-      var errText = await res.text();
-      if(res.status===401){resultEl.innerHTML='❌ Key无效，请检查API Key是否完整复制';return;}
-      if(res.status===400){resultEl.innerHTML='❌ 请求参数错误，可能Key无效或模型不可用';return;}
-      if(res.status===429){resultEl.innerHTML='❌ 请求太频繁或额度用完，稍等再试';return;}
-      resultEl.innerHTML = '❌ API调用失败('+res.status+')：'+errText;
-      return;
-    }
-    var data = await res.json();
-    var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if(!content){ resultEl.innerHTML = '❌ AI未返回有效结果'; return; }
-    // 简单markdown转html
-    content = content.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
-    resultEl.innerHTML = '<div style="margin-bottom:6px;font-size:13px;color:var(--gold);font-weight:700">🤖 AI排产建议</div>'+content;
-  }catch(e){
-    resultEl.innerHTML = '❌ 请求失败：'+e.message;
-  }
-}
+// ========== 质检记录 ==========
 
 // --- 质检记录 ---
 var _qualityRecords = [];
@@ -9704,38 +9605,66 @@ function submitQuickQC(){
     if(typeof showToast==='function') showToast('❌ 保存失败：'+(e.message||''));
   });
 }
+
+// ========== AI报价 ==========
+async function aiQuote(){
+  var _aiK = localStorage.getItem('qwen_api_key') || '';
+  if(!_aiK){
+    var k = prompt('请输入百炼API Key（首次输入后自动保存）：');
+    if(!k||!k.trim())return;
+    _aiK=k.trim();
+    localStorage.setItem('qwen_api_key',_aiK);
+  }
+  var sel = document.getElementById('productSelect');
+  var prodName = sel ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '';
+  var tuhao = document.getElementById('tuhaoInput') ? document.getElementById('tuhaoInput').value : '';
+  var material = document.getElementById('materialSelect') ? document.getElementById('materialSelect').value : '';
+  var costEls = document.querySelectorAll('.summary-value');
+  var costInfo = '';
+  costEls.forEach(function(el){ costInfo += el.textContent + ' '; });
+  var products = (typeof getProducts==='function') ? getProducts() : [];
+  var histText = products.slice(0,20).map(function(p){
+    return '- '+(p.tuhao||p.name||'?')+' 材料:'+(p.material||'?')+' 单价:'+(p.unitPrice||p.price||'?')+'元';
+  }).join('\n') || '（暂无历史报价数据）';
+  var currentInfo = '当前产品：'+(prodName||tuhao||'未选择')+' 材料：'+(material||'未选择')+' 已算成本：'+(costInfo||'未计算');
+  var prompt = '你是走芯机加工行业的资深报价专家。请根据以下信息给出报价建议：\n\n【当前产品信息】\n'+currentInfo+'\n\n【历史报价参考】\n'+histText+'\n\n【走芯机报价规则】\n1. 材料费=重量×单价，走芯机常用易切削钢、紫铜、黄铜等\n2. 加工费=时间/3600×费率，走芯机费率一般80-150元/小时\n3. 刀具分摊=单价/寿命×数量\n4. 废料回收价值需扣除\n5. 含税价=(成本+利润)×1.13\n6. 利润率一般15-30%，急单可加10%\n\n请给出：\n1. 建议单价区间（最低价和推荐价）\n2. 成本构成分析（材料/加工/刀具/其他占比）\n3. 利润率评估\n4. 报价建议和注意事项\n\n用简洁的中文回答，适合手机屏幕阅读。';
+  if(typeof showToast==='function') showToast('🤖 AI正在分析报价...');
+  try{
+    var res = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+_aiK},
+      body:JSON.stringify({model:'qwen-plus',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500})
+    });
+    if(!res.ok){
+      var errText = await res.text();
+      if(res.status===401){_aiShowModal('❌ Key无效','请检查API Key是否正确完整');return;}
+      if(res.status===429){_aiShowModal('❌ 请求太频繁','稍等几秒再试');return;}
+      _aiShowModal('❌ API失败('+res.status+')',errText.substring(0,200));return;
+    }
+    var data = await res.json();
+    var content = data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    if(!content){_aiShowModal('❌ AI未返回结果','请重试');return;}
+    content = content.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+    _aiShowModal('🤖 AI报价建议',content);
+  }catch(e){
+    _aiShowModal('❌ 请求失败',e.message);
+  }
+}
+function _aiShowModal(title,body){
+  var m = document.getElementById('ai-quote-modal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'ai-quote-modal';
+    m.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)';
+    m.innerHTML = '<div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:12px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto;padding:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b id="aiqm-title" style="font-size:15px;color:var(--gold,#f59e0b)"></b><button onclick="document.getElementById(\'ai-quote-modal\').style.display=\'none\'" style="background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer">✕</button></div><div id="aiqm-body" style="font-size:13px;line-height:1.7;color:var(--text)"></div></div>';
+    document.body.appendChild(m);
+  }
+  document.getElementById('aiqm-title').textContent = title;
+  document.getElementById('aiqm-body').innerHTML = body;
+  m.style.display = 'flex';
+}
 </script>
 
-
-<!-- ===== AI排产页面 ===== -->
-<div class="page" id="page-ai">
-  <button class="page-back" onclick="showNav()">← 返回</button>
-  <div class="ai-wrap">
-    <div class="ai-section">
-      <div class="ai-section-title">🤖 AI智能排产</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">基于当前订单和机台状态，AI自动给出排产建议</div>
-      <div class="ai-key-row">
-        <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">API Key:</span>
-        <input type="text" id="ai-api-key" placeholder="粘贴百炼 API Key" autocomplete="off" style="font-size:12px">
-        <button onclick="var e=document.getElementById('ai-api-key');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🔒'" style="padding:4px 6px;font-size:14px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim)" title="显示/隐藏">👁</button>
-        <button class="btn btn-blue" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="aiSaveKey()">保存</button>
-      </div>
-      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">💡 去 <a href="https://dashscope.aliyun.com" target="_blank" style="color:var(--gold)">dashscope.aliyun.com</a> 支付宝登录→创建API Key，送1000万token免费</div>
-    </div>
-    <div class="ai-section">
-      <div class="ai-section-title">📋 待排产订单</div>
-      <div id="ai-orders-list" style="max-height:30vh;overflow-y:auto">加载中...</div>
-    </div>
-    <div class="ai-section">
-      <div class="ai-section-title">🏭 机台状态</div>
-      <div id="ai-machines-list">加载中...</div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn" style="flex:1;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:700;padding:12px;font-size:14px;border:none;border-radius:8px" onclick="aiSchedule()">🤖 AI帮我排</button>
-    </div>
-    <div id="ai-result" class="ai-result"></div>
-  </div>
-</div>
 
 <!-- ===== 质检记录页面 ===== -->
 <div class="page" id="page-quality">
