@@ -9500,12 +9500,12 @@ setTimeout(function(){
 // ========== AI排产 & 质检记录 ==========
 
 // --- AI排产 ---
-var _aiKey = localStorage.getItem('ds_api_key') || '';
+var _aiKey = localStorage.getItem('sf_api_key') || '';
 function aiSaveKey(){
   var k = document.getElementById('ai-api-key').value.trim();
   if(!k){ showToast('请输入Key'); return; }
   _aiKey = k;
-  localStorage.setItem('ds_api_key', k);
+  localStorage.setItem('sf_api_key', k);
   showToast('✅ Key已保存');
 }
 function aiLoadKey(){
@@ -9554,7 +9554,7 @@ function aiRenderMachines(){
 async function aiSchedule(){
   if(!_aiKey){
     var kEl = document.getElementById('ai-api-key');
-    if(kEl && kEl.value.trim()){ _aiKey = kEl.value.trim(); localStorage.setItem('ds_api_key',_aiKey); }
+    if(kEl && kEl.value.trim()){ _aiKey = kEl.value.trim(); localStorage.setItem('sf_api_key',_aiKey); }
     else{ showToast('请先配置DeepSeek API Key'); return; }
   }
   var resultEl = document.getElementById('ai-result');
@@ -9573,15 +9573,15 @@ async function aiSchedule(){
   }).join('\n') || '（暂无机台数据）';
   var prompt = '你是走芯机车间的资深排产专家。请根据以下信息给出排产建议：\n\n【待排产订单】\n'+orderText+'\n\n【机台状态（共'+machines.length+'台）】\n'+machText+'\n\n【车间规则】\n1. 走芯机一人看3-4台，换线需调机时间\n2. 同材料同规格尽量连续加工，减少换线\n3. 急单优先排产\n4. 注意交期，快要到期的先排\n5. 故障机台不能排\n\n请给出：\n1. 每台空闲机台分配什么订单\n2. 建议加工顺序（考虑换线最少）\n3. 预计完成时间\n4. 注意事项和风险提示\n\n用简洁的中文回答，适合手机屏幕阅读。';
   try{
-    var res = await fetch('https://api.deepseek.com/v1/chat/completions',{
+    var res = await fetch('https://api.siliconflow.cn/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+_aiKey},
-      body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2000})
+      body:JSON.stringify({model:'deepseek-ai/DeepSeek-V3',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2000})
     });
     if(!res.ok){
       var errText = await res.text();
       if(res.status===401){resultEl.innerHTML='❌ Key无效，请检查API Key是否完整复制';return;}
-      if(res.status===402){resultEl.innerHTML='❌ DeepSeek余额不足，去<a href="https://platform.deepseek.com" target="_blank" style="color:var(--gold)">platform.deepseek.com</a>充值（1元就够用很久，支持支付宝）';return;}
+      if(res.status===402){resultEl.innerHTML='❌ 余额不足，去<a href="https://cloud.siliconflow.cn" target="_blank" style="color:var(--gold)">cloud.siliconflow.cn</a>充值或查看额度';return;}
       if(res.status===429){resultEl.innerHTML='❌ 请求太频繁，稍等几秒再试';return;}
       resultEl.innerHTML = '❌ API调用失败('+res.status+')：'+errText;
       return;
@@ -9716,11 +9716,11 @@ function submitQuickQC(){
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">基于当前订单和机台状态，AI自动给出排产建议</div>
       <div class="ai-key-row">
         <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">API Key:</span>
-        <input type="text" id="ai-api-key" placeholder="粘贴DeepSeek API Key" autocomplete="off" style="font-size:12px">
+        <input type="text" id="ai-api-key" placeholder="粘贴硅基流动 API Key" autocomplete="off" style="font-size:12px">
         <button onclick="var e=document.getElementById('ai-api-key');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🔒'" style="padding:4px 6px;font-size:14px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim)" title="显示/隐藏">👁</button>
         <button class="btn btn-blue" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="aiSaveKey()">保存</button>
       </div>
-      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">💡 去 <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--gold)">platform.deepseek.com</a> 注册获取Key，新用户送500万token</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">💡 去 <a href="https://cloud.siliconflow.cn" target="_blank" style="color:var(--gold)">cloud.siliconflow.cn</a> 注册获取Key，送2000万token免费额度</div>
     </div>
     <div class="ai-section">
       <div class="ai-section-title">📋 待排产订单</div>
