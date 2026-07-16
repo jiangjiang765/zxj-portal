@@ -111,6 +111,31 @@ body{background:var(--bg-deep);color:var(--text)}
 .home-card.hc-tech{background:linear-gradient(135deg,#8b1a1a,#e94560)}
 .home-card.hc-sync{background:linear-gradient(135deg,#2a4a6a,#4a8ab5)}
 .hc-kanban{background:linear-gradient(135deg,#0d47a1,#1976d2)}
+.hc-ai{background:linear-gradient(135deg,#4a1a6b,#7c3aed)}
+.hc-quality{background:linear-gradient(135deg,#0d5a3a,#10b981)}
+/* AI排产页 */
+.ai-wrap{padding:12px;max-width:640px;margin:0 auto}
+.ai-section{background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:12px}
+.ai-section-title{font-size:14px;font-weight:700;color:var(--gold);margin-bottom:10px}
+.ai-order-item{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.6;color:var(--text-main)}
+.ai-order-item:last-child{border-bottom:none}
+.ai-machine-item{display:inline-block;padding:4px 8px;margin:3px;border-radius:6px;font-size:11px;background:var(--bg-input);color:var(--text-main)}
+.ai-machine-item.busy{background:#1a3a1a;color:#4caf50}
+.ai-machine-item.idle{background:#3a3a1a;color:#ff9800}
+.ai-machine-item.fault{background:#3a1a1a;color:#f44336}
+.ai-result{background:var(--bg-input);border-radius:8px;padding:12px;margin-top:10px;font-size:12px;line-height:1.7;color:var(--text-main);white-space:pre-wrap;max-height:50vh;overflow-y:auto;display:none}
+.ai-result.active{display:block}
+.ai-thinking{color:var(--gold);animation:aiPulse 1.2s infinite}
+@keyframes aiPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ai-key-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.ai-key-row input{flex:1;background:var(--bg-input);color:var(--text-main);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px}
+/* 质检卡片 */
+.qc-stat{display:flex;gap:8px;margin-bottom:10px}
+.qc-stat-item{flex:1;text-align:center;padding:8px 4px;background:var(--bg-input);border-radius:8px}
+.qc-stat-num{font-size:18px;font-weight:700;color:var(--gold)}
+.qc-stat-lbl{font-size:10px;color:var(--text-dim);margin-top:2px}
+.qc-history-item{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;line-height:1.5}
+.qc-history-item:last-child{border-bottom:none}
 
 /* 生产看板 - 列表式 */
 .kb-wrap{padding:8px 10px;background:linear-gradient(180deg,#0a1628 0%,#0f2035 40%,#0a1628 100%);min-height:100vh}
@@ -828,6 +853,16 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
         <div class="hc-icon">☁️</div>
         <div class="hc-name">数据同步</div>
         <div class="hc-desc">云端备份与恢复</div>
+      </div>
+      <div class="home-card hc-ai" onclick="navTo('ai')">
+        <div class="hc-icon">🤖</div>
+        <div class="hc-name">AI排产</div>
+        <div class="hc-desc">智能排产建议</div>
+      </div>
+      <div class="home-card hc-quality" onclick="navTo('quality')">
+        <div class="hc-icon">✅</div>
+        <div class="hc-name">质检记录</div>
+        <div class="hc-desc">首检/巡检/完工检</div>
       </div>
     </div>
   </div>
@@ -5057,6 +5092,8 @@ function navTo(page){
   if(page==='product')refreshProductList();
   if(page==='order'){location.href='./production_plan.html';return;}
   if(page==='tech'){/* tech page static */}
+  if(page==='ai'){aiLoadKey();aiRenderOrders();aiRenderMachines();}
+  if(page==='quality'){qcLoadDeviceList();loadQualityRecords().then(function(){qcRenderStats();qcRenderHistory();});}
 }
 
 function showNav(){
@@ -9227,7 +9264,7 @@ function closeProdInput(){
   if(modal) modal.style.display = 'none';
 }
 function switchProdTab(tab){
-  var titles = {start:'📝 录入生产 - 开工', end:'🔵 收工登记', except:'🔴 异常上报'};
+  var titles = {start:'📝 录入生产 - 开工', end:'🔵 收工登记', except:'🔴 异常上报', qc:'✅ 快速质检'};
   var t = document.getElementById('prod-input-title');
   if(t) t.textContent = titles[tab] || '📝 录入生产';
   document.querySelectorAll('.prod-tab').forEach(function(b){
@@ -9248,6 +9285,9 @@ function switchProdTab(tab){
   if(tab==='except'){
     loadProdDeviceList('px-device');
     loadProdOpenByDevice('px');
+  }
+  if(tab==='qc'){
+    loadProdDeviceList('pq-device');
   }
 }
 function loadProdDeviceList(selId){
@@ -9456,8 +9496,273 @@ setTimeout(function(){renderGcodeTable();renderAlarmTable();renderSpecTable();re
 setTimeout(function(){
   if(typeof bootCloudSync==='function')bootCloudSync();
 },800);
+
+// ========== AI排产 & 质检记录 ==========
+
+// --- AI排产 ---
+var _aiKey = localStorage.getItem('ds_api_key') || '';
+function aiSaveKey(){
+  var k = document.getElementById('ai-api-key').value.trim();
+  if(!k){ showToast('请输入Key'); return; }
+  _aiKey = k;
+  localStorage.setItem('ds_api_key', k);
+  showToast('✅ Key已保存');
+}
+function aiLoadKey(){
+  var el = document.getElementById('ai-api-key');
+  if(el && _aiKey) el.value = _aiKey;
+}
+function aiRenderOrders(){
+  var el = document.getElementById('ai-orders-list');
+  if(!el) return;
+  if(!_volcOrders || !_volcOrders.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px">暂无订单（请在生产计划系统添加）</div>';
+    return;
+  }
+  var pending = _volcOrders.filter(function(o){ return o.status==='pending' || o.status==='进行中' || !o.status; });
+  if(!pending.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px">所有订单已排产 ✅</div>';
+    return;
+  }
+  var html = '';
+  pending.forEach(function(o){
+    var dl = o.deadline ? o.deadline.substring(0,10) : '无';
+    var pri = o.priority==='high'?'🔴急':o.priority==='low'?'🟢低':'🟡中';
+    html += '<div class="ai-order-item"><b>'+(o.drawing_no||o.order_no||'—')+'</b> '+(o.customer?'· '+o.customer:'')+' · 需'+(o.quantity||0)+'件 · 交期'+dl+' '+pri+(o.material_spec?' · '+(o.material_spec||''):'')+'</div>';
+  });
+  el.innerHTML = html;
+}
+function aiRenderMachines(){
+  var el = document.getElementById('ai-machines-list');
+  if(!el) return;
+  var ms = (typeof getMachines==='function') ? getMachines() : [];
+  if(!ms.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">暂无机台数据</div>';
+    return;
+  }
+  var html = '';
+  ms.forEach(function(m){
+    var cls = m.status==='fault'?'fault':(m.currentTuhao?'busy':'idle');
+    var lbl = m.id + (m.model?' ('+m.model+')':'');
+    if(m.currentTuhao) lbl += ' → '+m.currentTuhao;
+    else if(m.status==='fault') lbl += ' ⚠故障';
+    else lbl += ' 空闲';
+    html += '<span class="ai-machine-item '+cls+'">'+lbl+'</span>';
+  });
+  el.innerHTML = html;
+}
+async function aiSchedule(){
+  if(!_aiKey){
+    var kEl = document.getElementById('ai-api-key');
+    if(kEl && kEl.value.trim()){ _aiKey = kEl.value.trim(); localStorage.setItem('ds_api_key',_aiKey); }
+    else{ showToast('请先配置DeepSeek API Key'); return; }
+  }
+  var resultEl = document.getElementById('ai-result');
+  if(!resultEl) return;
+  resultEl.className = 'ai-result active';
+  resultEl.innerHTML = '<span class="ai-thinking">🤖 AI正在分析订单和机台，请稍候...</span>';
+  // 收集数据
+  var orders = (_volcOrders||[]).filter(function(o){ return o.status==='pending'||o.status==='进行中'||!o.status; });
+  var machines = (typeof getMachines==='function') ? getMachines() : [];
+  var orderText = orders.map(function(o){
+    return '- 图号:'+(o.drawing_no||'?')+' 客户:'+(o.customer||'?')+' 数量:'+(o.quantity||0)+' 交期:'+(o.deadline?o.deadline.substring(0,10):'无')+' 优先级:'+(o.priority==='high'?'急':o.priority==='low'?'低':'中')+' 材料:'+(o.material_spec||'未知');
+  }).join('\n') || '（暂无待排产订单）';
+  var machText = machines.map(function(m){
+    var s = m.status==='fault'?'故障':(m.currentTuhao?'加工中('+m.currentTuhao+')':'空闲');
+    return '- '+m.id+(m.model?' '+m.model:'')+' 状态:'+s;
+  }).join('\n') || '（暂无机台数据）';
+  var prompt = '你是走芯机车间的资深排产专家。请根据以下信息给出排产建议：\n\n【待排产订单】\n'+orderText+'\n\n【机台状态（共'+machines.length+'台）】\n'+machText+'\n\n【车间规则】\n1. 走芯机一人看3-4台，换线需调机时间\n2. 同材料同规格尽量连续加工，减少换线\n3. 急单优先排产\n4. 注意交期，快要到期的先排\n5. 故障机台不能排\n\n请给出：\n1. 每台空闲机台分配什么订单\n2. 建议加工顺序（考虑换线最少）\n3. 预计完成时间\n4. 注意事项和风险提示\n\n用简洁的中文回答，适合手机屏幕阅读。';
+  try{
+    var res = await fetch('https://api.deepseek.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+_aiKey},
+      body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2000})
+    });
+    if(!res.ok){
+      var errText = await res.text();
+      resultEl.innerHTML = '❌ API调用失败('+res.status+')：'+errText;
+      return;
+    }
+    var data = await res.json();
+    var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if(!content){ resultEl.innerHTML = '❌ AI未返回有效结果'; return; }
+    // 简单markdown转html
+    content = content.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+    resultEl.innerHTML = '<div style="margin-bottom:6px;font-size:13px;color:var(--gold);font-weight:700">🤖 AI排产建议</div>'+content;
+  }catch(e){
+    resultEl.innerHTML = '❌ 请求失败：'+e.message;
+  }
+}
+
+// --- 质检记录 ---
+var _qualityRecords = [];
+async function loadQualityRecords(){
+  try{
+    var data = await sbGet('zxj_kv','select=*&id=like.quality_*&order=updated_at.desc&limit=200');
+    _qualityRecords = (data||[]).map(function(r){
+      var d = r.data || {};
+      d._id = r.id;
+      d._updated = r.updated_at;
+      return d;
+    });
+  }catch(e){ _qualityRecords = []; }
+}
+function qcRenderStats(){
+  var today = new Date().toISOString().slice(0,10);
+  var todayRecs = _qualityRecords.filter(function(r){ return (r.date||'').substring(0,10)===today; });
+  var todayPass = todayRecs.reduce(function(s,r){return s+(r.pass||0)},0);
+  var todayFail = todayRecs.reduce(function(s,r){return s+(r.fail||0)},0);
+  var todayTotal = todayPass + todayFail;
+  var todayRate = todayTotal>0 ? Math.round(todayPass/todayTotal*100)+'%' : '-';
+  var allPass = _qualityRecords.reduce(function(s,r){return s+(r.pass||0)},0);
+  var allFail = _qualityRecords.reduce(function(s,r){return s+(r.fail||0)},0);
+  var el1=document.getElementById('qc-today-count'); if(el1)el1.textContent=todayTotal;
+  var el2=document.getElementById('qc-pass-rate'); if(el2)el2.textContent=todayRate;
+  var el3=document.getElementById('qc-total-count'); if(el3)el3.textContent=allPass+allFail;
+}
+function qcRenderHistory(){
+  var el = document.getElementById('qc-history');
+  if(!el) return;
+  if(!_qualityRecords.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px">暂无检验记录</div>';
+    return;
+  }
+  var html = '';
+  _qualityRecords.slice(0,50).forEach(function(r){
+    var t = r.type||'质检';
+    var icon = t==='首件检'?'🔍':t==='巡检'?'👁':t==='完工检'?'✅':'📋';
+    var failInfo = r.fail>0 ? ' <span style="color:#f44336">不良'+r.fail+(r.defect?'·'+r.defect:'')+'</span>' : '';
+    html += '<div class="qc-history-item">'+icon+' <b>'+t+'</b> '+(r.device||'')+' '+(r.part||'')+' · 合格'+(r.pass||0)+failInfo+' · '+(r.date||'').substring(0,16).replace('T',' ')+'</div>';
+  });
+  el.innerHTML = html;
+}
+function qcLoadDeviceList(){
+  var sel = document.getElementById('qc-device');
+  if(!sel) return;
+  var ms = (typeof getMachines==='function') ? getMachines() : [];
+  var html = '<option value="">请选择设备</option>';
+  ms.forEach(function(m){ html += '<option value="'+m.id+'">'+m.id+(m.model?' ('+m.model+')':'')+'</option>'; });
+  sel.innerHTML = html;
+}
+function submitQuality(){
+  var dev = document.getElementById('qc-device').value;
+  var passN = parseInt(document.getElementById('qc-pass').value)||0;
+  if(!dev){ showToast('请选择设备'); return; }
+  if(passN<=0 && parseInt(document.getElementById('qc-fail').value)<=0){ showToast('合格数或不良数需>0'); return; }
+  var rec = {
+    type: document.getElementById('qc-type').value,
+    device: dev,
+    part: document.getElementById('qc-part').value.trim(),
+    pass: passN,
+    fail: parseInt(document.getElementById('qc-fail').value)||0,
+    defect: document.getElementById('qc-defect').value,
+    inspector: document.getElementById('qc-inspector').value.trim() || (typeof getCurrentOperatorName==='function'?getCurrentOperatorName():''),
+    notes: document.getElementById('qc-notes').value.trim(),
+    date: new Date().toISOString()
+  };
+  var kvId = 'quality_' + Date.now();
+  sbPost('zxj_kv',{id:kvId,data:rec}).then(function(r){
+    if(typeof showToast==='function') showToast('✅ 质检已记录');
+    _qualityRecords.unshift(rec);
+    qcRenderStats();
+    qcRenderHistory();
+    // 清空表单
+    document.getElementById('qc-pass').value='1';
+    document.getElementById('qc-fail').value='0';
+    document.getElementById('qc-defect').value='';
+    document.getElementById('qc-notes').value='';
+  }).catch(function(e){
+    if(typeof showToast==='function') showToast('❌ 保存失败：'+(e.message||''));
+  });
+}
+// 快速质检（Modal内）
+function submitQuickQC(){
+  var dev = document.getElementById('pq-device').value;
+  var passN = parseInt(document.getElementById('pq-pass').value)||0;
+  if(!dev){ showToast('请选择设备'); return; }
+  if(passN<=0 && parseInt(document.getElementById('pq-fail').value)<=0){ showToast('合格数或不良数需>0'); return; }
+  var rec = {
+    type: document.getElementById('pq-type').value,
+    device: dev,
+    part: document.getElementById('pq-part').value.trim(),
+    pass: passN,
+    fail: parseInt(document.getElementById('pq-fail').value)||0,
+    defect: document.getElementById('pq-defect').value,
+    inspector: (typeof getCurrentOperatorName==='function'?getCurrentOperatorName():''),
+    notes: '',
+    date: new Date().toISOString()
+  };
+  var kvId = 'quality_' + Date.now();
+  sbPost('zxj_kv',{id:kvId,data:rec}).then(function(r){
+    if(typeof showToast==='function') showToast('✅ 质检已记录');
+    closeProdInput();
+    _qualityRecords.unshift(rec);
+  }).catch(function(e){
+    if(typeof showToast==='function') showToast('❌ 保存失败：'+(e.message||''));
+  });
+}
 </script>
 
+
+<!-- ===== AI排产页面 ===== -->
+<div class="page" id="page-ai">
+  <button class="page-back" onclick="showNav()">← 返回</button>
+  <div class="ai-wrap">
+    <div class="ai-section">
+      <div class="ai-section-title">🤖 AI智能排产</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">基于当前订单和机台状态，AI自动给出排产建议</div>
+      <div class="ai-key-row">
+        <span style="font-size:11px;color:var(--text-dim);white-space:nowrap">API Key:</span>
+        <input type="password" id="ai-api-key" placeholder="DeepSeek API Key（首次需配置）">
+        <button class="btn btn-blue" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="aiSaveKey()">保存</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">💡 去 <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--gold)">platform.deepseek.com</a> 注册获取Key，新用户送500万token</div>
+    </div>
+    <div class="ai-section">
+      <div class="ai-section-title">📋 待排产订单</div>
+      <div id="ai-orders-list" style="max-height:30vh;overflow-y:auto">加载中...</div>
+    </div>
+    <div class="ai-section">
+      <div class="ai-section-title">🏭 机台状态</div>
+      <div id="ai-machines-list">加载中...</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn" style="flex:1;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:700;padding:12px;font-size:14px;border:none;border-radius:8px" onclick="aiSchedule()">🤖 AI帮我排</button>
+    </div>
+    <div id="ai-result" class="ai-result"></div>
+  </div>
+</div>
+
+<!-- ===== 质检记录页面 ===== -->
+<div class="page" id="page-quality">
+  <button class="page-back" onclick="showNav()">← 返回</button>
+  <div class="ai-wrap">
+    <div class="ai-section">
+      <div class="ai-section-title">✅ 质检记录</div>
+      <div class="qc-stat" id="qc-stats">
+        <div class="qc-stat-item"><div class="qc-stat-num" id="qc-today-count">0</div><div class="qc-stat-lbl">今日检验</div></div>
+        <div class="qc-stat-item"><div class="qc-stat-num" id="qc-pass-rate">-</div><div class="qc-stat-lbl">合格率</div></div>
+        <div class="qc-stat-item"><div class="qc-stat-num" id="qc-total-count">0</div><div class="qc-stat-lbl">累计检验</div></div>
+      </div>
+    </div>
+    <div class="ai-section">
+      <div class="ai-section-title">📝 新增检验</div>
+      <div class="form-row"><span class="form-label">检验类型</span><select class="form-input" id="qc-type"><option value="首件检">首件检</option><option value="巡检">巡检</option><option value="完工检">完工检</option></select></div>
+      <div class="form-row"><span class="form-label">设备</span><select class="form-input" id="qc-device"></select></div>
+      <div class="form-row"><span class="form-label">图号/件名</span><input type="text" class="form-input" id="qc-part" placeholder="如 A1200"></div>
+      <div class="form-row"><span class="form-label">合格数 *</span><input type="number" class="form-input" id="qc-pass" placeholder="如 50" value="1"></div>
+      <div class="form-row"><span class="form-label">不良数</span><input type="number" class="form-input" id="qc-fail" placeholder="如 2" value="0"></div>
+      <div class="form-row"><span class="form-label">不良类型</span><select class="form-input" id="qc-defect"><option value="">无不良</option><option value="尺寸超差">尺寸超差</option><option value="表面缺陷">表面缺陷</option><option value="毛刺">毛刺</option><option value="崩刃">崩刃</option><option value="材料异常">材料异常</option><option value="其他">其他</option></select></div>
+      <div class="form-row"><span class="form-label">检验员</span><input type="text" class="form-input" id="qc-inspector" placeholder="选填"></div>
+      <div class="form-row"><span class="form-label">备注</span><input type="text" class="form-input" id="qc-notes" placeholder="选填"></div>
+      <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="submitQuality()">✅ 提交检验</button>
+    </div>
+    <div class="ai-section">
+      <div class="ai-section-title">📊 检验历史</div>
+      <div id="qc-history" style="max-height:40vh;overflow-y:auto">加载中...</div>
+    </div>
+  </div>
+</div>
 
 <!-- ===== 生产录入 Modal（数据贯通方案 2026-07-05） ===== -->
 <div id="prod-input-modal" class="prod-modal" style="display:none">
@@ -9471,6 +9776,7 @@ setTimeout(function(){
       <button class="prod-tab active" data-tab="start" onclick="switchProdTab('start')">🟢 开工</button>
       <button class="prod-tab" data-tab="end" onclick="switchProdTab('end')">🔵 收工</button>
       <button class="prod-tab" data-tab="except" onclick="switchProdTab('except')">🔴 异常</button>
+      <button class="prod-tab" data-tab="qc" onclick="switchProdTab('qc')">✅ 质检</button>
     </div>
     <div class="prod-modal-content">
       <!-- 开工 -->
@@ -9516,6 +9822,19 @@ setTimeout(function(){
         <div class="form-row"><span class="form-label">已解决</span><select class="form-input" id="px-resolved"><option value="false">否（继续观察）</option><option value="true">是（已修复）</option></select></div>
         <div class="prod-actions">
           <button class="btn" style="background:#C62828;color:#fff" onclick="submitProdExcept()">🔴 提交异常</button>
+        </div>
+      </div>
+      <!-- 质检(快速) -->
+      <div id="prod-tab-qc" class="prod-tab-pane" hidden>
+        <div class="prod-section-title">快速质检</div>
+        <div class="form-row"><span class="form-label">设备 *</span><select class="form-input" id="pq-device"></select></div>
+        <div class="form-row"><span class="form-label">检验类型</span><select class="form-input" id="pq-type"><option value="首件检">首件检</option><option value="巡检">巡检</option><option value="完工检">完工检</option></select></div>
+        <div class="form-row"><span class="form-label">图号/件名</span><input type="text" class="form-input" id="pq-part" placeholder="选填"></div>
+        <div class="form-row"><span class="form-label">合格数 *</span><input type="number" class="form-input" id="pq-pass" value="1"></div>
+        <div class="form-row"><span class="form-label">不良数</span><input type="number" class="form-input" id="pq-fail" value="0"></div>
+        <div class="form-row"><span class="form-label">不良类型</span><select class="form-input" id="pq-defect"><option value="">无</option><option value="尺寸超差">尺寸超差</option><option value="表面缺陷">表面缺陷</option><option value="毛刺">毛刺</option><option value="崩刃">崩刃</option></select></div>
+        <div class="prod-actions">
+          <button class="btn btn-green" onclick="submitQuickQC()">✅ 提交质检</button>
         </div>
       </div>
     </div>
