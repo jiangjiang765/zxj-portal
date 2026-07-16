@@ -533,6 +533,11 @@ html.portal-auto .login-overlay{display:none!important}
 .header-logout:active{color:#EF5350;border-color:#EF5350}
 
 </style>
+<!-- Three.js for 3D viewer -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
 
 </head>
 <body>
@@ -1625,6 +1630,34 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
       <div class="hc-name">切削</div>
       <div class="hc-desc">切削参数计算</div>
     </div>
+    <div class="home-card" style="background:linear-gradient(135deg,#1a2a4a,#5c6bc0)" onclick="conNav('viewer3d')">
+      <div class="hc-icon">📊</div>
+      <div class="hc-name">3D图纸</div>
+      <div class="hc-desc">3D模型在线查看</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 3D图纸查看页面 ===== -->
+<div class="page" id="page-viewer3d">
+  <button class="page-back" onclick="showNav()">← 返回</button>
+  <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">📊 3D图纸查看</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式，拖拽或点击上传</div>
+  <div id="v3d-upload-area" onclick="document.getElementById('v3d-file').click()" style="border:2px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all .2s">
+    <div style="font-size:36px;margin-bottom:8px">📁</div>
+    <div style="font-size:14px;color:var(--text);font-weight:600">点击选择文件</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px">或拖拽文件到此处</div>
+  </div>
+  <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj" style="display:none" onchange="handleV3dFile(this)">
+  <div id="v3d-info" style="display:none;font-size:12px;color:var(--text-dim);margin-bottom:8px;padding:8px;background:var(--bg-input);border-radius:8px"></div>
+  <div id="v3d-container" style="display:none;width:100%;height:400px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative">
+    <canvas id="v3d-canvas" style="width:100%;height:100%;display:block"></canvas>
+    <div id="v3d-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:14px;display:none">加载中...</div>
+  </div>
+  <div id="v3d-controls" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" style="background:var(--blue);color:#fff;flex:1;min-width:80px" onclick="v3dResetView()">🔄 重置视角</button>
+    <button class="btn" style="background:var(--blue);color:#fff;flex:1;min-width:80px" onclick="v3dToggleWireframe()">🔲 线框模式</button>
+    <button class="btn" style="background:#e74c3c;color:#fff;flex:1;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
   </div>
 </div>
 
@@ -4275,6 +4308,123 @@ function queryProcess(){
 }
 
 
+// ========== 3D图纸查看器 ==========
+var v3dScene=null,v3dCamera=null,v3dRenderer=null,v3dControls=null,v3dMesh=null,v3dWireframe=false;
+function initV3d(){
+  if(v3dRenderer)return;
+  var c=document.getElementById('v3d-canvas');
+  v3dScene=new THREE.Scene();
+  v3dScene.background=new THREE.Color(0x1a1a2e);
+  v3dCamera=new THREE.PerspectiveCamera(60,c.clientWidth/c.clientHeight,0.1,10000);
+  v3dCamera.position.set(100,80,100);
+  v3dRenderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
+  v3dRenderer.setSize(c.clientWidth,c.clientHeight);
+  v3dRenderer.setPixelRatio(window.devicePixelRatio);
+  v3dControls=new THREE.OrbitControls(v3dCamera,v3dRenderer.domElement);
+  v3dControls.enableDamping=true;
+  v3dControls.dampingFactor=0.1;
+  // lights
+  v3dScene.add(new THREE.AmbientLight(0x606080));
+  var dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(80,120,60);v3dScene.add(dl);
+  var dl2=new THREE.DirectionalLight(0x4488ff,0.4);dl2.position.set(-60,40,-80);v3dScene.add(dl2);
+  // grid
+  v3dScene.add(new THREE.GridHelper(200,20,0x333355,0x222244));
+  animateV3d();
+}
+function animateV3d(){requestAnimationFrame(animateV3d);if(v3dControls)v3dControls.update();if(v3dRenderer)v3dRenderer.render(v3dScene,v3dCamera);}
+function handleV3dFile(input){
+  var file=input.files[0];if(!file)return;
+  var name=file.name,ext=name.split('.').pop().toLowerCase();
+  document.getElementById('v3d-info').style.display='block';
+  document.getElementById('v3d-info').textContent='📄 '+name+' ('+formatFileSize(file.size)+')';
+  document.getElementById('v3d-container').style.display='block';
+  document.getElementById('v3d-controls').style.display='flex';
+  document.getElementById('v3d-loading').style.display='block';
+  initV3d();
+  // remove old mesh
+  if(v3dMesh){v3dScene.remove(v3dMesh);v3dMesh=null;}
+  if(ext==='stl'){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var loader=new THREE.STLLoader();
+        var geom=loader.parse(e.target.result);
+        var mat=new THREE.MeshPhongMaterial({color:0x4488cc,specular:0x222222,shininess:60});
+        if(v3dWireframe)mat.wireframe=true;
+        v3dMesh=new THREE.Mesh(geom,mat);
+        geom.computeBoundingBox();
+        var center=new THREE.Vector3();geom.boundingBox.getCenter(center);
+        v3dMesh.position.sub(center);
+        v3dScene.add(v3dMesh);
+        fitV3dCamera(geom.boundingBox);
+        document.getElementById('v3d-loading').style.display='none';
+      }catch(err){document.getElementById('v3d-loading').textContent='加载失败: '+err.message;}
+    };
+    reader.readAsArrayBuffer(file);
+  }else if(ext==='obj'){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var loader=new THREE.OBJLoader();
+        var obj=loader.parse(e.target.result);
+        obj.traverse(function(child){if(child.isMesh){child.material=new THREE.MeshPhongMaterial({color:0x4488cc,specular:0x222222,shininess:60});if(v3dWireframe)child.material.wireframe=true;}});
+        v3dMesh=obj;
+        var box=new THREE.Box3().setFromObject(obj);
+        var center=new THREE.Vector3();box.getCenter(center);
+        obj.position.sub(center);
+        v3dScene.add(obj);
+        fitV3dCamera(box);
+        document.getElementById('v3d-loading').style.display='none';
+      }catch(err){document.getElementById('v3d-loading').textContent='加载失败: '+err.message;}
+    };
+    reader.readAsText(file);
+  }else if(ext==='step'||ext==='stp'){
+    document.getElementById('v3d-loading').textContent='STEP格式暂不支持在线预览，建议转换为STL后查看';
+    document.getElementById('v3d-container').style.display='none';
+  }else{
+    document.getElementById('v3d-loading').textContent='不支持的格式: .'+ext;
+  }
+  input.value='';
+}
+function fitV3dCamera(box){
+  if(!box)return;
+  var size=new THREE.Vector3();box.getSize(size);
+  var maxDim=Math.max(size.x,size.y,size.z);
+  var dist=maxDim*1.8;
+  v3dCamera.position.set(dist*0.7,dist*0.5,dist*0.7);
+  v3dCamera.lookAt(0,0,0);
+  v3dControls.target.set(0,0,0);
+  v3dControls.update();
+}
+function v3dResetView(){
+  if(v3dMesh){
+    var box=new THREE.Box3().setFromObject(v3dMesh);
+    fitV3dCamera(box);
+  }else{
+    v3dCamera.position.set(100,80,100);v3dCamera.lookAt(0,0,0);v3dControls.target.set(0,0,0);v3dControls.update();
+  }
+}
+function v3dToggleWireframe(){
+  v3dWireframe=!v3dWireframe;
+  if(v3dMesh){v3dMesh.traverse(function(c){if(c.isMesh)c.material.wireframe=v3dWireframe;});}
+}
+function v3dClear(){
+  if(v3dMesh){v3dScene.remove(v3dMesh);v3dMesh=null;}
+  document.getElementById('v3d-container').style.display='none';
+  document.getElementById('v3d-controls').style.display='none';
+  document.getElementById('v3d-info').style.display='none';
+  v3dWireframe=false;
+}
+function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
+// drag & drop
+setTimeout(function(){
+  var area=document.getElementById('v3d-upload-area');
+  if(!area)return;
+  area.addEventListener('dragover',function(e){e.preventDefault();area.style.borderColor='#1e88e5';area.style.background='rgba(30,136,229,.08)';});
+  area.addEventListener('dragleave',function(){area.style.borderColor='';area.style.background='';});
+  area.addEventListener('drop',function(e){e.preventDefault();area.style.borderColor='';area.style.background='';var f=document.getElementById('v3d-file');var dt=new DataTransfer();if(e.dataTransfer.files.length)dt.items.add(e.dataTransfer.files[0]);f.files=dt.files;handleV3dFile(f);});
+},500);
+
 function conNav(pg){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   var target=document.getElementById('page-'+pg);
@@ -4291,6 +4441,7 @@ function conNav(pg){
   if(pg==='product'){refreshProductList();}
   if(pg==='scrap'){refreshScrapTuhaoList();refreshScrapRecordList();}
   if(pg==='programming'){initProgrammingPage();}
+  if(pg==='viewer3d'){initV3d();}
 }
 function navTo(page){
   if(page==='home'){
@@ -4386,7 +4537,8 @@ function renderKanbanTiles(list,dayByDev){
 
 // ========== 看板产品详情弹窗 ==========
 function showKanbanDetail(machineId){
-  var m=_machines.find(function(x){return x.id===machineId});
+  var machines=getMachines();
+  var m=machines.find(function(x){return x.id===machineId});
   if(!m)return;
   document.getElementById('kb-modal-title').textContent=machineId+' 详情';
   var html='';
