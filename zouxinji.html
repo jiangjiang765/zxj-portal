@@ -542,8 +542,9 @@ html.portal-auto .login-overlay{display:none!important}
 <script type="module">
 try{
   const m=await import('https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js');
-  const occt=m.default||m;
-  await occt.ready;
+  const factory=m.default||m;
+  // factory is the constructor function — call it to get the WASM instance
+  const occt=await factory();
   window._occtSunbox=occt;
   window._occtSunboxReady=true;
 }catch(e){
