@@ -1642,7 +1642,7 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 <div class="page" id="page-viewer3d">
   <button class="page-back" onclick="showNav()">← 返回</button>
   <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">📊 3D图纸查看</div>
-  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式（STEP首次加载需下载解析引擎约10秒），拖拽或点击上传</div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">支持 STEP/STL/OBJ 格式（STEP首次加载需下载解析引擎约10秒），拖拽或点击上传<br>💡 STEP渲染如不精确，建议用CAD导出STL再上传</div>
   <div id="v3d-upload-area" onclick="document.getElementById('v3d-file').click()" style="border:2px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;cursor:pointer;margin-bottom:12px;transition:all .2s">
     <div style="font-size:36px;margin-bottom:8px">📁</div>
     <div style="font-size:14px;color:var(--text);font-weight:600">点击选择文件</div>
@@ -4354,7 +4354,7 @@ function loadOcctJs(){
     }
     v3dShowStatus('⏳ 正在加载 STEP 解析引擎（首次约10秒）...','#64b5f6');
     var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js';
+    s.src='https://cdn.jsdelivr.net/npm/@sunbox/occt-import-js@0.0.25/dist/occt-import-js.js';
     s.onload=function(){
       if(typeof occtimportjs!=='function'){reject(new Error('occt-import-js 加载异常'));return;}
       v3dShowStatus('⏳ 正在初始化 STEP 解析引擎...','#64b5f6');
@@ -4367,42 +4367,58 @@ function loadOcctJs(){
 // Convert occt-import-js result to Three.js Group
 function occtResultToThree(result){
   var group=new THREE.Group();
-  function addNode(node){
-    if(node.meshes&&node.meshes.length){
-      for(var i=0;i<node.meshes.length;i++){
-        var mIdx=node.meshes[i];if(mIdx>=result.meshes.length)continue;
-        var m=result.meshes[mIdx];
-        var geom=new THREE.BufferGeometry();
-        var pos=m.attributes.position.array;
-        var posArr=new Float32Array(pos.length);
-        for(var j=0;j<pos.length;j++)posArr[j]=pos[j];
-        geom.setAttribute('position',new THREE.BufferAttribute(posArr,3));
-        if(m.attributes.normal){
-          var norm=m.attributes.normal.array;
-          var normArr=new Float32Array(norm.length);
-          for(var j=0;j<norm.length;j++)normArr[j]=norm[j];
-          geom.setAttribute('normal',new THREE.BufferAttribute(normArr,3));
-        }else{geom.computeVertexNormals();}
-        if(m.attributes.index){
-          var idx=m.attributes.index.array;
-          var idxArr=new Uint32Array(idx.length);
-          for(var j=0;j<idx.length;j++)idxArr[j]=idx[j];
-          geom.setIndex(new THREE.BufferAttribute(idxArr,1));
+  var meshes=result.meshes||[];
+  if(meshes.length===0&&result.root){
+    // fallback: try hierarchical
+    function addNode(node){
+      if(node.meshes&&node.meshes.length){
+        for(var i=0;i<node.meshes.length;i++){
+          var mIdx=node.meshes[i];if(mIdx>=meshes.length)continue;
+          meshes.push(result.meshes[mIdx]);
         }
-        var color=0x4488cc;
-        if(m.color&&m.color.length>=3){color=new THREE.Color(m.color[0],m.color[1],m.color[2]);}
-        var mat=new THREE.MeshPhongMaterial({color:color,specular:0x333333,shininess:40,side:THREE.DoubleSide});
-        if(v3dWireframe)mat.wireframe=true;
-        var mesh=new THREE.Mesh(geom,mat);
-        if(m.name)mesh.name=m.name;
-        group.add(mesh);
+      }
+      if(node.children&&node.children.length){
+        for(var i=0;i<node.children.length;i++)addNode(node.children[i]);
       }
     }
-    if(node.children&&node.children.length){
-      for(var i=0;i<node.children.length;i++)addNode(node.children[i]);
-    }
+    addNode(result.root);
   }
-  if(result.root)addNode(result.root);
+  for(var i=0;i<meshes.length;i++){
+    var m=meshes[i];
+    try{
+      var geom=new THREE.BufferGeometry();
+      var pos=m.attributes.position.array;
+      var vCount=pos.length/3;
+      var posArr=new Float32Array(pos.length);
+      for(var j=0;j<pos.length;j++)posArr[j]=pos[j];
+      geom.setAttribute('position',new THREE.BufferAttribute(posArr,3));
+      // index
+      if(m.attributes.index){
+        var idx=m.attributes.index.array;
+        var useUint16=(vCount<=65536);
+        var idxArr=useUint16?new Uint16Array(idx.length):new Uint32Array(idx.length);
+        for(var j=0;j<idx.length;j++){
+          idxArr[j]=idx[j];
+          if(idx[j]>=vCount){idxArr[j]=0;} // clamp out-of-range
+        }
+        geom.setIndex(new THREE.BufferAttribute(idxArr,1));
+      }
+      // always recompute normals for reliability
+      geom.computeVertexNormals();
+      var color=0x88aacc;
+      if(m.color&&m.color.length>=3){
+        var r=m.color[0],g=m.color[1],b=m.color[2];
+        // brighten dark colors
+        if(r+g+b<0.6){r=Math.min(r*1.8,1);g=Math.min(g*1.8,1);b=Math.min(b*1.8,1);}
+        color=new THREE.Color(r,g,b);
+      }
+      var mat=new THREE.MeshStandardMaterial({color:color,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+      if(v3dWireframe)mat.wireframe=true;
+      var meshObj=new THREE.Mesh(geom,mat);
+      if(m.name)meshObj.name=m.name;
+      group.add(meshObj);
+    }catch(e){console.warn('STEP mesh '+i+' failed:',e);}
+  }
   return group;
 }
 function handleV3dFile(input){
@@ -4423,7 +4439,11 @@ function handleV3dFile(input){
       loadOcctJs().then(function(occt){
         v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+')<br>⏳ STEP 引擎解析中，请稍候...','#64b5f6');
         try{
-          var result=occt.ReadStepFile(buf,null);
+          var result=occt.ReadStepFile(buf,{
+            linearDeflectionType:'bounding_box_ratio',
+            linearDeflection:0.005,
+            angularDeflection:0.3
+          });
           if(!result||!result.success){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
             return;
