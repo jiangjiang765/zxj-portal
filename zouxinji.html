@@ -1650,7 +1650,10 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj,.gltf,.glb" style="display:none" onchange="handleV3dFile(this)">
   <div id="v3d-status" style="display:none;font-size:13px;margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:8px;color:var(--text)"></div>
   <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative"></div>
-  <div id="v3d-controls" style="display:none;margin-top:8px;flex-wrap:wrap;text-align:center">
+  <div id="v3d-dimensions" style="display:none;margin-top:8px;padding:10px 14px;background:var(--bg-input);border-radius:10px;font-size:13px;line-height:1.6"></div>
+  <div id="v3d-measure" style="display:none;margin-top:6px;padding:8px 14px;background:rgba(30,136,229,.12);border:1px solid rgba(30,136,229,.3);border-radius:10px;font-size:12px;color:#64b5f6;line-height:1.5"></div>
+  <div id="v3d-controls" style="display:none;margin-top:8px;flex-wrap:wrap;text-align:center;gap:8px">
+    <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:80px" onclick="v3dToggleMeasure()">📏 测量</button>
     <button class="btn" style="background:#e74c3c;color:#fff;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
   </div>
 </div>
@@ -4328,6 +4331,7 @@ function loadO3dvEngine(){
     document.head.appendChild(s);
   });
 }
+var _v3dMeasuring=false,_v3dMeasureA=null,_v3dMeasureB=null;
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
   var name=file.name;
@@ -4335,19 +4339,20 @@ function handleV3dFile(input){
   loadO3dvEngine().then(function(){
     var container=document.getElementById('v3d-container');
     container.style.display='block';
-    document.getElementById('v3d-controls').style.display='block';
-    // 清除旧viewer
+    document.getElementById('v3d-controls').style.display='flex';
     container.innerHTML='';
-    _o3dvViewer=null;
+    _o3dvViewer=null;_v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
+    document.getElementById('v3d-dimensions').style.display='none';
+    document.getElementById('v3d-measure').style.display='none';
+    var mBtn=document.getElementById('v3d-btn-measure');if(mBtn)mBtn.style.background='#1e88e5';
     try{
       var viewer=new OV.EmbeddedViewer(container,{
         backgroundColor:new OV.RGBAColor(26,26,46,255),
-        defaultColor:new OV.RGBColor(136,170,204)
+        defaultColor:new OV.RGBColor(190,193,200),
+        onModelLoaded:function(){_o3dvPostProcess(viewer,name,file);}
       });
       _o3dvViewer=viewer;
       viewer.LoadModelFromFileList([file]);
-      // O3DV内部异步渲染，延迟更新状态
-      setTimeout(function(){v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');},1500);
     }catch(err){
       v3dShowStatus('❌ 加载失败: '+err.message,'#f44336');
     }
@@ -4356,13 +4361,155 @@ function handleV3dFile(input){
   });
   input.value='';
 }
+function _o3dvPostProcess(viewer,name,file){
+  try{
+    var v=viewer.GetViewer();
+    if(!v||!v.scene)return;
+    // 1. 覆盖颜色为金属银灰（机加工钢件质感）
+    v.scene.traverse(function(obj){
+      if(obj.isMesh&&obj.material){
+        var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+        mats.forEach(function(mat){
+          if(mat.color){mat.color.setRGB(0.745,0.757,0.784);}
+          if(mat.metalness!==undefined){mat.metalness=0.55;mat.roughness=0.4;}
+          mat.needsUpdate=true;
+        });
+      }
+    });
+    v.Render();
+    // 2. 显示包围盒外形尺寸
+    var bbox=v.GetBoundingBox(function(){return true;});
+    if(bbox&&bbox.min&&bbox.max){
+      var dx=Math.abs(bbox.max.x-bbox.min.x);
+      var dy=Math.abs(bbox.max.y-bbox.min.y);
+      var dz=Math.abs(bbox.max.z-bbox.min.z);
+      var dims=[{l:'X',v:dx},{l:'Y',v:dy},{l:'Z',v:dz}].sort(function(a,b){return b.v-a.v;});
+      var el=document.getElementById('v3d-dimensions');
+      if(el){
+        el.style.display='block';
+        el.innerHTML='<b style="color:var(--gold)">📐 外形尺寸 (mm)</b><br>'+
+          '<span style="font-size:18px;font-weight:700;color:#fff;letter-spacing:.5px">'+
+          dims[0].v.toFixed(2)+' × '+dims[1].v.toFixed(2)+' × '+dims[2].v.toFixed(2)+'</span><br>'+
+          '<span style="font-size:11px;color:var(--text-dim)">长('+dims[0].l+') × 宽('+dims[1].l+') × 高('+dims[2].l+')</span>';
+      }
+    }
+    v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
+  }catch(e){
+    v3dShowStatus('📄 '+esc(name)+' — ✅ 加载成功','#4caf50');
+  }
+}
+// ===== 测量功能 =====
+function v3dToggleMeasure(){
+  if(!_o3dvViewer)return;
+  var btn=document.getElementById('v3d-btn-measure');
+  var mel=document.getElementById('v3d-measure');
+  if(_v3dMeasuring){
+    _v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
+    var v=_o3dvViewer.GetViewer();if(v)v.SetMouseClickHandler(null);
+    if(btn)btn.style.background='#1e88e5';
+    mel.style.display='none';
+    v3dClearMeasureMarkers();
+  }else{
+    _v3dMeasuring=true;_v3dMeasureA=null;_v3dMeasureB=null;
+    if(btn)btn.style.background='#ff9800';
+    mel.style.display='block';
+    mel.innerHTML='📍 请点击模型上的<b>第一个测量点</b>';
+    var v=_o3dvViewer.GetViewer();
+    if(v)v.SetMouseClickHandler(function(mc){_v3dMeasureClick(mc);});
+  }
+}
+function _v3dMeasureClick(mouseCoords){
+  if(!_o3dvViewer||!_v3dMeasuring)return;
+  var v=_o3dvViewer.GetViewer();if(!v)return;
+  var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
+  var hit=v.GetMeshIntersectionUnderMouse(mode,mouseCoords);
+  if(!hit||!hit.point)return;
+  var p={x:hit.point.x,y:hit.point.y,z:hit.point.z};
+  var mel=document.getElementById('v3d-measure');
+  if(!_v3dMeasureA){
+    _v3dMeasureA=p;
+    v3dAddMeasureMarker(p,'A');
+    if(mel)mel.innerHTML='📍 A('+p.x.toFixed(2)+', '+p.y.toFixed(2)+', '+p.z.toFixed(2)+')<br>请点击<b>第二个测量点</b>';
+  }else if(!_v3dMeasureB){
+    _v3dMeasureB=p;
+    v3dAddMeasureMarker(p,'B');
+    var dx=p.x-_v3dMeasureA.x,dy=p.y-_v3dMeasureA.y,dz=p.z-_v3dMeasureA.z;
+    var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(mel)mel.innerHTML='✅ 测量结果：<br>'+
+      '<b style="font-size:16px;color:#fff">距离: '+dist.toFixed(3)+' mm</b><br>'+
+      '<span style="color:var(--text-dim)">ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)+'</span><br>'+
+      '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
+    v3dDrawMeasureLine(_v3dMeasureA,p);
+  }
+}
+function _v3dMeasureReset(){
+  _v3dMeasureA=null;_v3dMeasureB=null;
+  v3dClearMeasureMarkers();
+  var mel=document.getElementById('v3d-measure');
+  if(mel)mel.innerHTML='📍 请点击模型上的<b>第一个测量点</b>';
+}
+function v3dAddMeasureMarker(p,label){
+  var container=document.getElementById('v3d-container');
+  var marker=document.createElement('div');
+  marker.className='v3d-measure-dot';
+  marker.style.cssText='position:absolute;width:16px;height:16px;border-radius:50%;background:#ff9800;border:2px solid #fff;transform:translate(-50%,-50%);pointer-events:none;z-index:10;font-size:9px;color:#fff;text-align:center;line-height:14px;font-weight:700';
+  marker.textContent=label;
+  try{
+    var v=_o3dvViewer.GetViewer(),c=v.camera,canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+    var w=canvas.clientWidth,h=canvas.clientHeight;
+    var so=v.scene.children[0];
+    if(so&&so.position){
+      var ox=so.position.x,oy=so.position.y,oz=so.position.z;
+      so.position.set(p.x,p.y,p.z);
+      var proj=so.position.clone().project(c);
+      so.position.set(ox,oy,oz);
+      marker.style.left=((proj.x*0.5+0.5)*w)+'px';
+      marker.style.top=((-proj.y*0.5+0.5)*h)+'px';
+    }
+  }catch(e){}
+  container.appendChild(marker);
+}
+function v3dDrawMeasureLine(pA,pB){
+  var container=document.getElementById('v3d-container');
+  var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.className='v3d-measure-line';
+  svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9';
+  try{
+    var v=_o3dvViewer.GetViewer(),c=v.camera,canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+    var w=canvas.clientWidth,h=canvas.clientHeight;
+    var so=v.scene.children[0];
+    if(so&&so.position){
+      function proj3d(p){
+        var ox=so.position.x,oy=so.position.y,oz=so.position.z;
+        so.position.set(p.x,p.y,p.z);
+        var pr=so.position.clone().project(c);
+        so.position.set(ox,oy,oz);
+        return{x:(pr.x*0.5+0.5)*w,y:(-pr.y*0.5+0.5)*h};
+      }
+      var a=proj3d(pA),b=proj3d(pB);
+      var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
+      line.setAttribute('stroke','#ff9800');line.setAttribute('stroke-width','2');
+      line.setAttribute('stroke-dasharray','6,3');
+      svg.appendChild(line);
+    }
+  }catch(e){}
+  container.appendChild(svg);
+}
+function v3dClearMeasureMarkers(){
+  var c=document.getElementById('v3d-container');if(!c)return;
+  c.querySelectorAll('.v3d-measure-dot,.v3d-measure-line').forEach(function(el){el.remove();});
+}
 function v3dClear(){
   var container=document.getElementById('v3d-container');
   container.innerHTML='';
   container.style.display='none';
   document.getElementById('v3d-controls').style.display='none';
   document.getElementById('v3d-status').style.display='none';
-  _o3dvViewer=null;
+  document.getElementById('v3d-dimensions').style.display='none';
+  document.getElementById('v3d-measure').style.display='none';
+  _o3dvViewer=null;_v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
 }
 function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
 // drag & drop
