@@ -4367,8 +4367,8 @@ function loadOcctJs(){
     document.head.appendChild(s);
   });
 }
-// Convert occt-import-js result → binary STL ArrayBuffer, then use STLLoader
-function stepResultToStlBuffer(result){
+// Render STEP result → direct BufferGeometry (no STL middleman)
+function stepResultToThree(result){
   var meshes=result.meshes||[];
   // collect meshes from hierarchy if flat array is empty
   if(meshes.length===0&&result.root){
@@ -4384,66 +4384,61 @@ function stepResultToStlBuffer(result){
       }
     })(result.root);
   }
-  // count total triangles
-  var totalTri=0;
-  for(var i=0;i<meshes.length;i++){
-    var m=meshes[i];
-    if(m.attributes.index) totalTri+=m.attributes.index.array.length/3;
-    else totalTri+=m.attributes.position.array.length/9;
-  }
-  if(totalTri===0) return null;
-  // binary STL: 80 header + 4 triCount + 50*N
-  var buf=new ArrayBuffer(84+totalTri*50);
-  var dv=new DataView(buf);
-  var hdr='STEP converted to STL by occt-import-js';
-  for(var i=0;i<80;i++) dv.setUint8(i,i<hdr.length?hdr.charCodeAt(i):0);
-  dv.setUint32(80,totalTri,true);
-  var off=84;
+  if(meshes.length===0) return null;
+  var group=new THREE.Group();
+  var defaultMat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+  if(v3dWireframe) defaultMat.wireframe=true;
   for(var mi=0;mi<meshes.length;mi++){
-    var m=meshes[mi];
-    var pos=m.attributes.position.array;
-    var idx=m.attributes.index?m.attributes.index.array:null;
-    var triCount=idx?idx.length/3:pos.length/9;
-    for(var t=0;t<triCount;t++){
-      var i0,i1,i2;
-      if(idx){i0=idx[t*3];i1=idx[t*3+1];i2=idx[t*3+2];}
-      else{i0=t*3;i1=t*3+1;i2=t*3+2;}
-      // clamp indices
-      var vc=pos.length/3;
-      if(i0>=vc||i1>=vc||i2>=vc){i0=0;i1=0;i2=0;}
-      var ax=pos[i0*3],ay=pos[i0*3+1],az=pos[i0*3+2];
-      var bx=pos[i1*3],by=pos[i1*3+1],bz=pos[i1*3+2];
-      var cx=pos[i2*3],cy=pos[i2*3+1],cz=pos[i2*3+2];
-      // face normal = (b-a) × (c-a)
-      var e1x=bx-ax,e1y=by-ay,e1z=bz-az;
-      var e2x=cx-ax,e2y=cy-ay,e2z=cz-az;
-      var nx=e1y*e2z-e1z*e2y,ny=e1z*e2x-e1x*e2z,nz=e1x*e2y-e1y*e2x;
-      var len=Math.sqrt(nx*nx+ny*ny+nz*nz);
-      if(len>1e-10){nx/=len;ny/=len;nz/=len;}
-      dv.setFloat32(off,nx,true);off+=4;
-      dv.setFloat32(off,ny,true);off+=4;
-      dv.setFloat32(off,nz,true);off+=4;
-      dv.setFloat32(off,ax,true);off+=4;dv.setFloat32(off,ay,true);off+=4;dv.setFloat32(off,az,true);off+=4;
-      dv.setFloat32(off,bx,true);off+=4;dv.setFloat32(off,by,true);off+=4;dv.setFloat32(off,bz,true);off+=4;
-      dv.setFloat32(off,cx,true);off+=4;dv.setFloat32(off,cy,true);off+=4;dv.setFloat32(off,cz,true);off+=4;
-      dv.setUint16(off,0,true);off+=2;
+    try{
+      var m=meshes[mi];
+      if(!m||!m.attributes||!m.attributes.position||!m.attributes.position.array) continue;
+      var posArr=m.attributes.position.array;
+      if(posArr.length<9) continue; // need at least 1 triangle
+      var vCount=Math.floor(posArr.length/3);
+      // Build position Float32Array (ensure proper type)
+      var positions=(posArr instanceof Float32Array)?posArr:new Float32Array(posArr);
+      var geom=new THREE.BufferGeometry();
+      geom.setAttribute('position',new THREE.BufferAttribute(positions,3));
+      // Index buffer (if present)
+      var idxArr=(m.attributes.index&&m.attributes.index.array)?m.attributes.index.array:null;
+      if(idxArr&&idxArr.length>=3){
+        var maxIdx=0;
+        for(var k=0;k<idxArr.length;k++){if(idxArr[k]>maxIdx)maxIdx=idxArr[k];}
+        if(maxIdx<vCount){
+          if(idxArr instanceof Uint32Array){
+            geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idxArr),1));
+          }else if(idxArr instanceof Uint16Array){
+            geom.setIndex(new THREE.BufferAttribute(new Uint16Array(idxArr),1));
+          }else{
+            geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idxArr),1));
+          }
+        }else{
+          // indices out of range → un-index to avoid crash
+          geom=geom.toNonIndexed();
+        }
+      }
+      // Normals
+      var normArr=(m.attributes.normal&&m.attributes.normal.array)?m.attributes.normal.array:null;
+      if(normArr&&normArr.length>=positions.length){
+        var normals=(normArr instanceof Float32Array)?normArr:new Float32Array(normArr);
+        geom.setAttribute('normal',new THREE.BufferAttribute(normals,3));
+      }else{
+        geom.computeVertexNormals();
+      }
+      // Material per mesh (color support)
+      var mat=defaultMat;
+      if(m.color&&m.color.length>=3){
+        var r=Math.round(m.color[0]*255),g=Math.round(m.color[1]*255),b=Math.round(m.color[2]*255);
+        mat=new THREE.MeshStandardMaterial({color:(r<<16)|(g<<8)|b,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
+        if(v3dWireframe) mat.wireframe=true;
+      }
+      var meshObj=new THREE.Mesh(geom,mat);
+      group.add(meshObj);
+    }catch(eMesh){
+      // skip bad mesh, continue with others
     }
   }
-  return buf;
-}
-// Render STEP result via STL conversion (uses battle-tested STLLoader)
-function stepResultToThree(result){
-  var stlBuf=stepResultToStlBuffer(result);
-  if(!stlBuf){return null;}
-  var loader=new THREE.STLLoader();
-  var geom=loader.parse(stlBuf);
-  geom.computeVertexNormals();
-  var mat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0.5,metalness:0.3,side:THREE.DoubleSide,flatShading:true});
-  if(v3dWireframe)mat.wireframe=true;
-  var mesh=new THREE.Mesh(geom,mat);
-  var group=new THREE.Group();
-  group.add(mesh);
-  return group;
+  return group.children.length>0?group:null;
 }
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
@@ -4468,7 +4463,7 @@ function handleV3dFile(input){
             v3dShowStatus('❌ STEP 解析失败：文件可能损坏或格式不兼容','#f44336');
             return;
           }
-          // Convert STEP → STL buffer → STLLoader (proven rendering path)
+          // Convert STEP result → Three.js BufferGeometry directly
           var group=stepResultToThree(result);
           if(!group||group.children.length===0){
             v3dShowStatus('⚠️ STEP 解析成功但无网格数据（可能是空装配体）','#ff9800');
