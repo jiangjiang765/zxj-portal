@@ -1649,12 +1649,26 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   </div>
   <input type="file" id="v3d-file" accept=".step,.stp,.stl,.obj,.gltf,.glb" style="display:none" onchange="handleV3dFile(this)">
   <div id="v3d-status" style="display:none;font-size:13px;margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:8px;color:var(--text)"></div>
-  <div id="v3d-controls" style="display:none;margin-bottom:8px;flex-wrap:wrap;text-align:center;gap:8px">
-    <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:80px" onclick="v3dToggleMeasure()">📏 测量</button>
-    <button class="btn" style="background:#e74c3c;color:#fff;min-width:80px" onclick="v3dClear()">🗑️ 清除</button>
+  <div id="v3d-controls" style="display:none;margin-bottom:8px;display:flex;flex-wrap:wrap;text-align:center;gap:8px;justify-content:center">
+    <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:72px;font-size:12px" onclick="v3dToggleMeasure()">📏 测量</button>
+    <button id="v3d-btn-section" class="btn" style="background:#7b1fa2;color:#fff;min-width:72px;font-size:12px" onclick="v3dToggleSection()">🔪 剖面</button>
+    <button class="btn" style="background:#e74c3c;color:#fff;min-width:72px;font-size:12px" onclick="v3dClear()">🗑️ 清除</button>
+  </div>
+  <div id="v3d-section-ctrl" style="display:none;margin-bottom:8px;padding:8px 12px;background:rgba(123,31,162,.12);border:1px solid rgba(123,31,162,.3);border-radius:10px;font-size:12px;color:#ce93d8;line-height:1.8">
+    剖面轴: <select id="v3d-section-axis" onchange="_v3dUpdateSectionPlane()" style="background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;padding:2px 6px;font-size:12px"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select>
+    &nbsp;位置: <input type="range" id="v3d-section-pos" min="0" max="100" value="50" oninput="_v3dUpdateSectionPlane()" style="width:120px;vertical-align:middle">
+    <span id="v3d-section-val" style="color:#fff">50%</span>
   </div>
   <div id="v3d-dimensions" style="display:none;margin-bottom:8px;padding:10px 14px;background:var(--bg-input);border-radius:10px;font-size:13px;line-height:1.6"></div>
   <div id="v3d-measure" style="display:none;margin-bottom:8px;padding:8px 14px;background:rgba(30,136,229,.12);border:1px solid rgba(30,136,229,.3);border-radius:10px;font-size:12px;color:#64b5f6;line-height:1.5"></div>
+  <div id="v3d-measure-mode" style="display:none;margin-bottom:8px;padding:6px 10px;background:var(--bg-input);border-radius:8px;font-size:12px;line-height:1.8">
+    测量类型: <select id="v3d-mmode" onchange="_v3dSwitchMode()" style="background:#1a1a2e;color:#fff;border:1px solid #555;border-radius:4px;padding:2px 8px;font-size:12px">
+    <option value="dist">📏 距离(2点)</option>
+    <option value="arc">⭕ 圆弧(3点)</option>
+    <option value="angle">📐 角度(3点)</option>
+    <option value="area">🟦 面积(点面)</option>
+    </select>
+  </div>
   <div id="v3d-container" style="display:none;width:100%;height:60vh;min-height:350px;border-radius:12px;overflow:hidden;background:#1a1a2e;position:relative"></div>
 </div>
 
@@ -4331,7 +4345,7 @@ function loadO3dvEngine(){
     document.head.appendChild(s);
   });
 }
-var _v3dMeasuring=false,_v3dMeasureA=null,_v3dMeasureB=null;
+var _v3dMeasuring=false,_v3dMeasurePts=[],_v3dMeasureMode='dist';
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
   var name=file.name;
@@ -4421,59 +4435,242 @@ function v3dToggleMeasure(){
   if(!_o3dvViewer)return;
   var btn=document.getElementById('v3d-btn-measure');
   var mel=document.getElementById('v3d-measure');
+  var mmel=document.getElementById('v3d-measure-mode');
   var ctr=document.getElementById('v3d-container');
   if(_v3dMeasuring){
-    _v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
+    _v3dMeasuring=false;_v3dMeasurePts=[];_v3dMeasureMode='dist';
     var v=_o3dvViewer.GetViewer();if(v)v.SetMouseClickHandler(null);
     if(btn)btn.style.background='#1e88e5';
     mel.style.display='none';
+    if(mmel)mmel.style.display='none';
     v3dClearMeasureMarkers();
     if(ctr){ctr.removeEventListener('touchstart',_v3dOnTouchStart);ctr.removeEventListener('touchend',_v3dOnTouchEnd);}
   }else{
-    _v3dMeasuring=true;_v3dMeasureA=null;_v3dMeasureB=null;
+    _v3dMeasuring=true;_v3dMeasurePts=[];_v3dMeasureMode='dist';
     if(btn)btn.style.background='#ff9800';
     mel.style.display='block';
-    mel.innerHTML='📍 请点击模型上的<b>第一个测量点</b>';
+    if(mmel)mmel.style.display='block';
+    if(document.getElementById('v3d-mmode'))document.getElementById('v3d-mmode').value='dist';
+    _v3dShowMeasurePrompt();
     var v=_o3dvViewer.GetViewer();
     if(v)v.SetMouseClickHandler(function(mc){_v3dMeasureClick(mc);});
     if(ctr){ctr.addEventListener('touchstart',_v3dOnTouchStart,{passive:true});ctr.addEventListener('touchend',_v3dOnTouchEnd,{passive:false});}
   }
 }
+
+function _v3dSnapToVertex(p,viewer){
+  try{
+    var v=viewer.GetViewer();if(!v||!v.scene)return p;
+    var best=p,bestD=0.8;
+    v.scene.traverse(function(obj){
+      if(!obj.isMesh||!obj.geometry)return;
+      var pos=obj.geometry.attributes.position;if(!pos)return;
+      obj.updateMatrixWorld(true);
+      for(var i=0;i<pos.count;i++){
+        var wp=new THREE.Vector3(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(obj.matrixWorld);
+        var dx=wp.x-p.x,dy=wp.y-p.y,dz=wp.z-p.z;
+        var d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d<bestD){bestD=d;best={x:wp.x,y:wp.y,z:wp.z};}
+      }
+    });
+    return best;
+  }catch(e){return p;}
+}
+
+// Measure mode: dist(2pt), arc(3pt), angle(3pt), area(1face)
+var _v3dMeasureMode='dist';
+var _v3dMeasurePts=[]; // collected points for current measurement
+
+function _v3dSwitchMode(){
+  _v3dMeasureMode=document.getElementById('v3d-mmode').value;
+  _v3dMeasurePts=[];
+  v3dClearMeasureMarkers();
+  _v3dShowMeasurePrompt();
+}
+
+function _v3dShowMeasurePrompt(){
+  var mel=document.getElementById('v3d-measure');
+  if(!mel)return;
+  var m=_v3dMeasureMode,n=_v3dMeasurePts.length;
+  var snap=' <span style="color:#999;font-size:10px">🧲自动吸附</span>';
+  if(m==='dist'){
+    mel.innerHTML=n===0?'📍 点第1个测量点'+snap:'📍 A('+_v3dFmtPt(_v3dMeasurePts[0])+')<br>点第2个测量点';
+  }else if(m==='arc'){
+    mel.innerHTML='📍 圆弧: 已选'+n+'/3点'+(n>0?' ('+_v3dMeasurePts.map(function(p,i){return String.fromCharCode(65+i)+_v3dFmtPt(p)}).join(', ')+')':'')+snap;
+  }else if(m==='angle'){
+    mel.innerHTML='📍 角度: 先点<b>顶点</b>，再点两条边上的点 (已选'+n+'/3)'+(n>0?' ('+_v3dMeasurePts.map(function(p,i){return String.fromCharCode(65+i)}).join(',')+')':'')+snap;
+  }else if(m==='area'){
+    mel.innerHTML='📍 点击模型表面测量面积'+snap;
+  }
+}
+
+function _v3dFmtPt(p){return '('+p.x.toFixed(2)+','+p.y.toFixed(2)+','+p.z.toFixed(2)+')';}
+
 function _v3dMeasureClick(mouseCoords){
   if(!_o3dvViewer||!_v3dMeasuring)return;
   var v=_o3dvViewer.GetViewer();if(!v)return;
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
   var hit=v.GetMeshIntersectionUnderMouse(mode,mouseCoords);
   if(!hit||!hit.point)return;
-  var p={x:hit.point.x,y:hit.point.y,z:hit.point.z};
+  var raw={x:hit.point.x,y:hit.point.y,z:hit.point.z};
+  var p=_v3dSnapToVertex(raw,_o3dvViewer);
+  var snapped=(Math.abs(p.x-raw.x)>0.001||Math.abs(p.y-raw.y)>0.001||Math.abs(p.z-raw.z)>0.001);
+  var snapTag=snapped?' 🧲':'';
+  var m=_v3dMeasureMode;
   var mel=document.getElementById('v3d-measure');
-  if(!_v3dMeasureA){
-    _v3dMeasureA=p;
-    v3dAddMeasureMarker(p,'A');
-    if(mel)mel.innerHTML='📍 A('+p.x.toFixed(2)+', '+p.y.toFixed(2)+', '+p.z.toFixed(2)+')<br>请点击<b>第二个测量点</b>';
-  }else if(!_v3dMeasureB){
-    _v3dMeasureB=p;
-    v3dAddMeasureMarker(p,'B');
-    var dx=p.x-_v3dMeasureA.x,dy=p.y-_v3dMeasureA.y,dz=p.z-_v3dMeasureA.z;
-    var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    if(mel)mel.innerHTML='✅ 测量结果：<br>'+
-      '<b style="font-size:16px;color:#fff">距离: '+dist.toFixed(3)+' mm</b><br>'+
-      '<span style="color:var(--text-dim)">ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)+'</span><br>'+
-      '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
-    v3dDrawMeasureLine(_v3dMeasureA,p);
+
+  if(m==='dist'){
+    // 2-point distance
+    if(_v3dMeasurePts.length===0){
+      _v3dMeasurePts=[p];
+      v3dAddMeasureMarker(p,'A');
+      mel.innerHTML='📍 A'+_v3dFmtPt(p)+snapTag+'<br>点第2个测量点';
+    }else{
+      var a=_v3dMeasurePts[0];
+      v3dAddMeasureMarker(p,'B');
+      v3dDrawMeasureLine(a,p);
+      var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
+      var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      mel.innerHTML='✅ 距离：<b style="font-size:16px;color:#fff">'+dist.toFixed(3)+' mm</b><br>'+
+        '<span style="color:var(--text-dim)">ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)+'</span>'+snapTag+'<br>'+
+        '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
+      _v3dMeasurePts=[a,p];
+    }
+  }else if(m==='arc'){
+    // 3-point arc → radius + diameter
+    _v3dMeasurePts.push(p);
+    var n=_v3dMeasurePts.length;
+    v3dAddMeasureMarker(p,String.fromCharCode(64+n));
+    if(n>=2) v3dDrawMeasureLine(_v3dMeasurePts[n-2],p);
+    if(n===3){
+      // Fit circle through 3 points
+      var p1=_v3dMeasurePts[0],p2=_v3dMeasurePts[1],p3=_v3dMeasurePts[2];
+      var a12=Math.sqrt((p2.x-p1.x)**2+(p2.y-p1.y)**2+(p2.z-p1.z)**2);
+      var a23=Math.sqrt((p3.x-p2.x)**2+(p3.y-p2.y)**2+(p3.z-p2.z)**2);
+      var a13=Math.sqrt((p3.x-p1.x)**2+(p3.y-p1.y)**2+(p3.z-p1.z)**2);
+      // Use 2D projection: find the plane of the 3 points
+      // Simplified: use the largest 2 axes for projection
+      var v1={x:p2.x-p1.x,y:p2.y-p1.y,z:p2.z-p1.z};
+      var v2={x:p3.x-p1.x,y:p3.y-p1.y,z:p3.z-p1.z};
+      // Cross product to get plane normal
+      var nx=v1.y*v2.z-v1.z*v2.y, ny=v1.z*v2.x-v1.x*v2.z, nz=v1.x*v2.y-v1.y*v2.x;
+      // Choose 2 dominant axes
+      var ax=Math.abs(nx),ay=Math.abs(ny),az=Math.abs(nz);
+      var q1,q2;
+      if(ax>=ay&&ax>=az){q1='y';q2='z';}else if(ay>=az){q1='x';q2='z';}else{q1='x';q2='y';}
+      var ax1=p1[q1],ay1=p1[q2],ax2=p2[q1],ay2=p2[q2],ax3=p3[q1],ay3=p3[q2];
+      var D=2*(ax1*(ay2-ay3)+ax2*(ay3-ay1)+ax3*(ay1-ay2));
+      var R='--';
+      if(Math.abs(D)>1e-6){
+        var cx=((ax1*ax1+ay1*ay1)*(ay2-ay3)+(ax2*ax2+ay2*ay2)*(ay3-ay1)+(ax3*ax3+ay3*ay3)*(ay1-ay2))/D;
+        var cy=((ax1*ax1+ay1*ay1)*(ax3-ax2)+(ax2*ax2+ay2*ay2)*(ax1-ax3)+(ax3*ax3+ay3*ay3)*(ax2-ax1))/D;
+        R=Math.sqrt((ax1-cx)**2+(ay1-cy)**2);
+      }
+      var Rstr=typeof R==='number'?R.toFixed(3):R;
+      var Dstr=typeof R==='number'?(R*2).toFixed(3):'--';
+      mel.innerHTML='✅ 圆弧：<br>'+
+        '<b style="font-size:16px;color:#fff">半径 R = '+Rstr+' mm</b><br>'+
+        '<b style="font-size:14px;color:#fff">直径 D = '+Dstr+' mm</b>'+snapTag+'<br>'+
+        '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
+    }else{
+      mel.innerHTML='📍 圆弧: 已选'+n+'/3点'+snapTag;
+    }
+  }else if(m==='angle'){
+    // 3-point angle: A=vertex, B/C=on each ray
+    _v3dMeasurePts.push(p);
+    var n=_v3dMeasurePts.length;
+    v3dAddMeasureMarker(p,String.fromCharCode(64+n));
+    if(n>=2) v3dDrawMeasureLine(_v3dMeasurePts[0],p);
+    if(n===3){
+      var A=_v3dMeasurePts[0],B=_v3dMeasurePts[1],C=_v3dMeasurePts[2];
+      var ba={x:A.x-B.x,y:A.y-B.y,z:A.z-B.z};
+      var ca={x:A.x-C.x,y:A.y-C.y,z:A.z-C.z};
+      var dot=ba.x*ca.x+ba.y*ca.y+ba.z*ca.z;
+      var mba=Math.sqrt(ba.x**2+ba.y**2+ba.z**2);
+      var mca=Math.sqrt(ca.x**2+ca.y**2+ca.z**2);
+      var cosA=dot/(mba*mca);
+      if(cosA>1)cosA=1;if(cosA<-1)cosA=-1;
+      var ang=Math.acos(cosA)*180/Math.PI;
+      mel.innerHTML='✅ 角度：<br>'+
+        '<b style="font-size:16px;color:#fff">'+ang.toFixed(2)+'°</b> ('+(ang/180*Math.PI).toFixed(4)+' rad)'+snapTag+'<br>'+
+        '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
+    }else{
+      mel.innerHTML='📍 角度: '+(n===1?'已选顶点A，点第2个':'已选A,B，点第3个')+snapTag;
+    }
+  }else if(m==='area'){
+    // Face area: use raycaster hit face triangle
+    _v3dMeasurePts=[p];
+    v3dAddMeasureMarker(p,'■');
+    // Do our own raycast to get face
+    try{
+      var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+      var rect=canvas.getBoundingClientRect();
+      var ndc=new THREE.Vector2(((mouseCoords.x||0)/rect.width)*2-1,-((mouseCoords.y||0)/rect.height)*2+1);
+      var raycaster=new THREE.Raycaster();
+      raycaster.setFromCamera(ndc,v.camera);
+      var intersects=raycaster.intersectObjects(v.scene.children,true);
+      if(intersects.length>0&&intersects[0].face&&intersects[0].object){
+        var f=intersects[0].face;
+        var obj=intersects[0].object;
+        obj.updateMatrixWorld(true);
+        var va=new THREE.Vector3().fromBufferAttribute(obj.geometry.attributes.position,f.a).applyMatrix4(obj.matrixWorld);
+        var vb=new THREE.Vector3().fromBufferAttribute(obj.geometry.attributes.position,f.b).applyMatrix4(obj.matrixWorld);
+        var vc=new THREE.Vector3().fromBufferAttribute(obj.geometry.attributes.position,f.c).applyMatrix4(obj.matrixWorld);
+        // Triangle area = 0.5 * |AB × AC|
+        var ab=new THREE.Vector3().subVectors(vb,va);
+        var ac=new THREE.Vector3().subVectors(vc,va);
+        var cross=new THREE.Vector3().crossVectors(ab,ac);
+        var area=0.5*cross.length();
+        // Try to find connected coplanar faces for total surface area
+        var normal=cross.clone().normalize();
+        var totalArea=area;
+        var faceNormal=new THREE.Vector3();
+        if(obj.geometry.attributes.normal){
+          // Sum connected faces with same normal
+          var posAttr=obj.geometry.attributes.position;
+          var idx=obj.geometry.index;
+          var faceCount=idx?idx.count/3:posAttr.count/3;
+          for(var fi=0;fi<faceCount;fi++){
+            var ia=idx?idx.getX(fi*3):fi*3;
+            var ib=idx?idx.getX(fi*3+1):fi*3+1;
+            var ic=idx?idx.getX(fi*3+2):fi*3+2;
+            var fa2=new THREE.Vector3().fromBufferPosition||null;
+            var pa=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
+            var pb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
+            var pc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
+            var e1=new THREE.Vector3().subVectors(pb,pa);
+            var e2=new THREE.Vector3().subVectors(pc,pa);
+            var fn=new THREE.Vector3().crossVectors(e1,e2).normalize();
+            if(fn.dot(normal)>0.99){
+              totalArea+=0.5*e1.cross(e2).length();
+            }
+          }
+        }
+        mel.innerHTML='✅ 面积：<br>'+
+          '<b style="font-size:16px;color:#fff">'+area.toFixed(3)+' mm²</b><br>'+
+          (totalArea>area*1.01?'<span style="color:var(--text-dim)">同面累计: '+totalArea.toFixed(3)+' mm²</span><br>':'')+
+          '<span style="color:var(--text-dim)">'+(area*0.01*0.01).toFixed(6)+' cm²</span>'+snapTag+'<br>'+
+          '<span style="color:#64b5f6;font-size:11px;cursor:pointer" onclick="_v3dMeasureReset()">↻ 重新测量</span>';
+      }else{
+        mel.innerHTML='⚠️ 未检测到面，请点击模型表面';
+      }
+    }catch(e){
+      mel.innerHTML='⚠️ 面积计算失败: '+e.message;
+    }
   }
 }
+
 function _v3dMeasureReset(){
-  _v3dMeasureA=null;_v3dMeasureB=null;
+  _v3dMeasurePts=[];
   v3dClearMeasureMarkers();
-  var mel=document.getElementById('v3d-measure');
-  if(mel)mel.innerHTML='📍 请点击模型上的<b>第一个测量点</b>';
+  _v3dShowMeasurePrompt();
 }
+
 function v3dAddMeasureMarker(p,label){
   var container=document.getElementById('v3d-container');
   var marker=document.createElement('div');
   marker.className='v3d-measure-dot';
-  marker.style.cssText='position:absolute;width:16px;height:16px;border-radius:50%;background:#ff9800;border:2px solid #fff;transform:translate(-50%,-50%);pointer-events:none;z-index:10;font-size:9px;color:#fff;text-align:center;line-height:14px;font-weight:700';
+  marker.style.cssText='position:absolute;width:20px;height:20px;border-radius:50%;background:#ff9800;border:2px solid #fff;transform:translate(-50%,-50%);pointer-events:none;z-index:10;font-size:9px;color:#fff;text-align:center;line-height:16px;font-weight:700;box-shadow:0 0 6px rgba(255,152,0,.6)';
   marker.textContent=label;
   try{
     var v=_o3dvViewer.GetViewer(),c=v.camera,canvas=v.GetCanvas?v.GetCanvas():v.canvas;
@@ -4490,6 +4687,7 @@ function v3dAddMeasureMarker(p,label){
   }catch(e){}
   container.appendChild(marker);
 }
+
 function v3dDrawMeasureLine(pA,pB){
   var container=document.getElementById('v3d-container');
   var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -4518,20 +4716,92 @@ function v3dDrawMeasureLine(pA,pB){
   }catch(e){}
   container.appendChild(svg);
 }
+
 function v3dClearMeasureMarkers(){
   var c=document.getElementById('v3d-container');if(!c)return;
   c.querySelectorAll('.v3d-measure-dot,.v3d-measure-line').forEach(function(el){el.remove();});
 }
+
+// ===== 剖面功能 =====
+var _v3dSectionOn=false,_v3dSectionPlane=null;
+function v3dToggleSection(){
+  if(!_o3dvViewer)return;
+  var btn=document.getElementById('v3d-btn-section');
+  var ctrl=document.getElementById('v3d-section-ctrl');
+  var v=_o3dvViewer.GetViewer();if(!v)return;
+  if(_v3dSectionOn){
+    _v3dSectionOn=false;
+    // Remove clipping planes
+    v.renderer.clippingPlanes=[];
+    v.renderer.localClippingEnabled=false;
+    v.scene.traverse(function(obj){
+      if(obj.isMesh&&obj.material){
+        var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+        mats.forEach(function(m){m.clippingPlanes=[];m.needsUpdate=true;});
+      }
+    });
+    v.Render();
+    if(btn)btn.style.background='#7b1fa2';
+    ctrl.style.display='none';
+  }else{
+    _v3dSectionOn=true;
+    v.renderer.localClippingEnabled=true;
+    _v3dUpdateSectionPlane();
+    if(btn)btn.style.background='#ff9800';
+    ctrl.style.display='block';
+  }
+}
+
+function _v3dUpdateSectionPlane(){
+  if(!_o3dvViewer||!_v3dSectionOn)return;
+  var v=_o3dvViewer.GetViewer();if(!v)return;
+  var axis=document.getElementById('v3d-section-axis').value;
+  var pct=parseInt(document.getElementById('v3d-section-pos').value);
+  document.getElementById('v3d-section-val').textContent=pct+'%';
+  // Get bounding box to determine plane position
+  var bbox=v.GetBoundingBox(function(){return true;});
+  if(!bbox||!bbox.min)return;
+  var center={x:(bbox.min.x+bbox.max.x)/2,y:(bbox.min.y+bbox.max.y)/2,z:(bbox.min.z+bbox.max.z)/2};
+  var range={x:bbox.max.x-bbox.min.x,y:bbox.max.y-bbox.min.y,z:bbox.max.z-bbox.min.z};
+  // Plane position along axis
+  var planePos=bbox.min[axis]+range[axis]*(pct/100);
+  // THREE.Plane(normal, constant): normal·point + constant = 0
+  // We want to clip away the "positive" side of the axis at planePos
+  var normal=new THREE.Vector3(axis==='x'?1:0,axis==='y'?1:0,axis==='z'?1:0);
+  _v3dSectionPlane=new THREE.Plane(normal,-planePos);
+  // Apply to all materials
+  v.scene.traverse(function(obj){
+    if(obj.isMesh&&obj.material){
+      var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+      mats.forEach(function(m){
+        m.clippingPlanes=[_v3dSectionPlane];
+        m.clipShadows=true;
+        m.needsUpdate=true;
+      });
+    }
+  });
+  v.Render();
+}
+
 function v3dClear(){
   var container=document.getElementById('v3d-container');
+  // Remove clipping if active
+  if(_o3dvViewer){
+    var v=_o3dvViewer.GetViewer();
+    if(v&&v.renderer){v.renderer.clippingPlanes=[];v.renderer.localClippingEnabled=false;}
+  }
+  _v3dSectionOn=false;_v3dSectionPlane=null;
+  var sBtn=document.getElementById('v3d-btn-section');if(sBtn)sBtn.style.background='#7b1fa2';
+  var sCtrl=document.getElementById('v3d-section-ctrl');if(sCtrl)sCtrl.style.display='none';
   container.innerHTML='';
   container.style.display='none';
   document.getElementById('v3d-controls').style.display='none';
   document.getElementById('v3d-status').style.display='none';
   document.getElementById('v3d-dimensions').style.display='none';
   document.getElementById('v3d-measure').style.display='none';
-  _o3dvViewer=null;_v3dMeasuring=false;_v3dMeasureA=null;_v3dMeasureB=null;
+  _o3dvViewer=null;_v3dMeasuring=false;_v3dMeasurePts=[];_v3dMeasureMode='dist';
 }
+
 function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
 // drag & drop
 setTimeout(function(){
