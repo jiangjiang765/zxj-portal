@@ -240,6 +240,27 @@ button:active{transform:scale(.97)}
   <button class="btn btn-orange" style="margin-top:8px" onclick="openOsForm()">＋ 外发登记</button>
 </div>
 
+<!-- ============ AI排产 TAB ============ -->
+<div class="main page" id="page-ai">
+  <div style="padding:12px 16px">
+    <div style="font-size:16px;font-weight:700;color:var(--gold);margin-bottom:10px">🤖 AI智能排产</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:10px">基于订单和机台状态，AI自动给出排产建议</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--dim)">Key:</span>
+      <input type="text" id="ai-api-key" placeholder="粘贴百炼 API Key" autocomplete="off" style="flex:1;min-width:120px;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text)">
+      <button onclick="var e=document.getElementById('ai-api-key');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🔒'" style="padding:4px 6px;font-size:14px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim)">👁</button>
+      <button class="btn btn-gold" style="padding:4px 10px;font-size:11px;white-space:nowrap" onclick="aiSaveKey()">保存</button>
+    </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:12px">💡 去 <a href="https://dashscope.aliyun.com" target="_blank" style="color:var(--gold)">dashscope.aliyun.com</a> 支付宝登录→创建API Key，送1000万token免费</div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">📋 待排产订单</div>
+    <div id="ai-orders" style="max-height:25vh;overflow-y:auto;margin-bottom:10px"></div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">🏭 已排产机台</div>
+    <div id="ai-machines" style="margin-bottom:12px"></div>
+    <button class="btn" style="width:100%;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:700;padding:12px;font-size:14px;border:none;border-radius:8px;margin-bottom:12px" onclick="aiSchedule()">🤖 AI帮我排</button>
+    <div id="ai-result"></div>
+  </div>
+</div>
+
 <!-- ============ SETTINGS TAB ============ -->
 <div class="main page" id="page-settings">
   <div id="settingsContent"></div>
@@ -251,6 +272,7 @@ button:active{transform:scale(.97)}
   <div class="bnav-item" onclick="switchTab('schedule')"><div class="bnav-icon">📅</div><div class="bnav-label">排产</div></div>
   <div class="bnav-item" onclick="switchTab('progress')"><div class="bnav-icon">📊</div><div class="bnav-label">进度</div></div>
   <div class="bnav-item" onclick="switchTab('outsource')"><div class="bnav-icon">🔄</div><div class="bnav-label">外发</div></div>
+  <div class="bnav-item" onclick="switchTab('ai')"><div class="bnav-icon">🤖</div><div class="bnav-label">AI</div></div>
   <div class="bnav-item" onclick="switchTab('settings')"><div class="bnav-icon">⚙️</div><div class="bnav-label">管理</div></div>
 </div>
 
@@ -428,15 +450,16 @@ function switchTab(tab){
   document.querySelectorAll('.main.page').forEach(function(p){p.classList.remove('active')});
   document.getElementById('page-'+tab).classList.add('active');
   document.querySelectorAll('.bnav-item').forEach(function(n,i){
-    var tabs=['order','schedule','progress','outsource','settings'];
+    var tabs=['order','schedule','progress','outsource','ai','settings'];
     n.classList.toggle('active',tabs[i]===tab);
   });
-  var titles={order:'📋 生产计划',schedule:'📅 排产看板',progress:'📊 生产进度',outsource:'🔄 外发管理',settings:'⚙️ 系统管理'};
+  var titles={order:'📋 生产计划',schedule:'📅 排产看板',progress:'📊 生产进度',outsource:'🔄 外发管理',ai:'🤖 AI排产',settings:'⚙️ 系统管理'};
   document.getElementById('topTitle').textContent=titles[tab]||'生产计划';
   if(tab==='order')renderOrders();
   if(tab==='schedule')renderSchedule();
   if(tab==='progress')renderProgress();
   if(tab==='outsource')renderOutsource();
+  if(tab==='ai')aiInit();
   if(tab==='settings')renderSettings();
 }
 
@@ -1364,6 +1387,90 @@ async function init(){
 
   // Setup order form with at least one item row
   
+}
+
+/* ===== AI排产 ===== */
+var _aiKey = localStorage.getItem('qwen_api_key') || '';
+function aiSaveKey(){
+  var k = document.getElementById('ai-api-key').value.trim();
+  if(!k){toast('请输入Key');return;}
+  _aiKey = k;
+  localStorage.setItem('qwen_api_key', k);
+  toast('✅ Key已保存');
+}
+function aiInit(){
+  var el=document.getElementById('ai-api-key');
+  if(el&&_aiKey)el.value=_aiKey;
+  aiRenderOrders();
+  aiRenderMachines();
+}
+function aiRenderOrders(){
+  var el=document.getElementById('ai-orders');
+  if(!el)return;
+  var pending=cachedOrders.filter(function(o){return o.status==='待排产'||o.status==='生产中'||!o.status;});
+  if(!pending.length){el.innerHTML='<div style="font-size:12px;color:var(--dim);padding:4px">所有订单已排产 ✅</div>';return;}
+  var html='';
+  pending.forEach(function(o){
+    var dl=o.deadline?o.deadline.substring(0,10):'无';
+    var pri=o.priority==='特急'?'🔴特急':o.priority==='加急'?'🟠加急':'🟡常规';
+    html+='<div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px"><b>'+(esc(o.drawing_no)||esc(o.order_no))+'</b> '+(o.customer?'· '+esc(o.customer):'')+' · '+(o.quantity||0)+'件 · 交期'+dl+' '+pri+(o.material_spec?' · '+esc(o.material_spec):'')+'</div>';
+  });
+  el.innerHTML=html;
+}
+function aiRenderMachines(){
+  var el=document.getElementById('ai-machines');
+  if(!el)return;
+  var dispatches=cachedSchedules||[];
+  var busyMachines={};
+  dispatches.forEach(function(d){if(d.machine_no&&d.status!=='已完成')busyMachines[d.machine_no]=d;});
+  var machineNos=Object.keys(busyMachines);
+  if(!machineNos.length){el.innerHTML='<div style="font-size:12px;color:var(--dim);padding:4px">暂无已排产机台</div>';return;}
+  var html='';
+  machineNos.forEach(function(m){
+    var d=busyMachines[m];
+    html+='<span style="display:inline-block;padding:3px 8px;margin:2px;border-radius:6px;font-size:11px;background:rgba(245,158,11,.15);color:#f59e0b">'+esc(m)+' → '+(esc(d.drawing_no)||'?')+'</span>';
+  });
+  el.innerHTML=html;
+}
+async function aiSchedule(){
+  if(!_aiKey){
+    var kEl=document.getElementById('ai-api-key');
+    if(kEl&&kEl.value.trim()){_aiKey=kEl.value.trim();localStorage.setItem('qwen_api_key',_aiKey);}
+    else{toast('请先配置百炼 API Key');return;}
+  }
+  var resultEl=document.getElementById('ai-result');
+  if(!resultEl)return;
+  resultEl.innerHTML='<div style="padding:8px;font-size:13px;color:var(--dim)">🤖 AI正在分析订单和机台，请稍候...</div>';
+  var orders=cachedOrders.filter(function(o){return o.status==='待排产'||o.status==='生产中'||!o.status;});
+  var dispatches=cachedSchedules||[];
+  var busyMap={};
+  dispatches.forEach(function(d){if(d.machine_no&&d.status!=='已完成')busyMap[d.machine_no]=d;});
+  var orderText=orders.map(function(o){
+    return '- 图号:'+(o.drawing_no||'?')+' 客户:'+(o.customer||'?')+' 数量:'+(o.quantity||0)+' 交期:'+(o.deadline?o.deadline.substring(0,10):'无')+' 优先级:'+(o.priority==='特急'?'特急':o.priority==='加急'?'加急':'常规')+' 材料:'+(o.material_spec||'未知');
+  }).join('\n')||'（暂无待排产订单）';
+  var busyText=Object.keys(busyMap).map(function(m){var d=busyMap[m];return '- '+m+' → '+(d.drawing_no||'?')+' '+(d.plan_qty||0)+'件';}).join('\n')||'（暂无已排产机台）';
+  var prompt='你是走芯机车间的资深排产专家。请根据以下信息给出排产建议：\n\n【待排产订单】\n'+orderText+'\n\n【已排产机台】\n'+busyText+'\n\n【车间规则】\n1. 走芯机一人看3-4台，换线需调机时间\n2. 同材料同规格尽量连续加工，减少换线\n3. 特急/加急单优先排产\n4. 注意交期，快要到期的先排\n5. 共24台走芯机（斯大、西铁城、津上）\n\n请给出：\n1. 每台空闲机台分配什么订单\n2. 建议加工顺序（考虑换线最少）\n3. 预计完成时间\n4. 注意事项和风险提示\n\n用简洁的中文回答，适合手机屏幕阅读。';
+  try{
+    var res=await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+_aiKey},
+      body:JSON.stringify({model:'qwen-plus',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:2000})
+    });
+    if(!res.ok){
+      var errText=await res.text();
+      if(res.status===401){resultEl.innerHTML='❌ Key无效，请检查API Key是否完整复制';return;}
+      if(res.status===400){resultEl.innerHTML='❌ 请求参数错误，可能Key无效或模型不可用';return;}
+      if(res.status===429){resultEl.innerHTML='❌ 请求太频繁或额度用完，稍等再试';return;}
+      resultEl.innerHTML='❌ API调用失败('+res.status+')：'+errText;return;
+    }
+    var data=await res.json();
+    var content=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    if(!content){resultEl.innerHTML='❌ AI未返回有效结果';return;}
+    content=content.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+    resultEl.innerHTML='<div style="margin-bottom:6px;font-size:13px;color:var(--gold);font-weight:700">🤖 AI排产建议</div>'+content;
+  }catch(e){
+    resultEl.innerHTML='❌ 请求失败：'+e.message;
+  }
 }
 
 init();
