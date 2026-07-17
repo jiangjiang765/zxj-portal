@@ -99,7 +99,7 @@ body{background:var(--bg-deep);color:var(--text)}
 .home-greeting-text{font-size:20px;font-weight:700;color:var(--text)}
 .home-greeting-date{font-size:12px;color:var(--text-dim)}
 .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.home-card{border-radius:16px;padding:26px 16px 20px;cursor:pointer;transition:transform .15s;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;text-align:center;-webkit-tap-highlight-color:transparent}
+.home-card{border-radius:16px;padding:26px 16px 20px;cursor:pointer;transition:transform .15s;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;text-align:center;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;user-select:none;touch-action:manipulation}
 .home-card:active{transform:scale(.96)}
 .home-card .hc-icon{font-size:38px;margin-bottom:8px}
 .home-card .hc-name{font-size:16px;font-weight:700;letter-spacing:1px;color:#fff}
@@ -8269,21 +8269,36 @@ function init(){
 
 initAuth();
 
-// 华为鸿蒙浏览器：给home-card主动绑touchend，确保点击响应
-document.addEventListener('DOMContentLoaded', function(){
-  document.querySelectorAll('.home-card').forEach(function(card){
-    var sx=0,sy=0;
+// 华为鸿蒙浏览器：给home-card主动绑click+touchend，确保点击响应
+(function bindHomeCards(){
+  var cards=document.querySelectorAll('.home-card');
+  if(!cards.length){setTimeout(bindHomeCards,100);return;} // DOM未就绪则重试
+  cards.forEach(function(card){
+    // 方案1：直接绑click（某些浏览器touch后不自动合成click）
+    card.addEventListener('click',function(e){
+      var oc=card.getAttribute('onclick');
+      if(oc){e.stopPropagation();try{new Function(oc)();}catch(ex){console.error('hc-click',ex);}}
+    });
+    // 方案2：绑touchend（华为鸿蒙onclick可能不触发）
+    var sx=0,sy=0,moved=false;
     card.addEventListener('touchstart',function(e){
+      moved=false;
       if(e.touches.length===1){sx=e.touches[0].clientX;sy=e.touches[0].clientY;}
     },{passive:true});
+    card.addEventListener('touchmove',function(e){
+      var t=e.touches[0];
+      if(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)moved=true;
+    },{passive:true});
     card.addEventListener('touchend',function(e){
+      if(moved)return;
       var t=e.changedTouches[0];
       if(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)return;
+      e.preventDefault();
       var oc=card.getAttribute('onclick');
-      if(oc){e.preventDefault();try{new Function(oc)();}catch(ex){console.error('home-card click err',ex);}}
+      if(oc){try{new Function(oc)();}catch(ex){console.error('hc-touch',ex);}}
     });
   });
-});
+})();
 
 // === 华为浏览器touchend兜底（仅首页 con-btn） ===
 // 注意：早期版本扫描所有带 onclick 的元素，导致订单/产品等页面滑动时按钮被误触
