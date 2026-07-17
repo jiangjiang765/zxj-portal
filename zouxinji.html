@@ -8315,18 +8315,18 @@ initAuth();
   // Service Worker 离线缓存
   if('serviceWorker' in navigator){
     const swCode=`
-      const CACHE='走芯机-v1';
+      const CACHE='走芯机-v2';
       self.addEventListener('install',e=>{self.skipWaiting()});
       self.addEventListener('activate',e=>{e.waitUntil(clients.claim())});
       self.addEventListener('fetch',e=>{
         e.respondWith(
-          caches.match(e.request).then(r=>r||fetch(e.request).then(resp=>{
+          fetch(e.request).then(resp=>{
             if(resp.ok&&e.request.url.startsWith('http')){
               const c=resp.clone();
               caches.open(CACHE).then(cache=>cache.put(e.request,c));
             }
             return resp;
-          }).catch(()=>caches.match(e.request)))
+          }).catch(()=>caches.match(e.request))
         );
       });
     `;
