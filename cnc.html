@@ -2097,7 +2097,7 @@ function getScrapRec(tuhao){
   if(!density)return sr;
   // 从产品库补mode
   if(!sr.mode){
-    const prods=gd('products');
+    const prods=gd('cnc_products');
     const p=prods.find(x=>x.tuhao===sr.tuhao||x.tuhao.trim().toLowerCase()===sr.tuhao.trim().toLowerCase());
     if(p&&p.mode)sr.mode=p.mode;
   }
@@ -2130,7 +2130,7 @@ function collectAllData(){
     const v=localStorage.getItem(k); if(v) obj[k]=v;
   });
   // 原始字符串 key
-  obj.machinesVer=localStorage.getItem('machinesVer')||'';
+  obj.machinesVer=localStorage.getItem('cnc_machinesVer')||'';
   obj.appTheme=localStorage.getItem('appTheme')||'';
   obj.backupTime=new Date().toISOString();
   return obj;
@@ -2161,9 +2161,9 @@ function autoBackup(){
   if(_backupTimer)clearTimeout(_backupTimer);
   _backupTimer=setTimeout(()=>{
     const data={
-      products:gd('products'),daily:gd('daily'),orders:gd('orders'),
-      scrapRecords:gd('scrapRecords'),machines:gd('machines'),
-      machinesVer:localStorage.getItem('machinesVer'),
+      products:gd('cnc_products'),daily:gd('daily'),orders:gd('cnc_orders'),
+      scrapRecords:gd('scrapRecords'),machines:gd('cnc_machines'),
+      machinesVer:localStorage.getItem('cnc_machinesVer'),
       appTheme:localStorage.getItem('appTheme'),
       backupTime:new Date().toISOString()
     };
@@ -2174,9 +2174,9 @@ function autoBackup(){
 
 function generateBackupCode(){
   const data={
-    products:gd('products'),daily:gd('daily'),orders:gd('orders'),
-    scrapRecords:gd('scrapRecords'),machines:gd('machines'),
-    machinesVer:localStorage.getItem('machinesVer'),
+    products:gd('cnc_products'),daily:gd('daily'),orders:gd('cnc_orders'),
+    scrapRecords:gd('scrapRecords'),machines:gd('cnc_machines'),
+    machinesVer:localStorage.getItem('cnc_machinesVer'),
     appTheme:localStorage.getItem('appTheme'),
     backupTime:new Date().toISOString()
   };
@@ -2193,11 +2193,11 @@ function restoreFromBackupCode(code){
   try{
     const json=decodeURIComponent(escape(atob(code.trim())));
     const data=JSON.parse(json);
-    if(data.products)sd('products',data.products);
+    if(data.products)sd('cnc_products',data.products);
     if(data.daily)sd('daily',data.daily);
-    if(data.orders)sd('orders',data.orders);
+    if(data.orders)sd('cnc_orders',data.orders);
     if(data.scrapRecords)sd('scrapRecords',data.scrapRecords);
-    if(data.machines){sd('machines',data.machines);if(data.machinesVer)localStorage.setItem('machinesVer',data.machinesVer);}
+    if(data.machines){sd('cnc_machines',data.machines);if(data.machinesVer)localStorage.setItem('cnc_machinesVer',data.cnc_machinesVer);}
     if(data.appTheme){localStorage.setItem('appTheme',data.appTheme);setTheme(data.appTheme);}
     // 刷新所有页面
     refreshSelects();refreshDeviceSelect();loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();refreshProductList();
@@ -2243,7 +2243,7 @@ function exportDataText(){
     const data={};
     keys.forEach(k=>{const v=localStorage.getItem(k);if(v)data[k]=JSON.parse(v);});
     data.appTheme=localStorage.getItem('appTheme')||'';
-    data.machinesVer=localStorage.getItem('machinesVer')||'';
+    data.machinesVer=localStorage.getItem('cnc_machinesVer')||'';
     const json=JSON.stringify(data);
     const code=btoa(unescape(encodeURIComponent(json)));
     if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -2263,10 +2263,10 @@ function importDataText(){
     const json=decodeURIComponent(escape(atob(code)));
     const data=JSON.parse(json);
     let count=0;
-    if(data.products){sd('products',data.products);count++;}
-    if(data.orders){sd('orders',data.orders);count++;}
+    if(data.products){sd('cnc_products',data.products);count++;}
+    if(data.orders){sd('cnc_orders',data.orders);count++;}
     if(data.scrapRecords){sd('scrapRecords',data.scrapRecords);count++;}
-    if(data.machines){sd('machines',data.machines);count++;if(data.machinesVer)localStorage.setItem('machinesVer',data.machinesVer);}
+    if(data.machines){sd('cnc_machines',data.machines);count++;if(data.machinesVer)localStorage.setItem('cnc_machinesVer',data.cnc_machinesVer);}
     if(data.appTheme){localStorage.setItem('appTheme',data.appTheme);setTheme(data.appTheme);}
     refreshSelects();refreshDeviceSelect();loadVolcOrders();loadDispatches();loadToolIssues();loadShiftRecords();refreshProductList();
     refreshScrapTuhaoList();refreshScrapRecordList();renderMachinesPage();refreshConsoleStats();
@@ -3030,8 +3030,8 @@ function genMacro5(){
 
 // ========== 机台总览 ==========
 function getMachines(){
-  let m=gd('machines');
-  const ver=localStorage.getItem('machinesVer');
+  let m=gd('cnc_machines');
+  const ver=localStorage.getItem('cnc_machinesVer');
   if(!m||!m.length||ver!=='2'){
     m=[];
     // FANUC立式加工中心
@@ -3050,8 +3050,8 @@ function getMachines(){
     [...fanucMachines,...mazakMachines,...brotherMachines].forEach(item=>{
       m.push({id:item.id,model:item.model,status:''});
     });
-    sd('machines',m);
-    localStorage.setItem('machinesVer','2');
+    sd('cnc_machines',m);
+    localStorage.setItem('cnc_machinesVer','2');
   }
   return m;
 }
@@ -3071,7 +3071,7 @@ function renderMachinesPage(){
   });
   const selDate=document.getElementById('mc-date').value;
   const daily=gd('daily');
-  const products=gd('products');
+  const products=gd('cnc_products');
   const scrapRecs=gd('scrapRecords');
 
   // Date-filtered daily records
@@ -3361,7 +3361,7 @@ function renderMachineDetail(deviceId){
     if(!r.device && tuhaoMachineMap[r.tuhao]===deviceId) return true;
     return false;
   });
-  const products=gd('products');
+  const products=gd('cnc_products');
   const scrapRecs=gd('scrapRecords');
 
   // Group by tuhao
@@ -3648,9 +3648,9 @@ function saveMachines(){
     }
   });
   if(machines.length===0){showToast('至少保留1台机台');return;}
-  sd('machines',machines);
+  sd('cnc_machines',machines);
   // 更新版本号确保getMachines不再覆盖
-  localStorage.setItem('machinesVer','2');
+  localStorage.setItem('cnc_machinesVer','2');
   closeMachinesManager();
   renderMachinesPage();
   refreshDeviceSelect();
@@ -3718,7 +3718,7 @@ function onAssignTuhaoChange(){
   const infoEl=document.getElementById('assign-prod-info');
   const timeInput=document.getElementById('assign-time');
   if(!tuhao){infoEl.style.display='none';return;}
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   const p=prods.find(x=>x.tuhao===tuhao);
   if(!p){infoEl.style.display='none';return;}
   // Show product info
@@ -3784,7 +3784,7 @@ async function confirmAssign(){
   m.assignDate=isChanged?new Date().toISOString().slice(0,10):(m.assignDate||new Date().toISOString().slice(0,10));
   m.assignTs=isChanged?new Date().toISOString():(m.assignTs||new Date().toISOString());
   if(isChanged){m.pausedDays=0;m.pauseStartDate=null;}
-  sd('machines',machines);
+  sd('cnc_machines',machines);
   closeAssign();
   renderMachinesPage();
   showToast(m.id+' 已派工: '+tuhao+' ('+time+'秒/件)');
@@ -3823,7 +3823,7 @@ function endAssign(deviceId){
   m.assignTs='';
   m.pausedDays=0;
   m.pauseStartDate=null;
-  sd('machines',machines);
+  sd('cnc_machines',machines);
   renderMachinesPage();
   showToast(m.id+' 已结束派工'+totalStr);
 }
@@ -3935,7 +3935,7 @@ async function renderStatsPage(){
   var toStr=document.getElementById('sr-to').value;
   if(!fromStr||!toStr)return;
   var machines=getMachines();
-  var prods=gd('products');
+  var prods=gd('cnc_products');
   var orders=_volcOrders;
   var scrapRecs=gd('scrapRecords');
 
@@ -4235,7 +4235,7 @@ function renderMaintList(){
 function queryProcess(){
   var tuhao=document.getElementById('pc-tuhao').value.trim();
   if(!tuhao){document.getElementById('process-result').innerHTML='';return;}
-  var p=gd('products').find(x=>x.tuhao===tuhao);
+  var p=gd('cnc_products').find(x=>x.tuhao===tuhao);
   if(!p){document.getElementById('process-result').innerHTML='<div class="card"><div class="empty">未找到该图号</div></div>';return;}
   
   var density=p.density||DENSITY[p.brand]||7.85;
@@ -5185,7 +5185,7 @@ function showKanbanDetail(machineId){
   else if(m.currentTuhao){statusText='运行中';statusCls='green';}
   // 产品库信息
   var tuhao=m.currentTuhao||'';
-  var products=gd('products');
+  var products=gd('cnc_products');
   var prod=tuhao?products.find(function(p){return p.tuhao===tuhao}):null;
   // 排产记录
   var myDispatches=[];
@@ -5317,7 +5317,7 @@ function setMachineStatus(deviceId,status){
     }
   }
   m.status=status;
-  sd('machines',machines);
+  sd('cnc_machines',machines);
   // Close menu and re-render
   document.querySelectorAll('.mc-status-menu.open').forEach(m=>m.classList.remove('open'));
   renderMachinesPage();
@@ -5332,7 +5332,7 @@ document.addEventListener('click',()=>{document.querySelectorAll('.mc-status-men
 function showTuhaoDD(filter){
   const dd=document.getElementById('t-tuhao-dd');
   if(!dd)return;
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   let list=prods.map(p=>p.tuhao);
   if(filter)list=list.filter(t=>t.toLowerCase().includes(filter.toLowerCase()));
   if(!list.length){dd.innerHTML='<div class="tuhao-dd-empty">无匹配，可直接输入新图号</div>';dd.classList.add('open');return}
@@ -5346,7 +5346,7 @@ function pickTuhao(val){const inp=document.getElementById('t-tuhao');if(inp)inp.
 function showSfTuhaoDD(filter){
   const dd=document.getElementById('sf-tuhao-dd');
   if(!dd)return;
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   let list=prods.map(p=>p.tuhao);
   if(filter)list=list.filter(t=>t.toLowerCase().includes(filter.toLowerCase()));
   if(!list.length){dd.innerHTML='<div class="tuhao-dd-empty">无匹配，可直接输入新图号</div>';dd.classList.add('open');return}
@@ -5362,7 +5362,7 @@ function showComboDD(ddId,inputId,filter,onPick){
   const dd=document.getElementById(ddId);
   if(!dd)return;
   if(onPick)_comboCbs[ddId]=onPick;
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   let list=prods.map(p=>p.tuhao);
   if(filter)list=list.filter(t=>t.toLowerCase().includes(filter.toLowerCase()));
   if(!list.length){dd.innerHTML='<div class="tuhao-dd-empty">无匹配图号</div>';dd.classList.add('open');return}
@@ -5377,7 +5377,7 @@ function pickCombo(ddId,inputId,val){
 }
 
 function refreshSelects(){
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   refreshScrapTuhaoList();
   // sc-tuhao still uses select
   const opts='<option value="">选择图号或手动输入</option>'+prods.map(p=>`<option value="${p.tuhao}">${p.tuhao}</option>`).join('');
@@ -5475,10 +5475,10 @@ function saveProduct(){
   
   const p={tuhao,name:document.getElementById('p-name').value.trim(),customer:document.getElementById('p-customer').value.trim(),brand,dia:parseFloat(document.getElementById('p-dia').value)||0,len:parseFloat(document.getElementById('p-len').value)||0,barLen:parseFloat(document.getElementById('p-bar').value)||3000,mode:document.getElementById('p-mode').value,density,time:parseFloat(document.getElementById('p-time').value)||0,toolCost:parseFloat(document.getElementById('p-toolCost').value)||0,tools:getProdTools()};
   
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   const idx=prods.findIndex(x=>x.tuhao===tuhao);
   if(idx>=0)prods[idx]=p;else prods.push(p);
-  sd('products',prods);
+  sd('cnc_products',prods);
   
   ['p-tuhao','p-name','p-dia','p-len','p-time','p-customer','p-toolCost'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('p-bar').value='3000';
@@ -5493,7 +5493,7 @@ function saveProduct(){
 
 
 function editProduct(tuhao){
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   const p=prods.find(x=>x.tuhao===tuhao);
   if(!p)return;
   document.getElementById('p-tuhao').value=p.tuhao;
@@ -5519,15 +5519,15 @@ function editProduct(tuhao){
   showToast('已加载产品，修改后保存');
 }
 function deleteProduct(tuhao){
-  let prods=gd('products');
+  let prods=gd('cnc_products');
   prods=prods.filter(p=>p.tuhao!==tuhao);
-  sd('products',prods);
+  sd('cnc_products',prods);
   refreshSelects();refreshProductList();
   showToast('已删除');
 }
 
 function refreshProductList(){
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   if(!prods.length){document.getElementById('product-list').innerHTML='<div class="empty">暂无产品</div>';return}
   // 搜索过滤
   const kw=(document.getElementById('p-search')?.value||'').trim().toLowerCase();
@@ -5642,7 +5642,7 @@ function deleteDaily(ts){
 function queryProduct(){
   const tuhao=document.getElementById('q-tuhao').value;
   if(!tuhao){document.getElementById('query-result').innerHTML='';return}
-  const p=gd('products').find(x=>x.tuhao===tuhao);
+  const p=gd('cnc_products').find(x=>x.tuhao===tuhao);
   if(!p){document.getElementById('query-result').innerHTML='<div class="card"><div class="empty">未找到该图号</div></div>';return}
   
   const density=p.density||DENSITY[p.brand]||7.85;
@@ -5911,7 +5911,7 @@ const MAT_REF_PRICE={'12L14':5.5,'1215':5.5,'Y15':5.5,'SUM24L':6,'45#':5,'40Cr':
 
 function onPriceTuhaoChange(){
   const val=document.getElementById('pr-tuhao').value.trim();
-  const prods=gd('products')||[];
+  const prods=gd('cnc_products')||[];
   // 精确匹配（忽略大小写）才自动填充，防止部分输入时误匹配
   const p=prods.find(x=>x.tuhao.trim().toLowerCase()===val.toLowerCase());
   if(p){
@@ -6388,7 +6388,7 @@ function calcPlating() {
   });
   function pltShowDropdown() {
     var v = inp.value.trim().toLowerCase();
-    var products = gd('products') || [];
+    var products = gd('cnc_products') || [];
     var areaData = gd('surfaceAreas') || {};
     var items = [];
     for (var i = 0; i < products.length; i++) {
@@ -6960,7 +6960,7 @@ function showToast(msg){
 }
 
 function exportData(){
-  const data={products:gd('products'),daily:gd('daily'),orders:gd('orders'),scrapRecords:gd('scrapRecords'),maintRecords:gd('maintRecords'),qualityRecords:gd('qualityRecords'),toolInventory:gd('toolInventory'),machines:gd('machines'),exportTime:new Date().toISOString()};
+  const data={products:gd('cnc_products'),daily:gd('daily'),orders:gd('cnc_orders'),scrapRecords:gd('scrapRecords'),maintRecords:gd('maintRecords'),qualityRecords:gd('cnc_qualityRecords'),toolInventory:gd('toolInventory'),machines:gd('cnc_machines'),exportTime:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -6978,11 +6978,11 @@ function importData(e){
   reader.onload=function(ev){
     try{
       const data=JSON.parse(ev.target.result);
-      if(data.products)sd('products',data.products);
+      if(data.products)sd('cnc_products',data.products);
       if(data.daily)sd('daily',data.daily);
-      if(data.orders)sd('orders',data.orders);
+      if(data.orders)sd('cnc_orders',data.orders);
       if(data.scrapRecords)sd('scrapRecords',data.scrapRecords);
-      if(data.machines)sd('machines',data.machines);
+      if(data.machines)sd('cnc_machines',data.machines);
       refreshSelects();// refreshDailyList removed with daily pagerefreshProductList();
       showToast('导入成功，已恢复'+(data.products?.length||0)+'个产品，'+(data.daily?.length||0)+'条记录，'+(data.orders?.length||0)+'个订单 ✓');
     }catch(err){showToast('导入失败，文件格式错误')}
@@ -6993,7 +6993,7 @@ function importData(e){
 
 // ========== 数据迁移 ==========
 function exportMigrationFile(){
-  const data={products:gd('products'),daily:gd('daily'),orders:gd('orders'),scrapRecords:gd('scrapRecords'),maintRecords:gd('maintRecords'),qualityRecords:gd('qualityRecords'),toolInventory:gd('toolInventory'),machines:gd('machines'),exportTime:new Date().toISOString()};
+  const data={products:gd('cnc_products'),daily:gd('daily'),orders:gd('cnc_orders'),scrapRecords:gd('scrapRecords'),maintRecords:gd('maintRecords'),qualityRecords:gd('cnc_qualityRecords'),toolInventory:gd('toolInventory'),machines:gd('cnc_machines'),exportTime:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -7012,11 +7012,11 @@ function importMigrationFile(e){
   reader.onload=function(ev){
     try{
       const data=JSON.parse(ev.target.result);
-      if(data.products)sd('products',data.products);
+      if(data.products)sd('cnc_products',data.products);
       if(data.daily)sd('daily',data.daily);
-      if(data.orders)sd('orders',data.orders);
+      if(data.orders)sd('cnc_orders',data.orders);
       if(data.scrapRecords)sd('scrapRecords',data.scrapRecords);
-      if(data.machines)sd('machines',data.machines);
+      if(data.machines)sd('cnc_machines',data.machines);
       location.reload();
     }catch(err){showToast('导入失败，文件格式错误')}
   };
@@ -7406,7 +7406,7 @@ function onScTuhaoChange(){
       }else{
         // 没有废渣记录，从产品库带出模式
         clearScrapForm();
-        const prod=gd('products').find(p=>p.tuhao===sel);
+        const prod=gd('cnc_products').find(p=>p.tuhao===sel);
         if(prod&&prod.mode)document.getElementById('sc-mode').value=prod.mode;
       }
     }else{
@@ -7423,7 +7423,7 @@ function getScTuhao(){
 
 function refreshScrapTuhaoList(){
   const recs=gd('scrapRecords');
-  const prods=gd('products');
+  const prods=gd('cnc_products');
   let opts='<option value="">选择图号或手动输入</option>';
   // Add from saved records first
   const tuhaoSet=new Set();
@@ -8103,7 +8103,7 @@ function init(){
   // 自动迁移旧废渣记录（使用calcScrapCore统一计算）
   try{
     const recs=gd('scrapRecords');
-    const prods=gd('products');
+    const prods=gd('cnc_products');
     let needSave=false;
     recs.forEach(r=>{
       if(!r.barLen||!r.pieceLen)return;
