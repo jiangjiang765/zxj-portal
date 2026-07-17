@@ -2020,9 +2020,11 @@ function bootCloudSync(){
 
 const DENSITY={'12L14':7.85,'1215':7.85,'Y15':7.85,'SUM24L':7.85,'45#':7.85,'40Cr':7.85,'20CrMnTi':7.85,'Q235':7.85,'304':7.93,'316':7.98,'303':7.93,'17-4PH':7.78,'6061':2.70,'7075':2.81,'2024':2.78,'5052':2.68,'H62':8.50,'H59':8.40,'T2':8.96,'QAl9-4':7.50,'TC4':4.51,'TA2':4.51,'PEEK':1.30,'PTFE':2.20,'POM':1.41,'PA66':1.15,'A380':2.71,'ADC12':2.74,'ZL104':2.67,'HPb59-1':8.50,'QSn6.5-0.1':8.80,'BZn15-20':8.70,'SUJ2':7.81,'SKD11':7.70,'SKH51':8.10};
 
-function gd(k){try{return JSON.parse(localStorage.getItem(k))||[]}catch{return[]}}
+function gd(k){const _k=_cncKey(k);try{return JSON.parse(localStorage.getItem(_k))||[]}catch{return[]}}
+function _cncKey(k){const _shared=new Set(['appTheme','zxj_session','qwen_api_key','auth_admin_pwd','auth_device','auth_codes','auth_logged_out','appVersion','_autoBackup','_backupTime','_installHinted']);if(_shared.has(k)||k.startsWith('auth_')||k.startsWith('cnc_'))return k;return 'cnc_'+k}
 function sd(k,v){
-  localStorage.setItem(k,JSON.stringify(v));
+  const _k=_cncKey(k);
+  localStorage.setItem(_k,JSON.stringify(v));
   autoBackup();
   // 触发云端异步同步（防抖 1.5s）
   scheduleCloudSync();
