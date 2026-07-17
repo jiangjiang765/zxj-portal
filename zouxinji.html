@@ -8332,7 +8332,24 @@ initAuth();
     `;
     const swBlob=new Blob([swCode],{type:'application/javascript'});
     const swUrl=URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl,{scope:'/'}).catch(()=>{});
+    navigator.serviceWorker.register(swUrl,{scope:'/'}).then(reg=>{
+      // 强制更新：一旦检测到新SW，立即激活
+      if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+      reg.addEventListener('updatefound',()=>{
+        const nw=reg.installing;
+        if(nw) nw.addEventListener('statechange',()=>{
+          if(nw.state==='activated'){
+            // 新SW已激活，刷新页面加载最新资源
+            if(!sessionStorage.getItem('_swRefreshed')){
+              sessionStorage.setItem('_swRefreshed','1');
+              location.reload();
+            }
+          }
+        });
+      });
+    }).catch(()=>{});
+    // 清除旧缓存
+    if('caches' in window){caches.keys().then(ks=>ks.forEach(k=>{if(k!=='走芯机-v2')caches.delete(k)}));}
   }
 
   // 禁止下拉刷新（只在顶部向下拉时阻止）
