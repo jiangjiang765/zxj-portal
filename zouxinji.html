@@ -8267,8 +8267,23 @@ function init(){
   }
 }
 
-// 先检查认证状态，登录后再初始化系统
 initAuth();
+
+// 华为鸿蒙浏览器：给home-card主动绑touchend，确保点击响应
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.home-card').forEach(function(card){
+    var sx=0,sy=0;
+    card.addEventListener('touchstart',function(e){
+      if(e.touches.length===1){sx=e.touches[0].clientX;sy=e.touches[0].clientY;}
+    },{passive:true});
+    card.addEventListener('touchend',function(e){
+      var t=e.changedTouches[0];
+      if(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)return;
+      var oc=card.getAttribute('onclick');
+      if(oc){e.preventDefault();try{new Function(oc)();}catch(ex){console.error('home-card click err',ex);}}
+    });
+  });
+});
 
 // === 华为浏览器touchend兜底（仅首页 con-btn） ===
 // 注意：早期版本扫描所有带 onclick 的元素，导致订单/产品等页面滑动时按钮被误触
