@@ -3031,10 +3031,8 @@ function genMacro5(){
 function getMachines(){
   let m=gd('machines');
   const ver=localStorage.getItem('machinesVer');
-  if(!m||!m.length||ver!=='2'){
-    // CNC数据污染检测：如果localStorage里混进了CNC机台，只重置机台列表，不动其他数据
-  }else if((m[0]&&(m[0].id||'').match(/^(FANUC|MZK|BRT)/))||m.some(x=>(x.model||'').match(/FANUC|Mazak|Brother/))){
-    console.log('检测到CNC机台数据混入走芯机，正在恢复...');
+  if(!m||!m.length||ver!=='2'||(m[0]&&(m[0].id||'').match(/^(FANUC|MZK|BRT)/))||m.some(x=>(x.model||'').match(/FANUC|Mazak|Brother/))){
+    if(m.length&&(m[0]&&(m[0].id||'').match(/^(FANUC|MZK|BRT)/))||m.some(x=>(x.model||'').match(/FANUC|Mazak|Brother/))){console.log('检测到CNC数据混入，恢复走芯机默认机台');}
     m=[];
     // A区: A01~A06(型号待填) + A07~A15
     const aMachines=[
