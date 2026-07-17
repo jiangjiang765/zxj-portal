@@ -563,6 +563,10 @@ html.portal-auto .login-overlay{display:none!important}
 </head>
 <body>
 <script>
+// 清除旧Service Worker和缓存
+if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()))}
+if('caches' in window){caches.keys().then(ks=>ks.forEach(k=>caches.delete(k)))}
+
 /* ===== 火山引擎 Supabase (orders/dispatches) ===== */
 var VS_URL='https://br-glad-kite-fa945c96.supabase2.aidap-global.cn-beijing.volces.com';
 var VS_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjIwODg3MTksInJvbGUiOiJhbm9uIn0.JPc7B41GXEoiXoAchqjMB47RB4c4BktPWbn4uchKin8';
@@ -7697,6 +7701,8 @@ function initAuth() {
     if(zxjObj && zxjObj.name && zxjObj.code){
       _currentUser={name:zxjObj.name,code:zxjObj.code,role:zxjObj.role,isAdmin:zxjObj.role==='admin'};
       _isAdmin=zxjObj.role==='admin';
+      // 保存Portal session到localStorage，刷新页面时不需要URL参数
+      try{localStorage.setItem('zxj_session',JSON.stringify(zxjObj))}catch(e){}
       hideLoginOverlay();
       showUserInfo();
       init();
@@ -8312,29 +8318,15 @@ initAuth();
   link.href=manifestUrl;
   document.head.appendChild(link);
 
-  // Service Worker 离线缓存
-  if('serviceWorker' in navigator){
-    const swCode=`
-      const CACHE='走芯机-v2';
-      self.addEventListener('install',e=>{self.skipWaiting()});
-      self.addEventListener('activate',e=>{e.waitUntil(clients.claim())});
-      self.addEventListener('fetch',e=>{
-        e.respondWith(
-          fetch(e.request).then(resp=>{
-            if(resp.ok&&e.request.url.startsWith('http')){
-              const c=resp.clone();
-              caches.open(CACHE).then(cache=>cache.put(e.request,c));
-            }
+  // Service Worker 已移除（Blob URL SW造成缓存问题，用帽子云CDN代替）
             return resp;
           }).catch(()=>caches.match(e.request))
         );
       });
     `;
-    const swBlob=new Blob([swCode],{type:'application/javascript'});
-    const swUrl=URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl,{scope:'/'}).then(reg=>{
-      // 强制更新：一旦检测到新SW，立即激活
-      if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+    // [SW blob removed]
+    // [SW blob removed]
+    // [SW removed]
       reg.addEventListener('updatefound',()=>{
         const nw=reg.installing;
         if(nw) nw.addEventListener('statechange',()=>{
