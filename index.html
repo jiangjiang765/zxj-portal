@@ -458,6 +458,7 @@ function renderCards(role){
   var CARDS={
     admin:[
       {icon:'⚙️',title:'走芯机系统',desc:'报价 / 订单 / 机台 / 派工',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'🏭',title:'CNC加工中心',desc:'铣削 / 钻孔 / 五轴 / 钻攻',url:'./cnc.html',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'刀具 / 原材料 / 备品 / 成品',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
       {icon:'🤝',title:'交班系统',desc:'交班记录 / 设备状态',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'},
@@ -465,12 +466,14 @@ function renderCards(role){
     ],
     leader:[
       {icon:'⚙️',title:'走芯机系统',desc:'派工 / 机台 / 生产',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'🏭',title:'CNC加工中心',desc:'铣削 / 钻孔 / 五轴 / 钻攻',url:'./cnc.html',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'领料 / 查库存',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
       {icon:'🤝',title:'交班系统',desc:'填交班记录',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'}
     ],
     operator:[
       {icon:'⚙️',title:'走芯机系统',desc:'我的工单 / 生产报工',url:'./zouxinji.html',bg:'linear-gradient(135deg,#1e3a8a,#3b82f6)',permKey:'mc'},
+      {icon:'🏭',title:'CNC加工中心',desc:'我的工单 / 生产报工',url:'./cnc.html',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'我的任务 / 生产进度',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'领料 / 查库存',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
       {icon:'🤝',title:'交班系统',desc:'填交班记录',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'}
@@ -481,6 +484,10 @@ function renderCards(role){
     if(c.permKey==='admin') return role==='admin';
     if(c.permKey==='wh') return whList.length>0;
     if(c.permKey==='ho') return hoList.length>0;
+    if(c.permKey==='cnc'){
+      // CNC加工中心对所有角色可见
+      return true;
+    }
     if(c.permKey==='mc'){
       // Show 走芯机 if at least one mc_cards is true
       return Object.values(mcCards).some(function(v){return v===true;});
