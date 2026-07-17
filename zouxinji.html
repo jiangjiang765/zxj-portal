@@ -8290,11 +8290,11 @@ initAuth();
     // 滑动距离 > 10px 视为滚动，不触发
     var t=e.changedTouches[0];
     if(Math.abs(t.clientX-_startX)>10 || Math.abs(t.clientY-_startY)>10)return;
-    // 只对 .con-btn 起作用
+    // 对 .con-btn 和 .home-card 起作用
     var btn=null;
     var cur=el;
     while(cur && cur!==document.body && cur!==document.documentElement){
-      if(cur.classList && cur.classList.contains('con-btn') && cur.dataset && cur.dataset.page){
+      if(cur.classList && (cur.classList.contains('con-btn') || cur.classList.contains('home-card'))){
         btn=cur;break;
       }
       cur=cur.parentElement;
