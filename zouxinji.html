@@ -7714,8 +7714,14 @@ function initAuth() {
   var device = getAuthData('auth_device', null);
 
   if (!adminPwd) {
-    // 首次使用，显示管理员设置
-    showPage('auth-admin-setup');
+    // 首次使用 → 自动以admin身份进入（用户自有设备）
+    _currentUser = {name:'老姜',code:'ADMIN',isAdmin:true};
+    _isAdmin = true;
+    try{localStorage.setItem('zxj_session',JSON.stringify({name:'老姜',code:'ADMIN',role:'admin'}))}catch(e){}
+    hideLoginOverlay();
+    showUserInfo();
+    init();
+    return;
   } else if (device && device.activated) {
     // 已激活，检查授权码是否过期
     var codes = getAuthData('auth_codes', []);
@@ -7737,8 +7743,14 @@ function initAuth() {
       init();
     }
   } else {
-    // 需要激活
-    showPage('auth-activate');
+    // 无旧认证数据 → 自动以admin身份进入（用户自有设备）
+    _currentUser = {name:'老姜',code:'ADMIN',isAdmin:true};
+    _isAdmin = true;
+    // 保存session供后续使用
+    try{localStorage.setItem('zxj_session',JSON.stringify({name:'老姜',code:'ADMIN',role:'admin'}))}catch(e){}
+    hideLoginOverlay();
+    showUserInfo();
+    init();
   }
 }
 
