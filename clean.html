@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>清理缓存</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#0D1B2A;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;padding:20px;text-align:center}
+.icon{font-size:64px;margin-bottom:20px}
+h1{font-size:22px;margin-bottom:10px;color:#D4A843}
+p{font-size:15px;color:#8098B0;line-height:1.6}
+.ok{color:#4CAF50;font-size:18px;margin-top:16px;display:none}
+.btn{margin-top:24px;padding:14px 36px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:12px;font-size:16px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+</style>
+</head>
+<body>
+<div class="icon">🫚</div>
+<h1>缓存清理工具</h1>
+<p>正在清理旧Service Worker和缓存数据...</p>
+<div class="ok" id="ok-msg">✅ 清理完成！</div>
+<button class="btn" id="go-btn" style="display:none" onclick="location.href='./'">返回门户</button>
+<script>
+var done=0,total=2;
+function check(){done++;if(done>=total){document.getElementById('ok-msg').style.display='block';document.getElementById('go-btn').style.display='inline-block'}}
+
+// 1. 注册passthrough SW覆盖旧SW
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js',{scope:'/'}).then(function(reg){
+    console.log('passthrough SW已注册');
+    return reg.update();
+  }).then(function(){
+    setTimeout(function(){
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        var p=Promise.resolve();
+        regs.forEach(function(r){p=p.then(function(){return r.unregister()})});
+        return p;
+      }).then(function(){check()});
+    },800);
+  }).catch(function(e){
+    console.log('SW注册失败:',e);
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      return Promise.all(regs.map(function(r){return r.unregister()}));
+    }).then(function(){check()});
+  });
+}else{check()}
+
+// 2. 清除所有缓存
+if('caches' in window){
+  caches.keys().then(function(names){
+    return Promise.all(names.map(function(n){return caches.delete(n)}));
+  }).then(function(){check()});
+}else{check()}
+</script>
+</body>
+</html>
