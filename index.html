@@ -264,10 +264,22 @@ body{
 </div>
 
 <script>
-/* 强制清理旧Service Worker和缓存 - 解决走芯机"点不开"问题 */
+/* 强制覆盖旧SW + 清缓存 - 解决走芯机"点不开"问题 */
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(function(regs){
-    regs.forEach(function(r){r.unregister();console.log('[Portal] 已注销SW:',r.scope)});
+  // 先注册新的passthrough SW覆盖旧SW（同scope新SW会替换旧SW）
+  navigator.serviceWorker.register('./sw.js',{scope:'/'}).then(function(reg){
+    console.log('[Portal] passthrough SW已注册:',reg.scope);
+    // 等0.5秒让新SW激活，然后注销它
+    setTimeout(function(){
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(r){r.unregister();console.log('[Portal] 已注销SW:',r.scope)});
+      });
+    },500);
+  }).catch(function(e){
+    console.log('[Portal] SW注册失败，直接注销:',e);
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){r.unregister()});
+    });
   });
 }
 if('caches' in window){
