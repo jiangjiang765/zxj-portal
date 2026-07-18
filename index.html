@@ -64,8 +64,29 @@ body{
 .topbar-avatar{font-size:24px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:50%}
 .topbar-name{font-size:16px;font-weight:700;color:var(--text)}
 .topbar-role{font-size:11px;color:var(--gold);background:rgba(212,168,67,.15);padding:2px 8px;border-radius:8px;display:inline-block;margin-top:2px}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.topbar-bell{position:relative;font-size:22px;cursor:pointer;padding:4px 6px;border-radius:8px;transition:background .15s}
+.topbar-bell:active{background:var(--border)}
+.topbar-bell .nb{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;display:none}
+.topbar-bell .nb.show{display:block}
 .topbar-logout{background:transparent;border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;transition:all .15s}
 .topbar-logout:active{background:var(--red);color:#fff;border-color:var(--red)}
+.notif-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:299}
+.notif-overlay.show{display:block}
+.notif-panel{position:fixed;top:0;right:0;bottom:0;width:85%;max-width:380px;background:var(--card);z-index:300;transform:translateX(100%);transition:transform .25s;overflow-y:auto;border-left:1px solid rgba(212,168,67,.3);-webkit-overflow-scrolling:touch}
+.notif-panel.open{transform:translateX(0)}
+.np-head{padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.np-head h3{color:var(--gold);font-size:16px;margin:0}
+.np-close{font-size:22px;cursor:pointer;color:var(--text-dim);background:none;border:none}
+.np-clear{font-size:12px;color:var(--text-dim);cursor:pointer;padding:2px 8px;background:none;border:none}
+.np-empty{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:14px}
+.np-item{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;transition:background .1s}
+.np-item:active{background:rgba(255,255,255,.05)}
+.np-item.unread{border-left:3px solid var(--gold)}
+.np-item.read{opacity:.6}
+.ni-source{font-size:10px;color:var(--gold);margin-bottom:4px;font-weight:600}
+.ni-time{font-size:11px;color:var(--text-dim);margin-bottom:4px}
+.ni-body{font-size:13px;color:var(--text);line-height:1.5}
 .welcome{padding:20px 20px 8px;font-size:18px;color:var(--text);font-weight:600}
 .card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:14px 20px 30px}
 @media(min-width:600px){.card-grid{grid-template-columns:repeat(3,1fr);max-width:760px;margin:0 auto}}
@@ -139,7 +160,7 @@ body{
   <div class="splash-icon">⚙️</div>
   <div class="splash-line"></div>
   <div class="splash-desc">智能生产，让工作更简单</div>
-  <div class="splash-ver">v2.0</div>
+  <div class="splash-ver">v2.1</div>
 </div>
 
 <div id="cfm" class="cfm-wrap" onclick="if(event.target===this)_cfmR(false)">
@@ -185,12 +206,27 @@ body{
         <div class="topbar-role" id="user-role"></div>
       </div>
     </div>
-    <button class="topbar-logout" onclick="doLogout()">退出</button>
+    <div class="topbar-right">
+      <div class="topbar-bell" id="portalBell" onclick="togglePortalNotif()">🔔<span class="nb" id="portalNotifBadge"></span></div>
+      <button class="topbar-logout" onclick="doLogout()">退出</button>
+    </div>
   </div>
   <div class="welcome" id="welcome-text"></div>
   <div class="card-grid" id="card-grid"></div>
+  <!-- 全局通知面板 -->
+  <div class="notif-overlay" id="notifOverlay" onclick="togglePortalNotif()"></div>
+  <div class="notif-panel" id="notifPanel">
+    <div class="np-head">
+      <h3>🔔 消息中心</h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="np-clear" onclick="clearAllPortalNotif()">全部已读</button>
+        <button class="np-close" onclick="togglePortalNotif()">✕</button>
+      </div>
+    </div>
+    <div id="notifList"></div>
+  </div>
   <div class="footer">
-    <span id="footer-title">走芯机车间门户 v2.0</span>
+    <span id="footer-title">走芯机车间门户 v2.1</span>
     <span>·</span>
     <span id="last-login-tip"></span>
   </div>
@@ -456,6 +492,207 @@ function doLogout(){
 }
 
 /* ===== Screens ===== */
+/* ===== 全局通知中心 ===== */
+var NOTIF_SOURCES=[
+  {key:'purchaseNotif',label:'🛒 采购申请',source:'purchase'},
+  {key:'handoverNotif',label:'🤝 交班系统',source:'handover'},
+  {key:'machineNotif',label:'⚙️ 走芯机',source:'machine'}
+];
+var _notifPollTimer=null;
+
+function getAllNotifs(){
+  var all=[];
+  NOTIF_SOURCES.forEach(function(src){
+    try{
+      var raw=localStorage.getItem(src.key);
+      if(!raw)return;
+      var arr=JSON.parse(raw);
+      if(!Array.isArray(arr))return;
+      arr.forEach(function(n){
+        n._source=src.source;
+        n._sourceLabel=src.label;
+      });
+      all=all.concat(arr);
+    }catch(e){}
+  });
+  // Also check shared cloud notifications
+  try{
+    var shared=localStorage.getItem('zxj_notifications');
+    if(shared){
+      var sArr=JSON.parse(shared);
+      if(Array.isArray(sArr)){
+        sArr.forEach(function(n){
+          if(!n._source)n._source='system';
+          if(!n._sourceLabel)n._sourceLabel='📡 系统';
+        });
+        all=all.concat(sArr);
+      }
+    }
+  }catch(e){}
+  // Deduplicate by id
+  var seen={};
+  all=all.filter(function(n){if(seen[n.id])return false;seen[n.id]=true;return true});
+  // Sort by createdAt desc
+  all.sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')});
+  return all;
+}
+
+function getMyNotifs(){
+  var s=getSession();
+  if(!s)return[];
+  var name=s.name;
+  return getAllNotifs().filter(function(n){return n.to===name});
+}
+
+function getMyUnreadCount(){
+  return getMyNotifs().filter(function(n){return!n.read}).length;
+}
+
+function refreshPortalBadge(){
+  var count=getMyUnreadCount();
+  var badge=document.getElementById('portalNotifBadge');
+  if(!badge)return;
+  if(count>0){badge.textContent=count>99?'99+':count;badge.classList.add('show')}
+  else{badge.classList.remove('show')}
+}
+
+function togglePortalNotif(){
+  var panel=document.getElementById('notifPanel');
+  var overlay=document.getElementById('notifOverlay');
+  var isOpen=panel.classList.contains('open');
+  if(isOpen){
+    panel.classList.remove('open');overlay.classList.remove('show');
+  }else{
+    panel.classList.add('open');overlay.classList.add('show');
+    renderPortalNotifs();
+  }
+}
+
+function renderPortalNotifs(){
+  var notifs=getMyNotifs().slice(0,50);
+  var el=document.getElementById('notifList');
+  if(!notifs.length){
+    el.innerHTML='<div class="np-empty">📭 暂无消息</div>';
+    return;
+  }
+  el.innerHTML=notifs.map(function(n){
+    var timeStr='';
+    try{timeStr=new Date(n.createdAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){}
+    var srcLabel=n._sourceLabel||'📡 系统';
+    var body=n.body||n.title||'';
+    // Strip HTML tags for safe display
+    var safeBody=body.replace(/<[^>]*>/g,'');
+    return '<div class="np-item '+(n.read?'read':'unread')+'" onclick="readPortalNotif(\''+n.id+'\',\''+(n._source||'')+'\')">'+
+      '<div class="ni-source">'+esc(srcLabel)+'</div>'+
+      '<div class="ni-time">'+esc(timeStr)+'</div>'+
+      '<div class="ni-body">'+esc(safeBody)+'</div></div>';
+  }).join('');
+}
+
+function readPortalNotif(id,source){
+  // Mark as read in the source localStorage
+  NOTIF_SOURCES.forEach(function(src){
+    try{
+      var raw=localStorage.getItem(src.key);
+      if(!raw)return;
+      var arr=JSON.parse(raw);
+      if(!Array.isArray(arr))return;
+      var idx=arr.findIndex(function(n){return n.id===id});
+      if(idx>=0&&!arr[idx].read){
+        arr[idx].read=true;
+        localStorage.setItem(src.key,JSON.stringify(arr));
+      }
+    }catch(e){}
+  });
+  // Also check shared
+  try{
+    var shared=localStorage.getItem('zxj_notifications');
+    if(shared){
+      var sArr=JSON.parse(shared);
+      if(Array.isArray(sArr)){
+        var idx=sArr.findIndex(function(n){return n.id===id});
+        if(idx>=0&&!sArr[idx].read){
+          sArr[idx].read=true;
+          localStorage.setItem('zxj_notifications',JSON.stringify(sArr));
+        }
+      }
+    }
+  }catch(e){}
+  refreshPortalBadge();
+  renderPortalNotifs();
+  // If source is purchase, navigate to purchase page
+  if(source==='purchase'){
+    var s=getSession();
+    if(s){
+      var sep='./purchase.html'.includes('?')?'&':'?';
+      location.href='./purchase.html'+sep+'zxj_user='+encodeURIComponent(JSON.stringify(s));
+    }
+  }
+}
+
+function clearAllPortalNotif(){
+  var s=getSession();
+  if(!s)return;
+  var name=s.name;
+  NOTIF_SOURCES.forEach(function(src){
+    try{
+      var raw=localStorage.getItem(src.key);
+      if(!raw)return;
+      var arr=JSON.parse(raw);
+      if(!Array.isArray(arr))return;
+      arr.forEach(function(n){if(n.to===name)n.read=true});
+      localStorage.setItem(src.key,JSON.stringify(arr));
+    }catch(e){}
+  });
+  try{
+    var shared=localStorage.getItem('zxj_notifications');
+    if(shared){
+      var sArr=JSON.parse(shared);
+      if(Array.isArray(sArr)){
+        sArr.forEach(function(n){if(n.to===name)n.read=true});
+        localStorage.setItem('zxj_notifications',JSON.stringify(sArr));
+      }
+    }
+  }catch(e){}
+  refreshPortalBadge();
+  renderPortalNotifs();
+  toast('已全部标为已读','ok');
+}
+
+async function pollCloudNotifs(){
+  try{
+    var d=await sbGet('zxj_kv','select=data&id=eq.zxj_notifications');
+    if(d&&d.length>0&&d[0].data){
+      var cloudData=typeof d[0].data==='string'?JSON.parse(d[0].data):d[0].data;
+      if(Array.isArray(cloudData)){
+        // Merge cloud notifs into shared localStorage
+        var local=[];
+        try{local=JSON.parse(localStorage.getItem('zxj_notifications'))||[]}catch(e){}
+        var localIds=local.map(function(n){return n.id});
+        var newOnes=cloudData.filter(function(n){return localIds.indexOf(n.id)<0});
+        if(newOnes.length){
+          var merged=newOnes.concat(local).slice(0,200);
+          localStorage.setItem('zxj_notifications',JSON.stringify(merged));
+          refreshPortalBadge();
+        }
+      }
+    }
+  }catch(e){
+    // Supabase may be blocked, just use localStorage
+  }
+}
+
+function startNotifPolling(){
+  refreshPortalBadge();
+  if(_notifPollTimer)clearInterval(_notifPollTimer);
+  _notifPollTimer=setInterval(function(){
+    refreshPortalBadge();
+    pollCloudNotifs();
+  },15000);
+  // Initial cloud pull
+  pollCloudNotifs();
+}
+
 function showHome(){
   var s=getSession();
   if(!s){showLogin();return}
@@ -463,6 +700,7 @@ function showHome(){
   document.getElementById('screen-home').classList.add('active');
   renderTopbar(s);
   renderCards(s.role);
+  startNotifPolling();
 }
 function renderTopbar(s){
   document.getElementById('user-name').textContent=s.name;
@@ -486,9 +724,8 @@ function renderCards(role){
       {icon:'🏭',title:'CNC加工中心',desc:'铣削 / 钻孔 / 五轴 / 钻攻',url:'./cnc.html?v='+Date.now()+'',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'刀具 / 原材料 / 备品 / 成品',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
-            {icon:'🛒',title:'采购申请',desc:'刀具 / 备品 / 申请',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
+      {icon:'🛒',title:'采购申请',desc:'刀具 / 备品 / 审批 / 打印',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
       {icon:'🤝',title:'交班系统',desc:'交班记录 / 设备状态',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'},
-            {icon:'🛒',title:'采购申请',desc:'刀具 / 备品 / 审批 / 打印',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
       {icon:'🛠️',title:'后台管理',desc:'账号 / 权限 / 门户设置',action:'openAdminPanel()',bg:'linear-gradient(135deg,#374151,#6b7280)',permKey:'admin'}
     ],
     leader:[
@@ -800,7 +1037,7 @@ function applySysSettings(){
   var cn=SYS_SETTINGS.company_name||SYS_DEFAULTS.company_name;
   var el1=document.getElementById('login-title');if(el1)el1.textContent=pn;
   var el2=document.getElementById('login-company');if(el2)el2.textContent=cn;
-  var el3=document.getElementById('footer-title');if(el3)el3.textContent=pn+' v2.0';
+  var el3=document.getElementById('footer-title');if(el3)el3.textContent=pn+' v2.1';
   document.title=pn;
 }
 function openSysSettings(){
