@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>走芯机数据恢复</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0D1B2A;color:#E0E0E0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.card{background:#1B2838;border-radius:16px;padding:32px 24px;max-width:400px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+h1{font-size:22px;color:#D4A843;margin-bottom:8px}
+.sub{font-size:13px;color:#8899AA;margin-bottom:24px}
+.btn{display:inline-block;padding:14px 40px;border:none;border-radius:12px;font-size:17px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#D4A843,#B8912E);color:#0D1B2A;transition:transform .1s}
+.btn:active{transform:scale(.95)}
+.result{margin-top:20px;padding:16px;border-radius:10px;font-size:14px;text-align:left;display:none}
+.ok{background:rgba(76,175,80,.15);border:1px solid #4CAF50;color:#81C784}
+.fail{background:rgba(244,67,54,.15);border:1px solid #F44336;color:#EF9A9A}
+.detail{margin-top:12px;font-size:12px;color:#8899AA;line-height:1.8}
+.detail b{color:#D4A843}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🫚 走芯机数据恢复</h1>
+<p class="sub">从云端备份恢复到本机浏览器</p>
+<button class="btn" id="restoreBtn" onclick="doRestore()">一键恢复</button>
+<div class="result" id="result"></div>
+</div>
+<script>
+// 云端备份数据（7月18日最后同步）
+var CLOUD_DATA = {
+  "products": [{"tuhao":"7.744.107165","name":"插针","customer":"瑞可达","brand":"H62","dia":5,"len":35.2,"barLen":2500,"mode":"导套模式","density":8.5,"time":60,"toolCost":0,"tools":[]},{"tuhao":"8.008.185001","name":"基座","customer":"瑞可达","brand":"T2","dia":16.7,"len":21,"barLen":3000,"mode":"夹头模式","density":8.96,"time":105,"toolCost":0,"tools":[]},{"tuhao":"7.746.180337","name":"插针","customer":"瑞可达","brand":"T2","dia":21.5,"len":102,"barLen":3000,"mode":"夹头模式","density":8.96,"time":680,"toolCost":0,"tools":[]},{"tuhao":"7.746.180185","name":"插针","customer":"瑞可达","brand":"T2","dia":13.2,"len":48,"barLen":3000,"mode":"夹头模式","density":8.96,"time":200,"toolCost":0,"tools":[]},{"tuhao":"7.744.180033","name":"插针","customer":"瑞可达","brand":"H62","dia":10.1,"len":30,"barLen":2500,"mode":"夹头模式","density":8.5,"time":80,"toolCost":0,"tools":[]},{"tuhao":"Core","name":"铁芯","customer":"近藤","brand":"12L14","dia":14.2,"len":17.2,"barLen":2500,"mode":"夹头模式","density":7.85,"time":29,"toolCost":0,"tools":[]},{"tuhao":"838358B","name":"插针","customer":"象山","brand":"H59","dia":3,"len":12,"barLen":2500,"mode":"导套模式","density":8.4,"time":15,"toolCost":0,"tools":[]},{"tuhao":"7.746.185022","name":"特斯拉","customer":"瑞可达","brand":"陂铜","dia":9.1,"len":45,"barLen":2500,"mode":"夹头模式","density":8.8,"time":365,"toolCost":0,"tools":[]},{"tuhao":"7.746.180354","name":"特斯拉","customer":"瑞可达","brand":"陂铜","dia":9.1,"len":47,"barLen":2500,"mode":"夹头模式","density":8.8,"time":380,"toolCost":0,"tools":[]},{"tuhao":"core","name":"小铁芯","customer":"近藤","brand":"1215","dia":10,"len":19,"barLen":2500,"mode":"夹头模式","density":7.85,"time":60,"toolCost":0,"tools":[]}],
+  "machines": [{"id":"A01","model":""},{"id":"A02","model":""},{"id":"A03","model":""},{"id":"A04","model":""},{"id":"A05","model":""},{"id":"A06","model":""},{"id":"A07","model":"Star SB-20R"},{"id":"A08","model":"Star SB-20R"},{"id":"A09","model":"Star SB-20R"},{"id":"A10","model":"Star SB-20R"},{"id":"A11","model":"Star SB-20R"},{"id":"A12","model":"Citizen A20"},{"id":"A13","model":"Citizen A20"},{"id":"A14","model":"Citizen A20"},{"id":"A15","model":"Citizen A20"},{"id":"B01","model":"Star SR-10J"},{"id":"B02","model":"Star SB-20R"},{"id":"B03","model":"Star SB-20R"},{"id":"B04","model":"Star SB-20R"},{"id":"B05","model":"Star SB-20R"},{"id":"B06","model":"Star SB-20R"},{"id":"B07","model":"Star SB-20R"},{"id":"B08","model":"Star SB-20R"},{"id":"B09","model":"Citizen A20"}],
+  "daily": [{"date":"2026-07-13","tuhao":"8.008.185001","time":0,"qty":0,"orderId":"","device":"A08","operator":"","remark":"结束派工 共1天×754件≈398件","ts":1783916575199}],
+  "orders": [],
+  "scrapRecords": [],
+  "maintRecords": [],
+  "qualityRecords": [],
+  "toolInventory": [],
+  "platingData": {},
+  "machinesVer": "2"
+};
+
+function doRestore(){
+  var btn = document.getElementById('restoreBtn');
+  var res = document.getElementById('result');
+  btn.textContent = '恢复中...';
+  btn.disabled = true;
+  try {
+    var count = 0;
+    var details = [];
+    
+    // 写入产品数据
+    if(CLOUD_DATA.products && CLOUD_DATA.products.length > 0){
+      localStorage.setItem('products', JSON.stringify(CLOUD_DATA.products));
+      count += CLOUD_DATA.products.length;
+      details.push('产品: <b>' + CLOUD_DATA.products.length + '条</b>');
+    }
+    
+    // 写入机台数据
+    if(CLOUD_DATA.machines && CLOUD_DATA.machines.length > 0){
+      var m = CLOUD_DATA.machines.map(function(item){return {id:item.id,model:item.model,status:''}});
+      localStorage.setItem('machines', JSON.stringify(m));
+      count += m.length;
+      details.push('机台: <b>' + m.length + '台</b>');
+    }
+    
+    // 写入日产量
+    if(CLOUD_DATA.daily && CLOUD_DATA.daily.length > 0){
+      localStorage.setItem('daily', JSON.stringify(CLOUD_DATA.daily));
+      count += CLOUD_DATA.daily.length;
+      details.push('日产量: <b>' + CLOUD_DATA.daily.length + '条</b>');
+    }
+    
+    // 写入空数据（覆盖可能的undefined）
+    localStorage.setItem('orders', JSON.stringify(CLOUD_DATA.orders || []));
+    localStorage.setItem('scrapRecords', JSON.stringify(CLOUD_DATA.scrapRecords || []));
+    localStorage.setItem('maintRecords', JSON.stringify(CLOUD_DATA.maintRecords || []));
+    localStorage.setItem('qualityRecords', JSON.stringify(CLOUD_DATA.qualityRecords || []));
+    localStorage.setItem('toolInventory', JSON.stringify(CLOUD_DATA.toolInventory || []));
+    localStorage.setItem('platingData', JSON.stringify(CLOUD_DATA.platingData || {}));
+    localStorage.setItem('machinesVer', CLOUD_DATA.machinesVer || '2');
+    
+    res.className = 'result ok';
+    res.style.display = 'block';
+    res.innerHTML = '✅ 恢复成功！共写入 <b>' + count + '</b> 条数据<div class="detail">' + details.join('<br>') + '<br><br>👉 <b>点击下面按钮返回走芯机系统</b></div>';
+    btn.textContent = '返回走芯机系统';
+    btn.onclick = function(){ window.location.href = './zouxinji.html?v=' + Date.now(); };
+  } catch(e) {
+    res.className = 'result fail';
+    res.style.display = 'block';
+    res.innerHTML = '❌ 恢复失败: ' + e.message;
+    btn.textContent = '重试';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
