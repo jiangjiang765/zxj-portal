@@ -525,7 +525,7 @@ select.prog-input{appearance:none;-webkit-appearance:none;background:#0D1B2A url
 
 
 /* ===== 登录页 ===== */
-.login-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;min-height:100vh;z-index:9999;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px calc(24px + env(safe-area-inset-right,0px)) 24px calc(24px + env(safe-area-inset-left,0px));box-sizing:border-box;text-align:center}
+.login-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;min-height:100vh;z-index:9999;background:var(--bg-deep);display:none;align-items:center;justify-content:center;flex-direction:column;padding:24px calc(24px + env(safe-area-inset-right,0px)) 24px calc(24px + env(safe-area-inset-left,0px));box-sizing:border-box;text-align:center}
 .login-overlay.hidden{display:none}
 html.portal-auto .login-overlay{display:none!important}
 .login-logo{font-size:48px;margin-bottom:12px;line-height:1}
@@ -581,9 +581,13 @@ async function loadDispatches(){try{_dispatches=await vsGet('dispatches','select
 async function loadToolIssues(){try{_toolIssues=await vsGet('inventory_log','select=*&log_type=in.("领用出库","报废出库")&order=created_at.desc&limit=1000')}catch(e){_toolIssues=[]}}
 async function loadShiftRecords(){try{_shiftRecords=await vsGet('shift_records','select=*&order=created_at.desc&limit=500')}catch(e){_shiftRecords=[]}}
 function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=machineNo.toUpperCase().replace(/[^A-Z0-9]/g,'');var did=deviceId.toUpperCase();if(mn===did)return true;if(mn.length>2&&did.length>1&&mn.indexOf(did)>=0)return true;var mnSuffix=mn.replace(/^[A-Z]*/,'');var didSuffix=did.replace(/^[A-Z]*/,'');if(mnSuffix&&didSuffix&&mnSuffix===didSuffix)return true;return false}
-/* Anti-flash: hide login overlay immediately if Portal session exists */try{if(localStorage.getItem('zxj_session')){document.documentElement.classList.add('portal-auto')}}catch(e){}</script>
+/* Anti-flash: hide login overlay immediately if Portal session exists */try{
+  if(localStorage.getItem('zxj_session')){document.documentElement.classList.add('portal-auto')}
+  // 立即隐藏login-overlay，不等initAuth
+  var _lo=document.getElementById('login-overlay');if(_lo)_lo.classList.add('hidden');
+}catch(e){}</script>
 <!-- 登录页 -->
-<div class="login-overlay" id="login-overlay">
+<div class="login-overlay hidden" id="login-overlay">
   <div class="login-logo">&#9881;</div>
   <div class="login-title">走芯机管理系统</div>
   <div class="login-subtitle">CNC Swiss-Type Management</div>
@@ -7970,7 +7974,9 @@ function activateAuth() {
 }
 
 function showLoginOverlay() {
-  document.getElementById('login-overlay').classList.remove('hidden');
+  var lo=document.getElementById('login-overlay');
+  lo.classList.remove('hidden');
+  lo.style.display='flex';
   var adminPwd = localStorage.getItem('auth_admin_pwd');
   var device = getAuthData('auth_device', null);
   if (!adminPwd) {
@@ -7987,7 +7993,9 @@ function showLoginOverlay() {
 }
 
 function hideLoginOverlay() {
-  document.getElementById('login-overlay').classList.add('hidden');
+  var lo=document.getElementById('login-overlay');
+  lo.classList.add('hidden');
+  lo.style.display='none';
 }
 
 function showUserInfo() {
@@ -7998,7 +8006,9 @@ function showUserInfo() {
 }
 
 function openAdminPanel() {
-  document.getElementById('login-overlay').classList.remove('hidden');
+  var lo=document.getElementById('login-overlay');
+  lo.classList.remove('hidden');
+  lo.style.display='flex';
   showPage('auth-admin-panel');
   refreshAdminPanel();
   loadAdminConfig();
