@@ -743,23 +743,24 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
     </div>
 
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">💰 报价计算说明</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">💰 报价计算说明（CNC二元模型）</div>
       <div style="font-size:13px;color:var(--text-dim);line-height:1.8">
-        <div style="margin-bottom:4px"><b style="color:var(--text)">材料费</b> = 重量 × 材料单价</div>
-        <div style="margin-bottom:4px"><b style="color:var(--text)">加工费</b> = 加工时间 ÷ 3600 × 费率</div>
-        <div style="margin-bottom:4px"><b style="color:var(--text)">刀具分摊</b> = 刀具单价 ÷ 寿命 × 数量</div>
-        <div style="margin-bottom:4px"><b style="color:var(--text)">含税价</b> = (成本 + 利润) × 1.13</div>
-        <div style="margin-top:6px;color:var(--text-dark);font-size:12px">支持有/无导套、尾料损耗、双班22h/天计算</div>
+        <div style="margin-bottom:4px"><b style="color:var(--text)">变动成本/件</b> = 材料费 + 加工费 + 刀具费</div>
+        <div style="margin-bottom:4px"><b style="color:var(--text)">固定成本分摊/件</b> = (编程费+夹具费+装夹换型费+检测费+外协费+CAM费) ÷ 订单数量</div>
+        <div style="margin-bottom:4px"><b style="color:var(--text)">材料费</b> = 毛坯重量(kg) × 材料单价 × (1+损耗率%)</div>
+        <div style="margin-bottom:4px"><b style="color:var(--text)">加工费</b> = 加工时间(秒) ÷ 3600 × 设备费率</div>
+        <div style="margin-bottom:4px"><b style="color:var(--text)">含税单价</b> = 单件成本 × (1+利润率%) × (1+税率%)</div>
+        <div style="margin-top:6px;color:var(--text-dark);font-size:12px">CNC独有：编程费/夹具费/装夹换型费/检测费/外协费按订单数量分摊</div>
       </div>
     </div>
 
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">🔩 废渣计算</div>
       <div style="font-size:13px;color:var(--text-dim);line-height:1.8">
-        <div style="margin-bottom:4px">按图号统计日废渣量，按材料种类汇总金额</div>
-        <div style="margin-bottom:4px">日废渣 = 单件废渣 × 日产量 ÷ 1000 (kg)</div>
-        <div style="margin-bottom:4px">总废渣 = 日废渣 × 实际运行天数</div>
-        <div>停机待料期间自动扣除，不重复计算</div>
+        <div style="margin-bottom:4px">毛坯重量 = 毛坯长×宽×高 × 密度</div>
+        <div style="margin-bottom:4px">废料重量 = 毛坯重量 - 成品重量</div>
+        <div style="margin-bottom:4px">材料利用率 = 成品重量 ÷ 毛坯重量 × 100%</div>
+        <div>CNC材料利用率通常40%-75%</div>
       </div>
     </div>
 
@@ -1396,32 +1397,100 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 <div class="page" id="page-price">
   <button class="page-back" onclick="navTo('quote')">← 返回</button>
   <div class="card">
-    <div class="card-title">💰 成本核算与报价</div>
+    <div class="card-title">💰 CNC产品报价（固定+变动模型）</div>
     <div class="form-row tuhao-combo"><span class="form-label">图号</span><input type="text" class="form-input" id="pr-tuhao" placeholder="输入或选择图号" autocomplete="off"><div class="tuhao-dropdown" id="pr-tuhao-dd"></div></div>
     <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">选择已有图号自动填充产品数据，也可手动输入</div>
   </div>
+
   <div class="card">
-    <div class="card-title">📐 产品参数</div>
-    <div class="form-row"><span class="form-label">材料牌号</span><input type="text" class="form-input" id="pr-brand" placeholder="如 12L14"></div>
-    <div class="form-row"><span class="form-label">密度(g/cm³)</span><input type="number" class="form-input" id="pr-density" value="7.85" step="0.01" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">棒料直径(mm)</span><input type="number" class="form-input" id="pr-dia" placeholder="如 12" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">棒料长度(mm)</span><input type="number" class="form-input" id="pr-bar" value="3000" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">单件长度(mm)</span><input type="number" class="form-input" id="pr-len" placeholder="含切断刀宽" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">加工模式</span><select class="form-input" id="pr-mode" onchange="calcPrice()"><option value="">无</option><option value="夹头模式">夹头模式(150mm)</option><option value="导套模式">导套模式(200mm)</option></select></div>
-    <div class="form-row"><span class="form-label">单件时间(秒)</span><input type="number" class="form-input" id="pr-time" placeholder="如 15" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">订单数量</span><input type="number" class="form-input" id="pr-qty" placeholder="选填, 算总价用" oninput="calcPrice()"></div>
+    <div class="card-title">⚙️ 设备类型</div>
+    <div class="form-row"><span class="form-label">设备类型</span><select class="form-input" id="pr-equipType" onchange="onEquipTypeChange()">
+      <option value="3axis">三轴立加(100元/h)</option>
+      <option value="4axis">四轴CNC(150元/h)</option>
+      <option value="5axis">五轴CNC(250元/h)</option>
+      <option value="drill">钻攻中心(90元/h)</option>
+      <option value="hori">卧式加工中心(180元/h)</option>
+      <option value="lathe">数控车床(120元/h)</option>
+      <option value="swiss">走芯机(160元/h)</option>
+      <option value="millturn">车铣复合(180元/h)</option>
+      <option value="custom">自定义</option>
+    </select></div>
+    <div class="form-row"><span class="form-label">设备费率(元/h)</span><input type="number" class="form-input" id="pr-machRate" value="100" oninput="calcPrice()"></div>
   </div>
+
   <div class="card">
-    <div class="card-title">💲 费用参数</div>
-    <div class="form-row"><span class="form-label">材料单价(元/kg)</span><input type="number" class="form-input" id="pr-matPrice" placeholder="如 6.5" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">加工费率(元/h)</span><input type="number" class="form-input" id="pr-machRate" placeholder="如 100" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">刀具费(元/件)</span><input type="number" class="form-input" id="pr-toolCost" placeholder="选图号自动填或手动输入" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">表面处理(元/件)</span><input type="number" class="form-input" id="pr-surfaceCost" placeholder="选填" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">其他费用(元/件)</span><input type="number" class="form-input" id="pr-otherCost" placeholder="选填" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">废渣单价(元/kg)</span><input type="number" class="form-input" id="pr-scrapPrice" placeholder="如 3" oninput="calcPrice()"></div>
-    <div class="form-row"><span class="form-label">利润率(%)</span><input type="number" class="form-input" id="pr-profit" value="20" oninput="calcPrice()"></div>
+    <div class="card-title">📐 材料参数</div>
+    <div class="form-row"><span class="form-label">材料牌号</span><input type="text" class="form-input" id="pr-brand" placeholder="如 AL6061"></div>
+    <div class="form-row"><span class="form-label">密度(g/cm³)</span><input type="number" class="form-input" id="pr-density" value="7.85" step="0.01" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">毛坯长(mm)</span><input type="number" class="form-input" id="pr-blankL" placeholder="毛坯长度" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">毛坯宽(mm)</span><input type="number" class="form-input" id="pr-blankW" placeholder="毛坯宽度" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">毛坯高(mm)</span><input type="number" class="form-input" id="pr-blankH" placeholder="毛坯高度" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">成品重量(g)</span><input type="number" class="form-input" id="pr-netWt" placeholder="单件成品重量" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">损耗率(%)</span><input type="number" class="form-input" id="pr-lossRate" value="10" step="1" min="5" max="25" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">装夹次数</span><select class="form-input" id="pr-setupCount" onchange="calcPrice()">
+      <option value="1">1次</option>
+      <option value="2">2次</option>
+      <option value="3">3次</option>
+      <option value="4">4次</option>
+      <option value="5">5次</option>
+    </select></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔨 固定成本</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">CNC独有费用，按订单数量分摊</div>
+    <div class="form-row"><span class="form-label">编程费(元)</span><select class="form-input" id="pr-progFeeType" onchange="onProgFeeTypeChange()" style="flex:1">
+      <option value="simple">简单(100元)</option>
+      <option value="medium">中等(300元)</option>
+      <option value="complex">复杂(500元)</option>
+      <option value="custom">自定义</option>
+    </select></div>
+    <div class="form-row" id="pr-progFeeRow" style="display:none"><span class="form-label">自定义编程费</span><input type="number" class="form-input" id="pr-progFee" value="100" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">夹具/工装费(元)</span><select class="form-input" id="pr-fixtureType" onchange="onFixtureTypeChange()" style="flex:1">
+      <option value="vise">通用vise(0元)</option>
+      <option value="softjaw">软爪(200元)</option>
+      <option value="custom">专用夹具(1000元)</option>
+      <option value="custom_input">自定义</option>
+    </select></div>
+    <div class="form-row" id="pr-fixtureRow" style="display:none"><span class="form-label">自定义夹具费</span><input type="number" class="form-input" id="pr-fixtureFee" value="0" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">装夹换型费</span><div style="display:flex;align-items:center;gap:4px;flex:1"><input type="number" class="form-input" id="pr-setupTime" value="30" style="flex:1" oninput="calcPrice()"><span style="color:var(--text-dim);font-size:12px;white-space:nowrap">分钟 × 费率</span></div></div>
+    <div class="form-row"><span class="form-label">首件检测费(元)</span><select class="form-input" id="pr-inspectType" onchange="onInspectTypeChange()" style="flex:1">
+      <option value="caliper">卡尺(0元)</option>
+      <option value="cmm">三坐标(500元)</option>
+      <option value="custom">自定义</option>
+    </select></div>
+    <div class="form-row" id="pr-inspectRow" style="display:none"><span class="form-label">自定义检测费</span><input type="number" class="form-input" id="pr-inspectFee" value="0" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">表面处理外协(元/件)</span><select class="form-input" id="pr-surfaceType" onchange="onSurfaceTypeChange()" style="flex:1">
+      <option value="none">无</option>
+      <option value="sandblast">喷砂(10元)</option>
+      <option value="anode">阳极氧化(30元)</option>
+      <option value="black">发黑(3元)</option>
+      <option value="zinc">镀锌(4元)</option>
+      <option value="nickel">镀镍(15元)</option>
+      <option value="chrome">镀铬(45元)</option>
+      <option value="pvd">PVD镀膜(55元)</option>
+      <option value="polish">镜面抛光(40元)</option>
+      <option value="custom">自定义</option>
+    </select></div>
+    <div class="form-row" id="pr-surfaceRow" style="display:none"><span class="form-label">自定义外协费</span><input type="number" class="form-input" id="pr-surfaceCost" value="0" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">CAM编程工时(h)</span><input type="number" class="form-input" id="pr-camHours" value="1" step="0.5" min="0" max="30" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">编程费率(元/h)</span><input type="number" class="form-input" id="pr-progRate" value="100" oninput="calcPrice()"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💲 变动成本</div>
+    <div class="form-row"><span class="form-label">材料单价(元/kg)</span><input type="number" class="form-input" id="pr-matPrice" placeholder="如 25" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">加工时间(秒)</span><input type="number" class="form-input" id="pr-time" placeholder="如 300" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">刀具费(元/件)</span><input type="number" class="form-input" id="pr-toolCost" placeholder="选填" oninput="calcPrice()"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 报价参数</div>
+    <div class="form-row"><span class="form-label">订单数量</span><input type="number" class="form-input" id="pr-qty" value="1" min="1" oninput="calcPrice()"></div>
+    <div class="form-row"><span class="form-label">利润率(%)</span><input type="number" class="form-input" id="pr-profit" value="15" oninput="calcPrice()"></div>
     <div class="form-row"><span class="form-label">税率(%)</span><input type="number" class="form-input" id="pr-tax" value="13" oninput="calcPrice()"></div>
   </div>
+
   <div id="pr-result"></div>
 </div>
 
@@ -1429,33 +1498,61 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
   <button class="page-back" onclick="navTo('quote')">← 返回</button>
   <div class="card">
     <div class="card-title">关联图号</div>
-    <div class="form-row"><span class="form-label">图号</span><select class="form-input" id="sc-tuhao" onchange="onScTuhaoChange()"><option value="">选择图号或手动输入</option></select></div>
+    <div class="form-row"><span class="form-label">图号</span><select class="form-input" id="sc-tuhao" onchange="onScTuhaoChangeCnc()"><option value="">选择图号或手动输入</option></select></div>
     <div class="form-row" id="sc-tuhao-custom-row"><span class="form-label">自定义图号</span><input type="text" class="form-input" id="sc-tuhao-custom" placeholder="手动输入图号"></div>
-    <div class="prog-btn-row"><button class="prog-btn-calc" style="flex:1" onclick="saveScrapRecord()">💾 保存记录</button></div>
+    <div class="prog-btn-row"><button class="prog-btn-calc" style="flex:1" onclick="saveScrapRecordCnc()">💾 保存记录</button></div>
   </div>
+
   <div class="card">
-    <div class="card-title">棒料信息</div>
-    <div class="form-row"><span class="form-label">棒料外径(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-barDia" placeholder="必填" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">棒料长度(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-barLen" placeholder="整根棒料长度" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">单件消耗长度(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-pieceLen" placeholder="工件长度+切断刀宽" value="0" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">加工模式</span><select class="form-input" id="sc-mode" onchange="calcScrapNew()"><option value="">无(0)</option><option value="夹头模式">夹头模式(150mm)</option><option value="导套模式">导套模式(200mm)</option></select></div>
-    <div class="form-row"><span class="form-label">材料类型</span><select class="form-input" id="sc-mattype" onchange="onScMatTypeChange()"><option value="">选择材料类型</option><option value="7.85">碳钢/合金钢 (7.85)</option><option value="7.93">不锈钢304 (7.93)</option><option value="7.98">不锈钢316 (7.98)</option><option value="8.50">黄铜H62 (8.50)</option><option value="8.40">黄铜H59 (8.40)</option><option value="8.96">紫铜T2 (8.96)</option><option value="8.70">白铜BZn15-20 (8.70)</option><option value="8.80">锡青铜QSn6.5 (8.80)</option><option value="2.70">铝合金6061 (2.70)</option><option value="2.81">铝合金7075 (2.81)</option><option value="4.51">钛合金TC4 (4.51)</option><option value="2.74">压铸铝ADC12 (2.74)</option><option value="1.30">PEEK (1.30)</option><option value="2.20">PTFE/特氟龙 (2.20)</option><option value="1.41">POM/赛钢 (1.41)</option><option value="__custom">其他(手动输入)</option></select></div>
-    <div class="form-row" id="sc-density-row" style="display:none"><span class="form-label">密度(g/cm³)</span><input type="number" inputmode="decimal" class="form-input" id="sc-density" value="7.85" step="0.01" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">订单数量</span><input type="number" inputmode="decimal" class="form-input" id="sc-orderQty" placeholder="选填" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">废渣材质</span><select class="form-input" id="sc-scrapMat" onchange="onScrapMatChange()"><option value="">选择废渣材质</option><option value="iron">铁屑</option><option value="steel">钢屑</option><option value="stainless">不锈钢屑</option><option value="copper">铜屑</option><option value="brass">黄铜屑</option><option value="aluminum">铝屑</option><option value="__custom">其他</option></select></div>
-    <div class="form-row"><span class="form-label">废渣单价(元/kg)</span><input type="number" inputmode="decimal" class="form-input" id="sc-scrapPrice" placeholder="选填" oninput="calcScrapNew()"></div>
-    <div class="form-row"><span class="form-label">单件时间(秒)</span><input type="number" inputmode="decimal" class="form-input" id="sc-pieceTime" placeholder="选填, 用于算日废屑" oninput="calcScrapNew()"></div>
+    <div class="card-title">毛坯参数</div>
+    <div class="form-row"><span class="form-label">毛坯长(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-blankL" placeholder="必填" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">毛坯宽(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-blankW" placeholder="必填" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">毛坯高(mm)</span><input type="number" inputmode="decimal" class="form-input" id="sc-blankH" placeholder="必填" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">材料类型</span><select class="form-input" id="sc-mattype" onchange="onScMatTypeChangeCnc()">
+      <option value="">选择材料类型</option>
+      <option value="7.85">碳钢/合金钢 (7.85)</option>
+      <option value="7.93">不锈钢304 (7.93)</option>
+      <option value="7.98">不锈钢316 (7.98)</option>
+      <option value="8.50">黄铜H62 (8.50)</option>
+      <option value="8.40">黄铜H59 (8.40)</option>
+      <option value="8.96">紫铜T2 (8.96)</option>
+      <option value="8.70">白铜BZn15-20 (8.70)</option>
+      <option value="8.80">锡青铜QSn6.5 (8.80)</option>
+      <option value="2.70">铝合金6061 (2.70)</option>
+      <option value="2.81">铝合金7075 (2.81)</option>
+      <option value="4.51">钛合金TC4 (4.51)</option>
+      <option value="2.74">压铸铝ADC12 (2.74)</option>
+      <option value="1.30">PEEK (1.30)</option>
+      <option value="2.20">PTFE/特氟龙 (2.20)</option>
+      <option value="1.41">POM/赛钢 (1.41)</option>
+      <option value="__custom">其他(手动输入)</option>
+    </select></div>
+    <div class="form-row" id="sc-density-row" style="display:none"><span class="form-label">密度(g/cm³)</span><input type="number" inputmode="decimal" class="form-input" id="sc-density" value="7.85" step="0.01" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">成品重量(g)</span><input type="number" inputmode="decimal" class="form-input" id="sc-netWt" placeholder="单件成品重量" oninput="calcScrapCnc()"></div>
   </div>
+
   <div class="card">
-    <div class="card-title">产品截面（分段计算）</div>
-    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;padding:0 4px">💡 实心段=纯加体积；铣削段=外径体积-铣削量(已含外径别重复加)；内孔=减体积</div>
-    <div id="sc-segments"></div>
-    <button class="btn btn-blue" onclick="addScrapSegment()" style="margin-top:6px;font-size:13px;padding:10px">+ 添加一段</button>
+    <div class="card-title">订单与回收</div>
+    <div class="form-row"><span class="form-label">订单数量</span><input type="number" inputmode="decimal" class="form-input" id="sc-orderQty" placeholder="选填" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">废渣材质</span><select class="form-input" id="sc-scrapMat" onchange="onScrapMatChange()">
+      <option value="">选择废渣材质</option>
+      <option value="iron">铁屑</option>
+      <option value="steel">钢屑</option>
+      <option value="stainless">不锈钢屑</option>
+      <option value="copper">铜屑</option>
+      <option value="brass">黄铜屑</option>
+      <option value="aluminum">铝屑</option>
+      <option value="__custom">其他</option>
+    </select></div>
+    <div class="form-row"><span class="form-label">废渣单价(元/kg)</span><input type="number" inputmode="decimal" class="form-input" id="sc-scrapPrice" placeholder="选填" oninput="calcScrapCnc()"></div>
+    <div class="form-row"><span class="form-label">单件时间(秒)</span><input type="number" inputmode="decimal" class="form-input" id="sc-pieceTime" placeholder="选填, 用于算日废屑" oninput="calcScrapCnc()"></div>
   </div>
+
   <div class="card" id="sc-result-card" style="display:none">
     <div class="card-title">📊 计算结果</div>
     <div id="sc-results"></div>
   </div>
+
   <div class="card">
     <div class="card-title">📋 保存的记录</div>
     <div id="sc-records"></div>
@@ -1575,6 +1672,29 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 </div>
 
 <!-- ===== 报价Tab首页 ===== -->
+<div class="page" id="page-batch">
+  <button class="page-back" onclick="navTo('quote')">← 返回</button>
+  <div class="card">
+    <div class="card-title">📊 批量阶梯分析</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">快速查看不同订单量下的单价变化，展示固定成本摊薄效应</div>
+    <div class="form-row"><span class="form-label">设备费率(元/h)</span><input type="number" class="form-input" id="ba-rate" value="100" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">材料单价(元/kg)</span><input type="number" class="form-input" id="ba-matPrice" placeholder="如 25" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">毛坯重量(kg)</span><input type="number" class="form-input" id="ba-blankWt" placeholder="如 0.5" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">损耗率(%)</span><input type="number" class="form-input" id="ba-lossRate" value="10" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">加工时间(秒)</span><input type="number" class="form-input" id="ba-time" placeholder="如 300" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">刀具费(元/件)</span><input type="number" class="form-input" id="ba-toolCost" value="0" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">编程费(元)</span><input type="number" class="form-input" id="ba-progFee" value="300" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">夹具费(元)</span><input type="number" class="form-input" id="ba-fixtureFee" value="200" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">装夹换型费(元)</span><input type="number" class="form-input" id="ba-setupFee" value="50" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">检测费(元)</span><input type="number" class="form-input" id="ba-inspectFee" value="0" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">外协费(元)</span><input type="number" class="form-input" id="ba-surfaceFee" value="0" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">CAM编程费(元)</span><input type="number" class="form-input" id="ba-camFee" value="100" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">利润率(%)</span><input type="number" class="form-input" id="ba-profit" value="15" oninput="calcBatch()"></div>
+    <div class="form-row"><span class="form-label">税率(%)</span><input type="number" class="form-input" id="ba-tax" value="13" oninput="calcBatch()"></div>
+  </div>
+  <div id="ba-result"></div>
+</div>
+
 <div class="page" id="page-quote">
   <button class="page-back" onclick="showNav()">← 返回</button>
   <div style="padding:0 0 8px;font-size:20px;font-weight:700;color:var(--gold)">💰 报价中心</div>
@@ -1582,22 +1702,17 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
     <div class="home-card" style="background:linear-gradient(135deg,#8a6d0b,#b87308)" onclick="conNav('price')">
       <div class="hc-icon">💰</div>
       <div class="hc-name">产品报价</div>
-      <div class="hc-desc">成本核算与报价</div>
+      <div class="hc-desc">固定+变动二元报价</div>
     </div>
     <div class="home-card" style="background:linear-gradient(135deg,#3a5a3a,#27ae60)" onclick="conNav('scrap')">
       <div class="hc-icon">♻️</div>
       <div class="hc-name">废渣计算</div>
-      <div class="hc-desc">废料回收价值估算</div>
+      <div class="hc-desc">毛坯-成品=废料</div>
     </div>
     <div class="home-card" style="background:linear-gradient(135deg,#1a4a6a,#2980b9)" onclick="conNav('time')">
       <div class="hc-icon">⏱</div>
       <div class="hc-name">工时计算</div>
       <div class="hc-desc">加工工时与产能</div>
-    </div>
-    <div class="home-card" style="background:linear-gradient(135deg,#4a3a6a,#8e44ad)" onclick="conNav('material')">
-      <div class="hc-icon">🧮</div>
-      <div class="hc-name">材料计算</div>
-      <div class="hc-desc">材料用量与成本</div>
     </div>
     <div class="home-card" style="background:linear-gradient(135deg,#0e5a5a,#00b894)" onclick="conNav('surface')">
       <div class="hc-icon">📏</div>
@@ -1609,7 +1724,12 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
       <div class="hc-name">电镀计算</div>
       <div class="hc-desc">电镀成本报价</div>
     </div>
-    <div class="home-card" style="background:linear-gradient(135deg,#4a1a6b,#7c3aed)" onclick="aiQuote()">
+    <div class="home-card" style="background:linear-gradient(135deg,#4a1a6b,#7c3aed)" onclick="conNav('batch')">
+      <div class="hc-icon">📊</div>
+      <div class="hc-name">批量分析</div>
+      <div class="hc-desc">阶梯价与摊薄效应</div>
+    </div>
+    <div class="home-card" style="background:linear-gradient(135deg,#6a1a4a,#c0392b)" onclick="aiQuote()">
       <div class="hc-icon">🤖</div>
       <div class="hc-name">AI报价</div>
       <div class="hc-desc">AI智能建议报价</div>
@@ -5070,14 +5190,16 @@ function conNav(pg){
   document.querySelector('.header').style.display='none';
   if(pg==='machines'){renderMachinesPage();refreshDeviceSelect();}
   if(pg==='query'){document.getElementById('q-tuhao').focus();}
+  if(pg==='price'){initPricePage();}
   if(pg==='stats'){setStatsRange('month');}
   if(pg==='quality'){document.getElementById('ql-date').value=new Date().toISOString().slice(0,10);queryQuality();}
   if(pg==='toolinv'){renderToolInventory();}
   if(pg==='stats'){setStatsRange('month');}
   if(pg==='order'){location.href='./production_plan.html';return;}
   if(pg==='product'){refreshProductList();}
-  if(pg==='scrap'){refreshScrapTuhaoList();refreshScrapRecordList();}
+  if(pg==='scrap'){refreshScrapTuhaoListCnc();refreshScrapRecordListCnc();}
   if(pg==='programming'){initProgrammingPage();}
+  if(pg==='batch'){initBatchPage();}
   // viewer3d: O3DV引擎懒加载，不需要页面进入时初始化
 }
 function navTo(page){
@@ -5914,147 +6036,238 @@ const MAT_REF_PRICE={'12L14':5.5,'1215':5.5,'Y15':5.5,'SUM24L':6,'45#':5,'40Cr':
 function onPriceTuhaoChange(){
   const val=document.getElementById('pr-tuhao').value.trim();
   const prods=gd('cnc_products')||[];
-  // 精确匹配（忽略大小写）才自动填充，防止部分输入时误匹配
   const p=prods.find(x=>x.tuhao.trim().toLowerCase()===val.toLowerCase());
   if(p){
     document.getElementById('pr-brand').value=p.brand||'';
     document.getElementById('pr-density').value=p.density||7.85;
-    document.getElementById('pr-dia').value=p.dia||'';
-    document.getElementById('pr-len').value=p.len||'';
-    document.getElementById('pr-bar').value=p.barLen||3000;
-    document.getElementById('pr-mode').value=p.mode||'';
     document.getElementById('pr-time').value=p.time||'';
+    if(p.dia&&p.len){
+      // 从走芯机产品数据推算毛坯尺寸（圆柱→方坯近似）
+      const d=parseFloat(p.dia)||0;
+      const l=parseFloat(p.len)||0;
+      if(d>0)document.getElementById('pr-blankL').value=Math.ceil(d*1.3);
+      if(d>0)document.getElementById('pr-blankW').value=Math.ceil(d*1.3);
+      if(l>0)document.getElementById('pr-blankH').value=Math.ceil(l*1.2);
+    }
+    if(p.netWt)document.getElementById('pr-netWt').value=p.netWt;
     const matPriceEl=document.getElementById('pr-matPrice');
     const refPrice=MAT_REF_PRICE[p.brand];
     if(refPrice&&!matPriceEl.value)matPriceEl.value=refPrice;
     const toolCostEl=document.getElementById('pr-toolCost');
     if(p.toolCost&&!toolCostEl.value)toolCostEl.value=p.toolCost;
+    if(p.machRate)document.getElementById('pr-machRate').value=p.machRate;
     calcPrice();
   }else if(!val){
-    // 清空图号时重置产品参数
-    ['pr-brand','pr-dia','pr-len','pr-time','pr-qty','pr-matPrice','pr-machRate','pr-toolCost','pr-surfaceCost','pr-otherCost','pr-scrapPrice'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['pr-brand','pr-blankL','pr-blankW','pr-blankH','pr-netWt','pr-time','pr-matPrice','pr-toolCost'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('pr-density').value='7.85';
-    document.getElementById('pr-bar').value='3000';
-    document.getElementById('pr-mode').value='';
-    document.getElementById('pr-profit').value='20';
+    document.getElementById('pr-lossRate').value='10';
+    document.getElementById('pr-profit').value='15';
     document.getElementById('pr-tax').value='13';
     document.getElementById('pr-result').innerHTML='';
   }
-  // 用当前输入值过滤下拉列表
   showComboDD('pr-tuhao-dd','pr-tuhao',val);
 }
 
+function onEquipTypeChange(){
+  const rates={'3axis':100,'4axis':150,'5axis':250,'drill':90,'hori':180,'lathe':120,'swiss':160,'millturn':180,'custom':100};
+  const sel=document.getElementById('pr-equipType').value;
+  document.getElementById('pr-machRate').value=rates[sel]||100;
+  calcPrice();
+}
+function onProgFeeTypeChange(){
+  const v=document.getElementById('pr-progFeeType').value;
+  const row=document.getElementById('pr-progFeeRow');
+  const input=document.getElementById('pr-progFee');
+  if(v==='simple'){row.style.display='none';input.value=100;}
+  else if(v==='medium'){row.style.display='none';input.value=300;}
+  else if(v==='complex'){row.style.display='none';input.value=500;}
+  else{row.style.display='flex';}
+  calcPrice();
+}
+function onFixtureTypeChange(){
+  const v=document.getElementById('pr-fixtureType').value;
+  const row=document.getElementById('pr-fixtureRow');
+  const input=document.getElementById('pr-fixtureFee');
+  if(v==='vise'){row.style.display='none';input.value=0;}
+  else if(v==='softjaw'){row.style.display='none';input.value=200;}
+  else if(v==='custom'){row.style.display='none';input.value=1000;}
+  else{row.style.display='flex';}
+  calcPrice();
+}
+function onInspectTypeChange(){
+  const v=document.getElementById('pr-inspectType').value;
+  const row=document.getElementById('pr-inspectRow');
+  const input=document.getElementById('pr-inspectFee');
+  if(v==='caliper'){row.style.display='none';input.value=0;}
+  else if(v==='cmm'){row.style.display='none';input.value=500;}
+  else{row.style.display='flex';}
+  calcPrice();
+}
+function onSurfaceTypeChange(){
+  const v=document.getElementById('pr-surfaceType').value;
+  const row=document.getElementById('pr-surfaceRow');
+  const input=document.getElementById('pr-surfaceCost');
+  const prices={none:0,sandblast:10,anode:30,black:3,zinc:4,nickel:15,chrome:45,pvd:55,polish:40};
+  if(v==='custom'){row.style.display='flex';}
+  else{row.style.display='none';input.value=prices[v]||0;}
+  calcPrice();
+}
 function calcPrice(){
-  const dia=parseFloat(document.getElementById('pr-dia').value)||0;
-  const barLen=parseFloat(document.getElementById('pr-bar').value)||3000;
-  const pieceLen=parseFloat(document.getElementById('pr-len').value)||0;
-  const density=parseFloat(document.getElementById('pr-density').value)||7.85;
-  const mode=document.getElementById('pr-mode').value;
-  const time=parseFloat(document.getElementById('pr-time').value)||0;
-  const qty=parseFloat(document.getElementById('pr-qty').value)||0;
-  const matPrice=parseFloat(document.getElementById('pr-matPrice').value)||0;
+  // 读取设备费率
   const machRate=parseFloat(document.getElementById('pr-machRate').value)||0;
-  const toolCost=parseFloat(document.getElementById('pr-toolCost').value)||0;
+  // 材料参数
+  const density=parseFloat(document.getElementById('pr-density').value)||7.85;
+  const blankL=parseFloat(document.getElementById('pr-blankL').value)||0;
+  const blankW=parseFloat(document.getElementById('pr-blankW').value)||0;
+  const blankH=parseFloat(document.getElementById('pr-blankH').value)||0;
+  const netWt=parseFloat(document.getElementById('pr-netWt').value)||0;
+  const lossRate=parseFloat(document.getElementById('pr-lossRate').value)||10;
+  const setupCount=parseInt(document.getElementById('pr-setupCount').value)||1;
+  // 固定成本
+  const progFee=parseFloat(document.getElementById('pr-progFee').value)||0;
+  const fixtureFee=parseFloat(document.getElementById('pr-fixtureFee').value)||0;
+  const setupTime=parseFloat(document.getElementById('pr-setupTime').value)||30;
+  const inspectFee=parseFloat(document.getElementById('pr-inspectFee').value)||0;
   const surfaceCost=parseFloat(document.getElementById('pr-surfaceCost').value)||0;
-  const otherCost=parseFloat(document.getElementById('pr-otherCost').value)||0;
-  const scrapSellPriceInput=parseFloat(document.getElementById('pr-scrapPrice').value)||0;
-  const profitPct=parseFloat(document.getElementById('pr-profit').value)||0;
-  const taxPct=parseFloat(document.getElementById('pr-tax').value)||0;
+  const camHours=parseFloat(document.getElementById('pr-camHours').value)||0;
+  const progRate=parseFloat(document.getElementById('pr-progRate').value)||100;
+  // 变动成本
+  const matPrice=parseFloat(document.getElementById('pr-matPrice').value)||0;
+  const time=parseFloat(document.getElementById('pr-time').value)||0;
+  const toolCost=parseFloat(document.getElementById('pr-toolCost').value)||0;
+  // 报价参数
+  const qty=parseInt(document.getElementById('pr-qty').value)||1;
+  const profitPct=parseFloat(document.getElementById('pr-profit').value)||15;
+  const taxPct=parseFloat(document.getElementById('pr-tax').value)||13;
 
-  if(!dia||!pieceLen||!matPrice){
-    document.getElementById('pr-result').innerHTML='<div class="card"><div style="color:var(--text-dim);text-align:center;padding:20px">请填写产品参数和材料单价</div></div>';
+  // 基本校验
+  if(!blankL||!blankW||!blankH||!matPrice){
+    document.getElementById('pr-result').innerHTML='<div class="card"><div style="color:var(--text-dim);text-align:center;padding:20px">请填写毛坯尺寸和材料单价</div></div>';
     return;
   }
 
-  // 尝试从废渣记录获取截面数据，没有则用空数组
-  const tuhaoVal=document.getElementById('pr-tuhao').value.trim();
-  const sr=tuhaoVal?getScrapRec(tuhaoVal):null;
-  const segments=(sr&&sr.segments&&sr.segments.length>0)?sr.segments:[];
-  // 用calcScrapCore统一计算
-  const c=calcScrapCore(segments,dia,barLen,pieceLen,density,mode);
+  // === 计算毛坯重量 ===
+  // 毛坯体积 cm³ = L*W*H / 1000
+  const blankVolCm3=blankL*blankW*blankH/1000;
+  const blankWtG=blankVolCm3*density; // 毛坯重量 g
+  const blankWtKg=blankWtG/1000;
 
-  // 1. 材料费/件 = 单件毛坯重(g)/1000 × 材料单价
-  const matCostPerPiece=c.barPieceWt/1000*matPrice;
-  // 2. 加工费/件
+  // === 变动成本/件 ===
+  // 材料费 = 毛坯重量(kg) × 材料单价 × (1+损耗率%)
+  const matCostPerPiece=blankWtKg*matPrice*(1+lossRate/100);
+  // 加工费 = 加工时间(秒)/3600 × 设备费率
   const machCostPerPiece=time>0?time/3600*machRate:0;
-  // 3. 成本合计/件
-  const costPerPiece=matCostPerPiece+machCostPerPiece+toolCost+surfaceCost+otherCost;
-  // 4. 含利润单价
-  const priceBeforeTax=costPerPiece*(1+profitPct/100);
-  // 5. 含税单价
+  // 变动成本合计
+  const variableCostPerPiece=matCostPerPiece+machCostPerPiece+toolCost;
+
+  // === 固定成本合计 ===
+  const setupCostPerTime=setupTime/60*machRate; // 装夹换型费/次
+  const camCost=camHours*progRate; // CAM编程费
+  const totalFixedCost=progFee+fixtureFee+setupCostPerTime*setupCount+inspectFee+surfaceCost+camCost;
+  // 固定成本分摊/件
+  const fixedCostPerPiece=qty>0?totalFixedCost/qty:0;
+
+  // === 单件成本 ===
+  const unitCost=variableCostPerPiece+fixedCostPerPiece;
+  const priceBeforeTax=unitCost*(1+profitPct/100);
   const priceWithTax=priceBeforeTax*(1+taxPct/100);
 
-  // 废渣信息：日废渣金额必须填了废渣单价才算
-  const dailyQty=time>0?Math.floor(79200/time):0;
-  const dailyScrapKg=(c.noTailBarScrapG>0&&c.perBar>0&&dailyQty>0)?(c.noTailBarScrapG*dailyQty/c.perBar/1000):0;
-  let dailyScrapHtml='';
-  if(dailyScrapKg>0){
-    const dailyScrapIncome=scrapSellPriceInput>0?dailyScrapKg*scrapSellPriceInput:0;
-    dailyScrapHtml=`<div class="result-row"><span class="result-label">日废屑量</span><span class="result-value highlight">${dailyScrapKg.toFixed(1)} kg/日</span></div>
-      <div class="result-row"><span class="result-label" style="font-size:11px">↳ 日产${dailyQty}件 × ${(c.noTailBarScrapG/c.perBar).toFixed(1)}g/件(去料尾)</span></div>`;
-    if(scrapSellPriceInput>0){
-      dailyScrapHtml+=`<div class="result-row"><span class="result-label">日废渣收入</span><span class="result-value" style="color:#4CAF50">+${dailyScrapIncome.toFixed(2)} 元/日</span></div>
-      <div class="result-row"><span class="result-label" style="font-size:11px">↳ ${dailyScrapKg.toFixed(1)}kg × ${scrapSellPriceInput.toFixed(2)}元/kg</span></div>`;
-    }
-  }
+  // === 废料信息 ===
+  const scrapWtG=netWt>0?blankWtG-netWt:0;
+  const materialUtil=netWt>0&&blankWtG>0?(netWt/blankWtG*100).toFixed(1):0;
 
-  // 成本构成比例
-  const totalForChart=matCostPerPiece+machCostPerPiece+toolCost+surfaceCost+otherCost;
-  const pctMat=totalForChart>0?(matCostPerPiece/totalForChart*100).toFixed(1):0;
-  const pctMach=totalForChart>0?(machCostPerPiece/totalForChart*100).toFixed(1):0;
-  const pctTool=totalForChart>0?(toolCost/totalForChart*100).toFixed(1):0;
-  const pctOther=totalForChart>0?((surfaceCost+otherCost)/totalForChart*100).toFixed(1):0;
+  // === 批量阶梯价 ===
+  const batchQtys=[1,10,50,100,500];
+  let batchHtml='';
+  batchQtys.forEach(bq=>{
+    const fpp=totalFixedCost/bq;
+    const uc=variableCostPerPiece+fpp;
+    const pbt=uc*(1+profitPct/100);
+    const pwt=pbt*(1+taxPct/100);
+    const saved=(priceWithTax-pwt).toFixed(2);
+    batchHtml+=`<div class="result-row"><span class="result-label">${bq}件</span><span class="result-value">${pwt.toFixed(2)} 元/件</span><span style="color:#4CAF50;font-size:11px;margin-left:4px">${bq>1?'省'+saved+'元':''}</span></div>`;
+  });
 
-  // 毛坯价值 & 产品价值
-  const blankValue=c.barPieceWt/1000*matPrice;
-  const productValue=c.netWt/1000*matPrice;
+  // === 成本构成占比 ===
+  const totalForChart=variableCostPerPiece+fixedCostPerPiece;
+  const pctVar=totalForChart>0?(variableCostPerPiece/totalForChart*100).toFixed(1):0;
+  const pctFix=totalForChart>0?(fixedCostPerPiece/totalForChart*100).toFixed(1):0;
+
+  // 变动成本子项占比
+  const varTotal=variableCostPerPiece;
+  const pctMatOfVar=varTotal>0?(matCostPerPiece/varTotal*100).toFixed(1):0;
+  const pctMachOfVar=varTotal>0?(machCostPerPiece/varTotal*100).toFixed(1):0;
+  const pctToolOfVar=varTotal>0?(toolCost/varTotal*100).toFixed(1):0;
+
+  // 固定成本子项占比
+  const fixTotal=totalFixedCost;
+  const pctProgOfFix=fixTotal>0?(progFee/fixTotal*100).toFixed(1):0;
+  const pctFixtureOfFix=fixTotal>0?(fixtureFee/fixTotal*100).toFixed(1):0;
+  const pctSetupOfFix=fixTotal>0?((setupCostPerTime*setupCount)/fixTotal*100).toFixed(1):0;
+  const pctInspectOfFix=fixTotal>0?(inspectFee/fixTotal*100).toFixed(1):0;
+  const pctSurfaceOfFix=fixTotal>0?(surfaceCost/fixTotal*100).toFixed(1):0;
+  const pctCamOfFix=fixTotal>0?(camCost/fixTotal*100).toFixed(1):0;
 
   let html=`<div class="card"><div class="card-title">📊 成本明细(每件)</div>
-    <div class="result-row"><span class="result-label">单件毛坯重</span><span class="result-value">${(c.barPieceWt).toFixed(2)} g</span></div>
-    <div class="result-row"><span class="result-label" style="color:var(--gold)">💰 毛坯价值</span><span class="result-value" style="color:var(--gold);font-weight:700">${blankValue.toFixed(4)} 元</span></div>
-    <div class="result-row"><span class="result-label">单件净重</span><span class="result-value">${c.netWt.toFixed(2)} g</span></div>
-    <div class="result-row"><span class="result-label" style="color:#4CAF50">💰 产品价值</span><span class="result-value" style="color:#4CAF50;font-weight:700">${productValue.toFixed(4)} 元</span></div>
-    <div class="result-row"><span class="result-label">单件废屑</span><span class="result-value">${c.scrapG.toFixed(2)} g</span></div>
-    <div class="result-row"><span class="result-label">一根出件数</span><span class="result-value highlight">${c.perBar} 件</span></div>
-    ${dailyScrapHtml}
+    <div class="result-row"><span class="result-label">毛坯重量</span><span class="result-value">${blankWtG.toFixed(2)} g (${blankWtKg.toFixed(4)} kg)</span></div>
+    ${netWt>0?`<div class="result-row"><span class="result-label">成品重量</span><span class="result-value">${netWt.toFixed(2)} g</span></div>
+    <div class="result-row"><span class="result-label">废料重量</span><span class="result-value" style="color:#f44336">${scrapWtG.toFixed(2)} g</span></div>
+    <div class="result-row"><span class="result-label">材料利用率</span><span class="result-value highlight">${materialUtil}%</span></div>`:''}
   </div>
-  <div class="card"><div class="card-title">💵 费用明细(每件)</div>
-    <div class="result-row"><span class="result-label">材料费 (${pctMat}%)</span><span class="result-value">${matCostPerPiece.toFixed(4)} 元</span></div>
-    <div class="result-row"><span class="result-label">加工费 (${pctMach}%)</span><span class="result-value">${machCostPerPiece.toFixed(4)} 元</span></div>
-    <div class="result-row"><span class="result-label">刀具费 (${pctTool}%)</span><span class="result-value">${toolCost.toFixed(4)} 元</span></div>
-    ${(surfaceCost>0)?`<div class="result-row"><span class="result-label">表面处理</span><span class="result-value">${surfaceCost.toFixed(4)} 元</span></div>`:''}
-    ${(otherCost>0)?`<div class="result-row"><span class="result-label">其他费用</span><span class="result-value">${otherCost.toFixed(4)} 元</span></div>`:''}
-    <div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label" style="font-weight:700">成本合计</span><span class="result-value highlight">${costPerPiece.toFixed(4)} 元</span></div>
+
+  <div class="card"><div class="card-title">🔄 变动成本 (${pctVar}%)</div>
+    <div class="result-row"><span class="result-label">材料费 (${pctMatOfVar}%)</span><span class="result-value">${matCostPerPiece.toFixed(4)} 元</span></div>
+    <div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${blankWtKg.toFixed(4)}kg × ${matPrice}元/kg × (1+${lossRate}%)</span></div>
+    <div class="result-row"><span class="result-label">加工费 (${pctMachOfVar}%)</span><span class="result-value">${machCostPerPiece.toFixed(4)} 元</span></div>
+    ${time>0?`<div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${time}秒 ÷ 3600 × ${machRate}元/h</span></div>`:''}
+    <div class="result-row"><span class="result-label">刀具费 (${pctToolOfVar}%)</span><span class="result-value">${toolCost.toFixed(4)} 元</span></div>
+    <div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label" style="font-weight:700">变动成本合计</span><span class="result-value highlight">${variableCostPerPiece.toFixed(4)} 元/件</span></div>
   </div>
+
+  <div class="card"><div class="card-title">🔨 固定成本 (${pctFix}%)</div>
+    <div class="result-row"><span class="result-label">编程费 (${pctProgOfFix}%)</span><span class="result-value">${progFee.toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label">夹具/工装费 (${pctFixtureOfFix}%)</span><span class="result-value">${fixtureFee.toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label">装夹换型费 (${pctSetupOfFix}%)</span><span class="result-value">${(setupCostPerTime*setupCount).toFixed(2)} 元</span></div>
+    <div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${setupTime}分钟 × ${machRate.toFixed(0)}元/h ÷ 60 × ${setupCount}次</span></div>
+    <div class="result-row"><span class="result-label">首件检测费 (${pctInspectOfFix}%)</span><span class="result-value">${inspectFee.toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label">表面处理外协 (${pctSurfaceOfFix}%)</span><span class="result-value">${surfaceCost.toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label">CAM编程费 (${pctCamOfFix}%)</span><span class="result-value">${camCost.toFixed(2)} 元</span></div>
+    <div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${camHours}小时 × ${progRate}元/h</span></div>
+    <div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label" style="font-weight:700">固定成本合计</span><span class="result-value">${totalFixedCost.toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label" style="color:var(--gold);font-weight:700">固定成本分摊/件</span><span class="result-value highlight" style="color:var(--gold)">${fixedCostPerPiece.toFixed(4)} 元/件</span></div>
+    <div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${totalFixedCost.toFixed(2)}元 ÷ ${qty}件</span></div>
+  </div>
+
   <div class="card"><div class="card-title">🏷️ 报价结果</div>
+    <div class="result-row"><span class="result-label">单件成本</span><span class="result-value highlight">${unitCost.toFixed(4)} 元</span></div>
+    <div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ 变动${variableCostPerPiece.toFixed(4)} + 固定分摊${fixedCostPerPiece.toFixed(4)}</span></div>
     <div class="result-row"><span class="result-label">利润率</span><span class="result-value">${profitPct}%</span></div>
     <div class="result-row"><span class="result-label">税率</span><span class="result-value">${taxPct}%</span></div>
     <div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label" style="font-weight:700">不含税单价</span><span class="result-value highlight" style="font-size:18px">${priceBeforeTax.toFixed(4)} 元</span></div>
     <div class="result-row"><span class="result-label" style="font-weight:700">含税单价</span><span class="result-value highlight" style="font-size:22px;color:var(--gold)">${priceWithTax.toFixed(4)} 元</span></div>
-    ${qty>0?`<div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label">订单总价(含税)</span><span class="result-value highlight" style="font-size:18px">${(priceWithTax*qty).toFixed(2)} 元</span></div>
-    <div class="result-row"><span class="result-label">订单总价(不含税)</span><span class="result-value">${(priceBeforeTax*qty).toFixed(2)} 元</span></div>`:''}
-  </div>`;
+    <div class="result-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><span class="result-label">订单总价(含税)</span><span class="result-value highlight" style="font-size:18px">${(priceWithTax*qty).toFixed(2)} 元</span></div>
+    <div class="result-row"><span class="result-label">订单总价(不含税)</span><span class="result-value">${(priceBeforeTax*qty).toFixed(2)} 元</span></div>
+  </div>
 
-  // 成本构成条形图
-  if(totalForChart>0){
-    html+=`<div class="card"><div class="card-title">📊 成本构成</div>
-    <div style="display:flex;height:20px;border-radius:10px;overflow:hidden;margin:8px 0">
-      <div style="width:${pctMat}%;background:#EF5350" title="材料 ${pctMat}%"></div>
-      <div style="width:${pctMach}%;background:#42A5F5" title="加工 ${pctMach}%"></div>
-      <div style="width:${pctTool}%;background:#FFA726" title="刀具 ${pctTool}%"></div>
-      <div style="width:${pctOther}%;background:#66BB6A" title="其他 ${pctOther}%"></div>
+  <div class="card"><div class="card-title">📊 成本构成（固定 vs 变动）</div>
+    <div style="display:flex;height:24px;border-radius:12px;overflow:hidden;margin:8px 0">
+      <div style="width:${pctVar}%;background:#42A5F5" title="变动成本 ${pctVar}%"></div>
+      <div style="width:${pctFix}%;background:#EF5350" title="固定成本 ${pctFix}%"></div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11px;color:var(--text-dim)">
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF5350;margin-right:3px"></span>材料 ${pctMat}%</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#42A5F5;margin-right:3px"></span>加工 ${pctMach}%</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#FFA726;margin-right:3px"></span>刀具 ${pctTool}%</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#66BB6A;margin-right:3px"></span>其他 ${pctOther}%</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#42A5F5;margin-right:3px"></span>变动 ${pctVar}%</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF5350;margin-right:3px"></span>固定 ${pctFix}%</span>
     </div>
+  </div>
+
+  <div class="card"><div class="card-title">📈 批量阶梯价</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">固定成本摊薄效应：订单量越大，单件固定成本越低</div>
+    ${batchHtml}
   </div>`;
-  }
 
   document.getElementById('pr-result').innerHTML=html;
 }
+
 
 function calcMaterial(){
   const dia=parseFloat(document.getElementById('m-dia').value)||0;
@@ -7030,7 +7243,7 @@ function importMigrationFile(e){
 // ========== 废屑计算(独立页面) ==========
 let segCount=0;
 
-function onScMatTypeChange(){
+function onScMatTypeChangeCnc(){
   const v=document.getElementById('sc-mattype').value;
   if(v==='__custom'){
     document.getElementById('sc-density-row').style.display='flex';
@@ -7041,359 +7254,10 @@ function onScMatTypeChange(){
   }else{
     document.getElementById('sc-density-row').style.display='none';
   }
-  calcScrapNew();
+  calcScrapCnc();
 }
 
-function addScrapSegment(){
-  segCount++;
-  const i=segCount;
-  const total=document.querySelectorAll('#sc-segments .step-card').length;
-  const showDel=total>=1?'':'style="display:none"';
-  const html=`<div class="step-card" id="seg${i}">
-    <div class="sc-head"><div class="sc-idx">${i}</div><button class="sc-del" onclick="removeScrapSegment(${i})" ${showDel}>×</button></div>
-    <div class="sc-grid">
-      <div class="sg-full"><label>段类型</label><select id="seg-type${i}" onchange="onSegTypeChange(${i})">
-        <option value="cylinder">➕ 实心段(加体积)</option>
-        <option value="mill">➕ 铣削段(含外径,不重复加)</option>
-        <option value="hole">➖ 内孔(减体积)</option>
-      </select></div>
-      <div id="seg-od-wrap${i}"><label>外径(mm)</label><input id="seg-od${i}" type="number" inputmode="decimal" placeholder="必填" oninput="calcScrapNew()"></div>
-      <div id="seg-ol-wrap${i}"><label id="seg-ol-label${i}">长度(mm)</label><input id="seg-ol${i}" type="number" inputmode="decimal" placeholder="必填" oninput="calcScrapNew()"></div>
-      <div id="seg-hd-wrap${i}" style="display:none"><label>孔径(mm)</label><input id="seg-hd${i}" type="number" inputmode="decimal" placeholder="必填" oninput="onSegHoleChange(${i})"></div>
-      <div id="seg-hl-wrap${i}" style="display:none"><label>孔深(mm)</label><input id="seg-hl${i}" type="number" inputmode="decimal" placeholder="必填" oninput="calcScrapNew()"></div>
-      <div id="seg-mill-od-wrap${i}" style="display:none"><label>铣前外径(mm)</label><input id="seg-mill-od${i}" type="number" inputmode="decimal" placeholder="必填(铣削前的圆棒外径)" oninput="calcScrapNew()"></div>
-      <div id="seg-mill-mode-wrap${i}" style="display:none"><label>铣面方式</label><select id="seg-mill-mode${i}" onchange="onMillModeChange(${i})">
-        <option value="single">单边铣</option>
-        <option value="flat">铣扁(2面)</option>
-        <option value="square">铣四方(4面)</option>
-        <option value="hex">铣6边(六角)</option>
-      </select></div>
-      <div id="seg-fw-wrap${i}" style="display:none"><label id="seg-fw-label${i}">对边宽度(mm)</label><input id="seg-fw${i}" type="number" inputmode="decimal" placeholder="" oninput="calcScrapNew()"></div>
-    </div>
-    <div class="seg-wt-badge" id="seg-wt${i}"></div>
-  </div>`;
-  document.getElementById('sc-segments').insertAdjacentHTML('beforeend',html);
-  updateSegDelButtons();
-  calcScrapNew();
-}
-
-function getPrevCylinderOD(currentIdx){
-  const cards=document.querySelectorAll('#sc-segments .step-card');
-  let od=0;
-  for(const card of cards){
-    const idx=card.id.replace('seg','');
-    if(idx==currentIdx)break;
-    const t=document.getElementById('seg-type'+idx)?.value||'cylinder';
-    if(t==='cylinder'){
-      const v=parseFloat(document.getElementById('seg-od'+idx)?.value)||0;
-      if(v>0)od=v;
-    }
-  }
-  return od;
-}
-
-function onSegTypeChange(i){
-  const type=document.getElementById('seg-type'+i)?.value||'cylinder';
-  const odWrap=document.getElementById('seg-od-wrap'+i);
-  const olWrap=document.getElementById('seg-ol-wrap'+i);
-  const olLabel=document.getElementById('seg-ol-label'+i);
-  const hdWrap=document.getElementById('seg-hd-wrap'+i);
-  const hlWrap=document.getElementById('seg-hl-wrap'+i);
-  const millOdWrap=document.getElementById('seg-mill-od-wrap'+i);
-  const millModeWrap=document.getElementById('seg-mill-mode-wrap'+i);
-  const fwWrap=document.getElementById('seg-fw-wrap'+i);
-  // 先隐藏所有扩展字段
-  [hdWrap,hlWrap,millOdWrap,millModeWrap,fwWrap].forEach(w=>{if(w)w.style.display='none'});
-
-  if(type==='cylinder'){
-    if(odWrap)odWrap.style.display='block';
-    if(olLabel)olLabel.textContent='长度(mm)';
-    const olInput=document.getElementById('seg-ol'+i);
-    if(olInput)olInput.placeholder='必填';
-  }else if(type==='mill'){
-    // 铣面：隐藏外径输入，铣前外径必填
-    if(odWrap)odWrap.style.display='none';
-    // 清空旧外径值，强制用户填铣前外径
-    const odInput=document.getElementById('seg-od'+i);
-    if(odInput)odInput.value='';
-    if(millOdWrap)millOdWrap.style.display='block';
-    if(millModeWrap)millModeWrap.style.display='block';
-    if(olLabel)olLabel.textContent='铣削长度(mm)';
-    const olInput=document.getElementById('seg-ol'+i);
-    if(olInput)olInput.placeholder='铣削段长度';
-    onMillModeChange(i);
-  }else if(type==='hole'){
-    // 孔径段：只填孔径+孔深，从产品中扣除孔体积
-    if(odWrap)odWrap.style.display='none';
-    if(olWrap)olWrap.style.display='none';
-    if(hdWrap)hdWrap.style.display='block';
-    if(hlWrap)hlWrap.style.display='block';
-  }
-  calcScrapNew();
-}
-
-function onMillModeChange(i){
-  const millMode=document.getElementById('seg-mill-mode'+i)?.value||'single';
-  const fwWrap=document.getElementById('seg-fw-wrap'+i);
-  const fwLabel=document.getElementById('seg-fw-label'+i);
-  const fwInput=document.getElementById('seg-fw'+i);
-  if(fwWrap)fwWrap.style.display='block';
-  if(millMode==='single'){
-    if(fwLabel)fwLabel.textContent='铣后厚度(mm)';
-    if(fwInput)fwInput.placeholder='铣面到对面距离';
-  }else if(millMode==='flat'){
-    if(fwLabel)fwLabel.textContent='铣后宽度(mm)';
-    if(fwInput)fwInput.placeholder='铣扁后对边宽度';
-  }else if(millMode==='square'){
-    if(fwLabel)fwLabel.textContent='对边宽度(mm)';
-    if(fwInput)fwInput.placeholder='四方对边尺寸';
-  }else if(millMode==='hex'){
-    if(fwLabel)fwLabel.textContent='对边宽度(mm)';
-    if(fwInput)fwInput.placeholder='六角对边尺寸';
-  }
-  calcScrapNew();
-}
-
-function removeScrapSegment(idx){
-  const el=document.getElementById('seg'+idx);
-  if(el)el.remove();
-  updateSegDelButtons();
-  calcScrapNew();
-}
-
-function updateSegDelButtons(){
-  const cards=document.querySelectorAll('#sc-segments .step-card');
-  cards.forEach((c,i)=>{
-    const btn=c.querySelector('.sc-del');
-    if(btn){
-      c.querySelector('.sc-idx').textContent=i+1;
-      btn.style.display=cards.length<=1?'none':'';
-    }
-  });
-}
-
-function onSegHoleChange(i){
-  const hdia=document.getElementById('seg-hd'+i);
-  const wrap=document.getElementById('seg-hl-wrap'+i);
-  if(hdia&&wrap){
-    wrap.style.display=hdia.value?'block':'none';
-    if(!hdia.value){
-      const hl=document.getElementById('seg-hl'+i);
-      if(hl)hl.value='';
-    }
-  }
-  calcScrapNew();
-}
-
-function onScrapMatChange(){
-  const v=document.getElementById('sc-scrapMat').value;
-  const priceInput=document.getElementById('sc-scrapPrice');
-  const scrapPrices={iron:1.5,steel:2.0,stainless:3.5,copper:30,brass:25,aluminum:8};
-  if(v&&v!=='__custom'&&scrapPrices[v]){
-    priceInput.value=scrapPrices[v];
-  }
-  calcScrapNew();
-}
-
-
-function calcScrapNew(){
-  const barDia=parseFloat(document.getElementById('sc-barDia').value)||0;
-  const barLen=parseFloat(document.getElementById('sc-barLen').value)||0;
-  const pieceLen=parseFloat(document.getElementById('sc-pieceLen').value)||0;
-  const mattype=document.getElementById('sc-mattype').value;
-  const orderQty=parseFloat(document.getElementById('sc-orderQty').value)||0;
-
-  let density=0;
-  if(mattype==='__custom'){
-    density=parseFloat(document.getElementById('sc-density').value)||0;
-  }else if(mattype){
-    density=parseFloat(mattype);
-  }
-
-  // 从DOM读取segments数据，转成数组供calcScrapCore使用
-  let segmentsData=[];
-  let segmentsValid=true;
-  const cards=document.querySelectorAll('#sc-segments .step-card');
-  if(!cards.length)segmentsValid=false;
-
-  cards.forEach(card=>{
-    const i=card.id.replace('seg','');
-    const segType=document.getElementById('seg-type'+i)?.value||'cylinder';
-    let od=parseFloat(document.getElementById('seg-od'+i)?.value)||0;
-    const ol=parseFloat(document.getElementById('seg-ol'+i)?.value)||0;
-    const hd=parseFloat(document.getElementById('seg-hd'+i)?.value)||0;
-    const hl=parseFloat(document.getElementById('seg-hl'+i)?.value)||0;
-    // 铣面类型：必须用铣前外径
-    if(segType==='mill'){
-      const millOd=parseFloat(document.getElementById('seg-mill-od'+i)?.value)||0;
-      if(millOd>0){od=millOd;}else{segmentsValid=false;return}
-      const odInput=document.getElementById('seg-od'+i);
-      if(odInput)odInput.value=od;
-    }
-    // 孔径段：转成hole对象
-    if(segType==='hole'){
-      if(!hd||!hl){segmentsValid=false;return}
-      segmentsData.push({type:'hole',hd,hl,od:0,ol:0});
-      return;
-    }
-    if(!od||!ol){segmentsValid=false;return}
-    const segObj={type:segType,od,ol,hd,hl};
-    // 铣面参数
-    if(segType==='mill'){
-      const millMode=document.getElementById('seg-mill-mode'+i)?.value||'single';
-      const fw=parseFloat(document.getElementById('seg-fw'+i)?.value)||0;
-      segObj.millMode=millMode;
-      segObj.fw=fw;
-    }
-    segmentsData.push(segObj);
-  });
-
-  if(!density||!barDia||!barLen||!pieceLen||!segmentsValid){
-    // 清除所有段badge
-    document.querySelectorAll('.seg-wt-badge').forEach(b=>{b.innerHTML='';b.style.display='none';});
-    document.getElementById('sc-result-card').style.display='none';
-    return;
-  }
-
-  // 加工模式
-  const scMode=document.getElementById('sc-mode').value;
-
-  // 统一调用calcScrapCore（与getScrapRec使用同一个函数，保证结果一致）
-  const c=calcScrapCore(segmentsData,barDia,barLen,pieceLen,density,scMode);
-
-  if(c.pieceVol<=0){
-    document.getElementById('sc-result-card').style.display='none';
-    return;
-  }
-
-  const {netWt,perBar,barTotalWt,barScrapG,tailWtG,noTailBarScrapG,scrapG,barPieceWt,tail:scTail}=c;
-
-  // ===== 计算每段重量贡献并更新badge =====
-  let segBreakdown=[];
-  cards.forEach(card=>{
-    const i=card.id.replace('seg','');
-    const segType=document.getElementById('seg-type'+i)?.value||'cylinder';
-    const badge=document.getElementById('seg-wt'+i);
-    if(!badge)return;
-    let wt=0, label='';
-    if(segType==='hole'){
-      const hd=parseFloat(document.getElementById('seg-hd'+i)?.value)||0;
-      const hl=parseFloat(document.getElementById('seg-hl'+i)?.value)||0;
-      if(hd>0&&hl>0){ wt=-Math.PI*(hd/20)*(hd/20)*(hl/10)*density; }
-      label='内孔';
-    }else if(segType==='mill'){
-      const millOd=parseFloat(document.getElementById('seg-mill-od'+i)?.value)||0;
-      const ol=parseFloat(document.getElementById('seg-ol'+i)?.value)||0;
-      if(millOd>0&&ol>0){
-        // 统一用cm单位（与calcScrapCore一致）
-        const outerR=millOd/20,segL=ol/10;
-        let segVol=Math.PI*outerR*outerR*segL;
-        const millMode=document.getElementById('seg-mill-mode'+i)?.value||'single';
-        const fw=parseFloat(document.getElementById('seg-fw'+i)?.value)||0;
-        if(fw>0&&fw<millOd){
-          const R=millOd/2;let cutArea=0;
-          if(millMode==='single'){const d=millOd-fw,dist=R-d;cutArea=R*R*Math.acos(dist/R)-dist*Math.sqrt(R*R-dist*dist);}
-          else if(millMode==='flat'){const dist=fw/2;const sA=R*R*Math.acos(dist/R)-dist*Math.sqrt(R*R-dist*dist);cutArea=2*sA;}
-          else if(millMode==='square'){cutArea=Math.PI*R*R-fw*fw;}
-          else if(millMode==='hex'){cutArea=Math.PI*R*R-Math.sqrt(3)/2*fw*fw;}
-          segVol-=cutArea*(ol/10)/100;
-        }
-        if(segVol<0)segVol=0;
-        wt=segVol*density;
-      }
-      label='铣削段';
-    }else{
-      const od=parseFloat(document.getElementById('seg-od'+i)?.value)||0;
-      const ol=parseFloat(document.getElementById('seg-ol'+i)?.value)||0;
-      if(od>0&&ol>0){ wt=Math.PI*(od/20)*(od/20)*(ol/10)*density; }
-      label='实心段';
-    }
-    // 更新badge显示
-    if(wt!==0){
-      const sign=wt>0?'+':'';
-      badge.innerHTML=`<span style="color:${wt>0?'#4CAF50':'#f44336'};font-weight:700;font-size:14px">${sign}${wt.toFixed(2)}g</span> <span style="color:var(--muted);font-size:12px">${label}</span>`;
-      badge.style.display='flex';
-    }else{
-      badge.innerHTML='';
-      badge.style.display='none';
-    }
-    segBreakdown.push({idx:i,type:segType,wt,label});
-  });
-
-  // 订单所需棒料根数
-  const orderBars=perBar>0&&orderQty>0?Math.ceil(orderQty/perBar):0;
-  // 订单总废屑(kg) = 含料尾的每根废屑×所需根数
-  const orderScrapKg=barScrapG*orderBars/1000;
-
-  let html=`
-    <div class="result-row" style="margin-bottom:4px"><span class="result-label" style="color:var(--gold)">📋 分段明细</span><span class="result-value"></span></div>`;
-  segBreakdown.forEach((s,si)=>{
-    const sign=s.wt>0?'+':'';
-    const clr=s.wt>0?'#4CAF50':'#f44336';
-    let param='';
-    if(s.type==='hole'){
-      const hd=document.getElementById('seg-hd'+s.idx)?.value||'';
-      const hl=document.getElementById('seg-hl'+s.idx)?.value||'';
-      param=`φ${hd}×${hl}`;
-    }else if(s.type==='mill'){
-      const mo=document.getElementById('seg-mill-od'+s.idx)?.value||'';
-      const ol=document.getElementById('seg-ol'+s.idx)?.value||'';
-      param=`${mo}×${ol}铣`;
-    }else{
-      const od=document.getElementById('seg-od'+s.idx)?.value||'';
-      const ol=document.getElementById('seg-ol'+s.idx)?.value||'';
-      param=`φ${od}×${ol}`;
-    }
-    html+=`<div class="result-row" style="padding:2px 0"><span class="result-label" style="padding-left:16px;font-size:13px;color:var(--muted)">${si+1}. ${param}</span><span class="result-value" style="color:${clr};font-weight:600;font-size:13px">${sign}${s.wt.toFixed(2)}g</span></div>`;
-  });
-  html+=`<div class="result-row" style="margin-top:4px;padding-top:6px;border-top:1px solid var(--border)"><span class="result-label" style="color:var(--gold)">毛坯重量</span><span class="result-value" style="color:var(--gold);font-weight:700">${barPieceWt.toFixed(2)} g</span></div>`;
-  html+=`<div class="result-row"><span class="result-label">产品净重</span><span class="result-value highlight">${netWt.toFixed(2)} g (${(netWt/1000).toFixed(4)} kg)</span></div>`;
-  html+=`<div class="result-row" style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)"><span class="result-label" style="color:#f44336">废屑</span><span class="result-value" style="color:#f44336;font-weight:700">${scrapG.toFixed(2)} g</span></div>`;
-  html+=`
-    <div class="result-row"><span class="result-label">单件棒料消耗重</span><span class="result-value">${barPieceWt.toFixed(2)} g</span></div>
-    <div class="result-row"><span class="result-label">料尾</span><span class="result-value">${scTail} mm</span></div>
-    <div class="result-row"><span class="result-label">单根棒料可加工件数</span><span class="result-value highlight">${perBar} 件</span></div>
-    <div class="result-row"><span class="result-label">单根棒料废屑</span><span class="result-value highlight">${(barScrapG/1000).toFixed(4)} kg</span></div>`;
-
-  if(orderQty>0){
-    html+=`
-    <div class="result-row"><span class="result-label">订单总废屑</span><span class="result-value highlight">${orderScrapKg.toFixed(2)} kg</span></div>
-    <div class="result-row"><span class="result-label">订单所需棒料根数</span><span class="result-value highlight">${orderBars} 根</span></div>`;
-  }
-
-  // 废渣回收价值
-  const scrapPrice=parseFloat(document.getElementById('sc-scrapPrice').value)||0;
-  const pieceTime=parseFloat(document.getElementById('sc-pieceTime').value)||0;
-  
-  // 日废屑（不含料尾）- 直接用calcScrapCore返回的noTailBarScrapG
-  if(pieceTime>0&&scrapG>0){
-    const dailyQty=Math.floor(79200/pieceTime);
-    const dailyScrapKg=perBar>0?(noTailBarScrapG*dailyQty/perBar/1000):0;
-    html+=`<div class="result-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--accent)"><span class="result-label" style="color:var(--accent)">📊 理论日产量</span><span class="result-value highlight">${dailyQty} 件</span></div>`;
-    html+=`<div class="result-row"><span class="result-label" style="color:var(--accent)">📊 日废屑量</span><span class="result-value highlight">${dailyScrapKg.toFixed(2)} kg</span></div>`;
-    if(scrapPrice>0){
-      const dailyValue=dailyScrapKg*scrapPrice;
-      html+=`<div class="result-row"><span class="result-label" style="color:var(--accent)">💰 日废屑价值</span><span class="result-value highlight">${dailyValue.toFixed(2)} 元</span></div>`;
-    }
-  }
-
-  if(scrapPrice>0){
-    const perBarScrapKg=barScrapG/1000;
-    const perBarValue=perBarScrapKg*scrapPrice;
-    html+=`<div class="result-row" style="margin-top:8px;padding-top:8px;border-top:1px solid #D4A843"><span class="result-label" style="color:#D4A843">💰 单根棒料废渣价值</span><span class="result-value highlight">${perBarValue.toFixed(2)} 元</span></div>`;
-    if(orderQty>0){
-      const totalScrapKg=orderScrapKg;
-      const totalValue=totalScrapKg*scrapPrice;
-      html+=`<div class="result-row"><span class="result-label" style="color:#D4A843">💰 订单废屑总价值</span><span class="result-value highlight">${totalValue.toFixed(2)} 元</span></div>`;
-    }
-  }
-
-  document.getElementById('sc-results').innerHTML=html;
-  document.getElementById('sc-result-card').style.display='block';
-}
-
-// ========== 废屑记录管理 ==========
-function onScTuhaoChange(){
+function onScTuhaoChangeCnc(){
   const sel=document.getElementById('sc-tuhao').value;
   const customRow=document.getElementById('sc-tuhao-custom-row');
   if(sel==='__custom'){
@@ -7401,211 +7265,200 @@ function onScTuhaoChange(){
   }else{
     customRow.style.display='none';
     if(sel){
-      const recs=gd('scrapRecords');
+      const recs=gd('cnc_scrapRecords');
       const hasRec=recs.some(r=>r.tuhao===sel);
-      if(hasRec){
-        loadScrapRecord(sel);
-      }else{
-        // 没有废渣记录，从产品库带出模式
-        clearScrapForm();
-        const prod=gd('cnc_products').find(p=>p.tuhao===sel);
-        if(prod&&prod.mode)document.getElementById('sc-mode').value=prod.mode;
-      }
-    }else{
-      clearScrapForm();
-    }
+      if(hasRec){loadScrapRecordCnc(sel);}
+      else{clearScrapFormCnc();}
+    }else{clearScrapFormCnc();}
   }
 }
 
-function getScTuhao(){
+function getScTuhaoCnc(){
   const sel=document.getElementById('sc-tuhao').value;
   if(sel==='__custom')return document.getElementById('sc-tuhao-custom').value.trim();
   return sel;
 }
 
-function refreshScrapTuhaoList(){
-  const recs=gd('scrapRecords');
-  const prods=gd('cnc_products');
+function calcScrapCnc(){
+  const blankL=parseFloat(document.getElementById('sc-blankL').value)||0;
+  const blankW=parseFloat(document.getElementById('sc-blankW').value)||0;
+  const blankH=parseFloat(document.getElementById('sc-blankH').value)||0;
+  const mattype=document.getElementById('sc-mattype').value;
+  const netWt=parseFloat(document.getElementById('sc-netWt').value)||0;
+  const orderQty=parseFloat(document.getElementById('sc-orderQty').value)||0;
+  const scrapPrice=parseFloat(document.getElementById('sc-scrapPrice').value)||0;
+  const pieceTime=parseFloat(document.getElementById('sc-pieceTime').value)||0;
+
+  let density=0;
+  if(mattype==='__custom'){density=parseFloat(document.getElementById('sc-density').value)||0;}
+  else if(mattype){density=parseFloat(mattype);}
+
+  if(!blankL||!blankW||!blankH||!density){
+    document.getElementById('sc-result-card').style.display='none';
+    return;
+  }
+
+  // 毛坯重量 = 长×宽×高(cm³) × 密度
+  const blankVolCm3=blankL*blankW*blankH/1000;
+  const blankWtG=blankVolCm3*density;
+  const blankWtKg=blankWtG/1000;
+
+  // 废料 = 毛坯 - 成品
+  const scrapWtG=netWt>0?Math.max(0,blankWtG-netWt):0;
+  const scrapWtKg=scrapWtG/1000;
+  const materialUtil=netWt>0&&blankWtG>0?(netWt/blankWtG*100).toFixed(1):'--';
+
+  let html=`<div class="result-row"><span class="result-label" style="color:var(--gold)">毛坯重量</span><span class="result-value" style="color:var(--gold);font-weight:700">${blankWtG.toFixed(2)} g (${blankWtKg.toFixed(4)} kg)</span></div>`;
+  html+=`<div class="result-row" style="font-size:11px;color:var(--text-dim)"><span class="result-label" style="padding-left:16px">↳ ${blankL}×${blankW}×${blankH}mm × ${density}g/cm³</span></div>`;
+
+  if(netWt>0){
+    html+=`<div class="result-row"><span class="result-label">成品重量</span><span class="result-value">${netWt.toFixed(2)} g</span></div>`;
+    html+=`<div class="result-row"><span class="result-label" style="color:#f44336">废料重量</span><span class="result-value" style="color:#f44336;font-weight:700">${scrapWtG.toFixed(2)} g (${scrapWtKg.toFixed(4)} kg)</span></div>`;
+    html+=`<div class="result-row"><span class="result-label">材料利用率</span><span class="result-value highlight">${materialUtil}%</span></div>`;
+  }
+
+  if(orderQty>0){
+    const totalBlankKg=blankWtKg*orderQty;
+    const totalScrapKg=scrapWtKg*orderQty;
+    html+=`<div class="result-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span class="result-label" style="color:var(--gold)">订单毛坯总重</span><span class="result-value">${totalBlankKg.toFixed(2)} kg</span></div>`;
+    if(netWt>0){
+      html+=`<div class="result-row"><span class="result-label">订单废料总重</span><span class="result-value">${totalScrapKg.toFixed(2)} kg</span></div>`;
+    }
+  }
+
+  // 日废屑
+  if(pieceTime>0&&scrapWtG>0){
+    const dailyQty=Math.floor(79200/pieceTime);
+    const dailyScrapKg=scrapWtG*dailyQty/1000;
+    html+=`<div class="result-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span class="result-label" style="color:var(--gold)">📊 理论日产量</span><span class="result-value highlight">${dailyQty} 件</span></div>`;
+    html+=`<div class="result-row"><span class="result-label">日废料量</span><span class="result-value highlight">${dailyScrapKg.toFixed(2)} kg</span></div>`;
+    if(scrapPrice>0){
+      const dailyValue=dailyScrapKg*scrapPrice;
+      html+=`<div class="result-row"><span class="result-label" style="color:#4CAF50">日废料价值</span><span class="result-value" style="color:#4CAF50;font-weight:700">${dailyValue.toFixed(2)} 元</span></div>`;
+    }
+  }
+
+  // 废渣回收价值
+  if(scrapPrice>0&&scrapWtKg>0){
+    const perPieceValue=scrapWtKg*scrapPrice;
+    html+=`<div class="result-row" style="margin-top:8px;padding-top:8px;border-top:1px solid #D4A843"><span class="result-label" style="color:#D4A843">💰 单件废料价值</span><span class="result-value highlight">${perPieceValue.toFixed(4)} 元</span></div>`;
+    if(orderQty>0){
+      const totalValue=scrapWtKg*orderQty*scrapPrice;
+      html+=`<div class="result-row"><span class="result-label" style="color:#D4A843">💰 订单废料总价值</span><span class="result-value highlight">${totalValue.toFixed(2)} 元</span></div>`;
+    }
+  }
+
+  document.getElementById('sc-results').innerHTML=html;
+  document.getElementById('sc-result-card').style.display='block';
+}
+
+function refreshScrapTuhaoListCnc(){
+  const recs=gd('cnc_scrapRecords')||[];
+  const prods=gd('cnc_products')||[];
   let opts='<option value="">选择图号或手动输入</option>';
-  // Add from saved records first
   const tuhaoSet=new Set();
   recs.forEach(r=>{if(r.tuhao&&!tuhaoSet.has(r.tuhao)){tuhaoSet.add(r.tuhao)}});
   recs.forEach(r=>{
     if(tuhaoSet.has(r.tuhao)){
-      opts+=`<option value="${r.tuhao}">${r.tuhao} (${r.date})</option>`;
+      opts+=`<option value="${r.tuhao}">${r.tuhao} (${r.date||''})</option>`;
       tuhaoSet.delete(r.tuhao);
     }
   });
-  // Add products that don't have records yet
   prods.forEach(p=>{
     if(!recs.find(r=>r.tuhao===p.tuhao)){
       opts+=`<option value="${p.tuhao}">${p.tuhao} (产品库)</option>`;
     }
   });
   opts+='<option value="__custom">手动输入...</option>';
-  document.getElementById('sc-tuhao').innerHTML=opts;
+  const el=document.getElementById('sc-tuhao');
+  if(el)el.innerHTML=opts;
 }
 
-function loadScrapRecord(tuhao){
-  const recs=gd('scrapRecords');
-  // Get the latest record for this tuhao
-  const rec=recs.filter(r=>r.tuhao===tuhao).sort((a,b)=>b.ts-a.ts)[0];
+function loadScrapRecordCnc(tuhao){
+  const recs=gd('cnc_scrapRecords')||[];
+  const rec=recs.filter(r=>r.tuhao===tuhao).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
   if(!rec){showToast('未找到记录');return}
-  // Fill form
-  document.getElementById('sc-barDia').value=rec.barDia||'';
-  document.getElementById('sc-barLen').value=rec.barLen||'';
-  document.getElementById('sc-pieceLen').value=rec.pieceLen||'';
-  // Material type
+  document.getElementById('sc-blankL').value=rec.blankL||'';
+  document.getElementById('sc-blankW').value=rec.blankW||'';
+  document.getElementById('sc-blankH').value=rec.blankH||'';
   if(rec.mattype){
     const matSel=document.getElementById('sc-mattype');
     const opts=Array.from(matSel.options).map(o=>o.value);
-    if(opts.includes(rec.mattype)){
-      matSel.value=rec.mattype;
-    }else{
-      matSel.value='__custom';
-      document.getElementById('sc-density').value=rec.density||'';
-    }
-    onScMatTypeChange();
+    if(opts.includes(rec.mattype)){matSel.value=rec.mattype;}
+    else{matSel.value='__custom';document.getElementById('sc-density').value=rec.density||'';}
+    onScMatTypeChangeCnc();
   }
+  document.getElementById('sc-netWt').value=rec.netWt||'';
   document.getElementById('sc-orderQty').value=rec.orderQty||'';
   if(rec.scrapMat){document.getElementById('sc-scrapMat').value=rec.scrapMat}
   if(rec.scrapPrice){document.getElementById('sc-scrapPrice').value=rec.scrapPrice}
   if(rec.pieceTime){document.getElementById('sc-pieceTime').value=rec.pieceTime}
-  document.getElementById('sc-mode').value=rec.mode||'';
   onScrapMatChange();
-  // Rebuild segments
-  document.getElementById('sc-segments').innerHTML='';
-  segCount=0;
-  if(rec.segments&&rec.segments.length){
-    rec.segments.forEach(s=>{
-      addScrapSegment();
-      const i=segCount;
-      const odEl=document.getElementById('seg-od'+i);
-      const olEl=document.getElementById('seg-ol'+i);
-      const hdEl=document.getElementById('seg-hd'+i);
-      const hlEl=document.getElementById('seg-hl'+i);
-      const typeEl=document.getElementById('seg-type'+i);
-      // 类型映射：旧记录兼容
-      let mappedType=s.type||'cylinder';
-      if(mappedType==='mill-flat'||mappedType==='mill-square')mappedType='mill';
-      if(mappedType==='mill-slot')mappedType='cylinder'; // 旧铣槽忽略
-      if(typeEl){typeEl.value=mappedType;onSegTypeChange(i)}
-      if(odEl)odEl.value=s.od||'';
-      if(olEl)olEl.value=s.ol||'';
-      if(hdEl){hdEl.value=s.hd||'';onSegHoleChange(i)}
-      if(hlEl)hlEl.value=s.hl||'';
-      // 铣面
-      if(mappedType==='mill'){
-        const millOdEl=document.getElementById('seg-mill-od'+i);
-        if(millOdEl)millOdEl.value=s.millOd||'';
-        const mmEl=document.getElementById('seg-mill-mode'+i);
-        let mappedMode=s.millMode||'single';
-        if(s.type==='mill-flat')mappedMode='flat';
-        if(s.type==='mill-square')mappedMode='square';
-        if(mmEl){mmEl.value=mappedMode;onMillModeChange(i)}
-        const fwEl=document.getElementById('seg-fw'+i);
-        if(fwEl)fwEl.value=s.fw||s.sq||'';
-      }
-    });
-  }else{
-    addScrapSegment();
-  }
-  calcScrapNew();
+  calcScrapCnc();
   showToast('已加载: '+tuhao);
 }
 
-function clearScrapForm(){
-  document.getElementById('sc-barDia').value='';
-  document.getElementById('sc-barLen').value='';
-  document.getElementById('sc-pieceLen').value='0';
+function clearScrapFormCnc(){
+  document.getElementById('sc-blankL').value='';
+  document.getElementById('sc-blankW').value='';
+  document.getElementById('sc-blankH').value='';
   document.getElementById('sc-mattype').value='';
+  document.getElementById('sc-netWt').value='';
   document.getElementById('sc-orderQty').value='';
   document.getElementById('sc-scrapMat').value='';
   document.getElementById('sc-scrapPrice').value='';
   document.getElementById('sc-pieceTime').value='';
   document.getElementById('sc-density-row').style.display='none';
   document.getElementById('sc-result-card').style.display='none';
-  document.getElementById('sc-segments').innerHTML='';
-  segCount=0;
-  addScrapSegment();
 }
 
-function saveScrapRecord(){
-  const tuhao=getScTuhao();
+function saveScrapRecordCnc(){
+  const tuhao=getScTuhaoCnc();
   if(!tuhao){showToast('请选择或输入图号');return}
-  // Collect segments
-  const cards=document.querySelectorAll('#sc-segments .step-card');
-  const segments=[];
-  cards.forEach(card=>{
-    const i=card.id.replace('seg','');
-    const segType=document.getElementById('seg-type'+i)?.value||'cylinder';
-    const seg={type:segType,
-      od:parseFloat(document.getElementById('seg-od'+i)?.value)||0,
-      ol:parseFloat(document.getElementById('seg-ol'+i)?.value)||0,
-      hd:parseFloat(document.getElementById('seg-hd'+i)?.value)||0,
-      hl:parseFloat(document.getElementById('seg-hl'+i)?.value)||0
-    };
-    if(segType==='mill'){
-      seg.millOd=parseFloat(document.getElementById('seg-mill-od'+i)?.value)||0;
-      seg.millMode=document.getElementById('seg-mill-mode'+i)?.value||'single';
-      seg.fw=parseFloat(document.getElementById('seg-fw'+i)?.value)||0;
-    }
-    segments.push(seg);
-  });
   const rec={
     tuhao,
-    barDia:parseFloat(document.getElementById('sc-barDia').value)||0,
-    barLen:parseFloat(document.getElementById('sc-barLen').value)||0,
-    pieceLen:parseFloat(document.getElementById('sc-pieceLen').value)||0,
-    mode:document.getElementById('sc-mode').value,
+    blankL:parseFloat(document.getElementById('sc-blankL').value)||0,
+    blankW:parseFloat(document.getElementById('sc-blankW').value)||0,
+    blankH:parseFloat(document.getElementById('sc-blankH').value)||0,
     mattype:document.getElementById('sc-mattype').value,
     density:document.getElementById('sc-density').value,
+    netWt:parseFloat(document.getElementById('sc-netWt').value)||0,
     orderQty:parseFloat(document.getElementById('sc-orderQty').value)||0,
     scrapMat:document.getElementById('sc-scrapMat').value,
     scrapPrice:document.getElementById('sc-scrapPrice').value,
     pieceTime:parseFloat(document.getElementById('sc-pieceTime').value)||0,
-    segments,
     date:new Date().toISOString().slice(0,10).replace(/-/g,'/'),
-    ts:Date.now()
+    ts:Date.now(),
+    cncMode:true
   };
-  // Also save calculated values for machine page - 使用calcScrapCore统一计算
-  const scrapDensity=rec.mattype==='__custom'?parseFloat(document.getElementById('sc-density').value)||0:parseFloat(rec.mattype)||0;
-  if(scrapDensity>0 && rec.barDia>0 && rec.barLen>0 && rec.pieceLen>0 && segments.length>0){
-    const scMode=document.getElementById('sc-mode').value;
-    const c=calcScrapCore(segments,rec.barDia,rec.barLen,rec.pieceLen,scrapDensity,scMode);
-    rec.perBar=c.perBar;
-    rec.barScrapG=c.barScrapG;
-    rec.tailKg=c.tailKg;
-    rec.noTailBarScrapG=c.noTailBarScrapG;
-  }
-  const recs=gd('scrapRecords');
-  // Overwrite if same tuhao exists (keep latest only per tuhao)
+  const recs=gd('cnc_scrapRecords')||[];
   const idx=recs.findIndex(r=>r.tuhao===tuhao);
   if(idx>=0){recs[idx]=rec}else{recs.push(rec)}
-  sd('scrapRecords',recs);
-  refreshScrapTuhaoList();
-  refreshScrapRecordList();
+  sd('cnc_scrapRecords',recs);
+  refreshScrapTuhaoListCnc();
+  refreshScrapRecordListCnc();
   showToast('已保存: '+tuhao);
 }
 
-function deleteScrapRecord(tuhao){
-  let recs=gd('scrapRecords');
+function deleteScrapRecordCnc(tuhao){
+  let recs=gd('cnc_scrapRecords')||[];
   recs=recs.filter(r=>r.tuhao!==tuhao);
-  sd('scrapRecords',recs);
-  refreshScrapTuhaoList();
-  refreshScrapRecordList();
+  sd('cnc_scrapRecords',recs);
+  refreshScrapTuhaoListCnc();
+  refreshScrapRecordListCnc();
 }
 
-function refreshScrapRecordList(){
-  const recs=gd('scrapRecords');
+function refreshScrapRecordListCnc(){
+  const recs=gd('cnc_scrapRecords')||[];
   const el=document.getElementById('sc-records');
   if(!recs.length){el.innerHTML='<div class="empty">暂无保存记录</div>';return}
   let html='';
-  recs.sort((a,b)=>b.ts-a.ts).forEach(r=>{
-    html+=`<div class="prod-item"><button class="pi-edit" onclick="document.getElementById('sc-tuhao').value='${r.tuhao}';loadScrapRecord('${r.tuhao}')">✎</button><button class="pi-del" onclick="deleteScrapRecord('${r.tuhao}')">×</button><div class="pi-head"><span class="pi-tuhao" style="cursor:pointer" onclick="document.getElementById('sc-tuhao').value='${r.tuhao}';loadScrapRecord('${r.tuhao}')">${r.tuhao}</span><span class="pi-name">${r.date}</span></div><div class="pi-info">⌀${r.barDia} · L${r.barLen} · 消耗${r.pieceLen}mm · ${r.segments.length}段</div></div>`;
+  recs.sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>{
+    html+=`<div class="prod-item"><button class="pi-edit" onclick="document.getElementById('sc-tuhao').value='${r.tuhao}';loadScrapRecordCnc('${r.tuhao}')">✎</button><button class="pi-del" onclick="deleteScrapRecordCnc('${r.tuhao}')">×</button><div class="pi-head"><span class="pi-tuhao" style="cursor:pointer" onclick="document.getElementById('sc-tuhao').value='${r.tuhao}';loadScrapRecordCnc('${r.tuhao}')">${r.tuhao}</span><span class="pi-name">${r.date||''}</span></div><div class="pi-info">${r.blankL||0}×${r.blankW||0}×${r.blankH||0}mm · 成品${r.netWt||0}g</div></div>`;
   });
   el.innerHTML=html;
 }
+
 // ========== 每日汇总(稼动率) ==========
 function renderDailySummary(){
   const selDate=document.getElementById('mc-date').value;
@@ -9609,6 +9462,141 @@ function submitQuickQC(){
 }
 
 // ========== AI报价 ==========
+function initPricePage(){
+  // Init tuhao dropdown for price page
+  var prods=gd('cnc_products')||[];
+  var dd=document.getElementById('pr-tuhao-dd');
+  if(!dd)return;
+  if(!prods.length){dd.innerHTML='';return;}
+  var html='';
+  prods.forEach(function(p){
+    html+='<div class="tuhao-dd-item" onclick="selectPriceTuhao(\''+p.tuhao+'\')">'+p.tuhao+(p.brand?' · '+p.brand:'')+'</div>';
+  });
+  dd.innerHTML=html;
+}
+
+function selectPriceTuhao(tuhao){
+  document.getElementById('pr-tuhao').value=tuhao;
+  document.getElementById('pr-tuhao-dd').style.display='none';
+  // Try to fill from product data
+  var prods=gd('cnc_products')||[];
+  var prod=prods.find(function(p){return p.tuhao===tuhao;});
+  if(prod){
+    if(prod.brand)document.getElementById('pr-brand').value=prod.brand;
+    if(prod.density)document.getElementById('pr-density').value=prod.density;
+    if(prod.unitPrice)document.getElementById('pr-matPrice').value=prod.unitPrice;
+    if(prod.toolCost)document.getElementById('pr-toolCost').value=prod.toolCost;
+    if(prod.machRate)document.getElementById('pr-machRate').value=prod.machRate;
+  }
+  calcPrice();
+}
+
+function initBatchPage(){
+  // Try to pre-fill from price page if available
+  try{
+    const rateEl=document.getElementById('pr-machRate');
+    const matEl=document.getElementById('pr-matPrice');
+    if(rateEl&&rateEl.value)document.getElementById('ba-rate').value=rateEl.value;
+    if(matEl&&matEl.value)document.getElementById('ba-matPrice').value=matEl.value;
+  }catch(e){}
+  calcBatch();
+}
+
+function calcBatch(){
+  const rate=parseFloat(document.getElementById('ba-rate').value)||0;
+  const matPrice=parseFloat(document.getElementById('ba-matPrice').value)||0;
+  const blankWt=parseFloat(document.getElementById('ba-blankWt').value)||0;
+  const lossRate=parseFloat(document.getElementById('ba-lossRate').value)||10;
+  const time=parseFloat(document.getElementById('ba-time').value)||0;
+  const toolCost=parseFloat(document.getElementById('ba-toolCost').value)||0;
+  const progFee=parseFloat(document.getElementById('ba-progFee').value)||0;
+  const fixtureFee=parseFloat(document.getElementById('ba-fixtureFee').value)||0;
+  const setupFee=parseFloat(document.getElementById('ba-setupFee').value)||0;
+  const inspectFee=parseFloat(document.getElementById('ba-inspectFee').value)||0;
+  const surfaceFee=parseFloat(document.getElementById('ba-surfaceFee').value)||0;
+  const camFee=parseFloat(document.getElementById('ba-camFee').value)||0;
+  const profitPct=parseFloat(document.getElementById('ba-profit').value)||15;
+  const taxPct=parseFloat(document.getElementById('ba-tax').value)||13;
+
+  if(!matPrice||!blankWt||!rate){
+    document.getElementById('ba-result').innerHTML='<div class="card"><div style="color:var(--text-dim);text-align:center;padding:20px">请填写设备费率、材料单价和毛坯重量</div></div>';
+    return;
+  }
+
+  const matCost=blankWt*matPrice*(1+lossRate/100);
+  const machCost=time>0?time/3600*rate:0;
+  const varCost=matCost+machCost+toolCost;
+  const totalFixed=progFee+fixtureFee+setupFee+inspectFee+surfaceFee+camFee;
+
+  const batchQtys=[1,5,10,25,50,100,200,500,1000];
+  let html='<div class="card"><div class="card-title">📈 批量阶梯价对比</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html+='<thead><tr style="border-bottom:1px solid var(--border)">';
+  html+='<th style="padding:8px 4px;text-align:left;color:var(--gold)">数量</th>';
+  html+='<th style="padding:8px 4px;text-align:right;color:var(--gold)">固定分摊</th>';
+  html+='<th style="padding:8px 4px;text-align:right;color:var(--gold)">单件成本</th>';
+  html+='<th style="padding:8px 4px;text-align:right;color:var(--gold)">含税单价</th>';
+  html+='<th style="padding:8px 4px;text-align:right;color:var(--gold)">订单总价</th>';
+  html+='<th style="padding:8px 4px;text-align:right;color:var(--gold)">降幅</th>';
+  html+='</tr></thead><tbody>';
+
+  let firstPrice=0;
+  batchQtys.forEach((bq,i)=>{
+    const fpp=totalFixed/bq;
+    const uc=varCost+fpp;
+    const pbt=uc*(1+profitPct/100);
+    const pwt=pbt*(1+taxPct/100);
+    const total=pwt*bq;
+    if(i===0)firstPrice=pwt;
+    const drop=firstPrice>0?((firstPrice-pwt)/firstPrice*100).toFixed(1):0;
+    const bgColor=i%2===0?'var(--bg-input)':'transparent';
+    html+=`<tr style="background:${bgColor};border-bottom:1px solid var(--border)">`;
+    html+=`<td style="padding:6px 4px;font-weight:700;color:var(--text)">${bq}件</td>`;
+    html+=`<td style="padding:6px 4px;text-align:right;color:var(--text-dim)">${fpp.toFixed(2)}元</td>`;
+    html+=`<td style="padding:6px 4px;text-align:right">${uc.toFixed(2)}元</td>`;
+    html+=`<td style="padding:6px 4px;text-align:right;font-weight:700;color:var(--gold)">${pwt.toFixed(2)}元</td>`;
+    html+=`<td style="padding:6px 4px;text-align:right">${total.toFixed(0)}元</td>`;
+    html+=`<td style="padding:6px 4px;text-align:right;color:${drop>0?'#4CAF50':'var(--text-dim)'}">${drop>0?'-'+drop+'%':'-'}</td>`;
+    html+='</tr>';
+  });
+
+  html+='</tbody></table></div></div>';
+
+  // Visualization: simple bar chart for price trend
+  const q1Price=totalFixed/1+varCost;
+  const q500Price=totalFixed/500+varCost;
+  const maxPrice=q1Price*(1+profitPct/100)*(1+taxPct/100);
+  html+='<div class="card"><div class="card-title">📉 单价趋势</div>';
+  html+='<div style="padding:8px 0">';
+  batchQtys.forEach(bq=>{
+    const fpp=totalFixed/bq;
+    const uc=varCost+fpp;
+    const pwt=uc*(1+profitPct/100)*(1+taxPct/100);
+    const width=maxPrice>0?(pwt/maxPrice*100).toFixed(1):0;
+    html+=`<div style="display:flex;align-items:center;margin-bottom:4px;font-size:11px">`;
+    html+=`<span style="width:50px;color:var(--text-dim)">${bq}件</span>`;
+    html+=`<div style="flex:1;height:16px;background:var(--bg-input);border-radius:4px;overflow:hidden">`;
+    html+=`<div style="width:${width}%;height:100%;background:linear-gradient(90deg,var(--gold),#b87308);border-radius:4px"></div>`;
+    html+=`</div>`;
+    html+=`<span style="width:70px;text-align:right;color:var(--gold);font-weight:700;margin-left:4px">${pwt.toFixed(1)}</span>`;
+    html+=`</div>`;
+  });
+  html+='</div></div>';
+
+  // Summary
+  const varPct=varCost+totalFixed>0?(varCost/(varCost+totalFixed/1)*100).toFixed(1):0;
+  html+=`<div class="card"><div class="card-title">📊 关键数据</div>`;
+  html+=`<div class="result-row"><span class="result-label">变动成本/件</span><span class="result-value">${varCost.toFixed(2)} 元</span></div>`;
+  html+=`<div class="result-row"><span class="result-label">固定成本总额</span><span class="result-value">${totalFixed.toFixed(2)} 元</span></div>`;
+  html+=`<div class="result-row"><span class="result-label">1件含税价</span><span class="result-value highlight">${(q1Price*(1+profitPct/100)*(1+taxPct/100)).toFixed(2)} 元</span></div>`;
+  html+=`<div class="result-row"><span class="result-label">500件含税价</span><span class="result-value highlight" style="color:#4CAF50">${(q500Price*(1+profitPct/100)*(1+taxPct/100)).toFixed(2)} 元</span></div>`;
+  const dropPct=((q1Price-q500Price)/q1Price*100).toFixed(1);
+  html+=`<div class="result-row"><span class="result-label" style="color:#4CAF50">摊薄降幅</span><span class="result-value" style="color:#4CAF50;font-weight:700">${dropPct}%</span></div>`;
+  html+=`</div>`;
+
+  document.getElementById('ba-result').innerHTML=html;
+}
+
 async function aiQuote(){
   var _aiK = localStorage.getItem('qwen_api_key') || '';
   if(!_aiK){
@@ -9629,7 +9617,7 @@ async function aiQuote(){
     return '- '+(p.tuhao||p.name||'?')+' 材料:'+(p.material||'?')+' 单价:'+(p.unitPrice||p.price||'?')+'元';
   }).join('\n') || '（暂无历史报价数据）';
   var currentInfo = '当前产品：'+(prodName||tuhao||'未选择')+' 材料：'+(material||'未选择')+' 已算成本：'+(costInfo||'未计算');
-  var prompt = '你是CNC加工中心加工行业的资深报价专家。请根据以下信息给出报价建议：\n\n【当前产品信息】\n'+currentInfo+'\n\n【历史报价参考】\n'+histText+'\n\n【CNC加工中心报价规则】\n1. 材料费=重量×单价，CNC加工中心常用易切削钢、紫铜、黄铜等\n2. 加工费=时间/3600×费率，CNC加工中心费率一般80-150元/小时\n3. 刀具分摊=单价/寿命×数量\n4. 废料回收价值需扣除\n5. 含税价=(成本+利润)×1.13\n6. 利润率一般15-30%，急单可加10%\n\n请给出：\n1. 建议单价区间（最低价和推荐价）\n2. 成本构成分析（材料/加工/刀具/其他占比）\n3. 利润率评估\n4. 报价建议和注意事项\n\n用简洁的中文回答，适合手机屏幕阅读。';
+  var prompt = '你是CNC加工中心加工行业的资深报价专家。请根据以下信息给出报价建议：\n\n【当前产品信息】\n'+currentInfo+'\n\n【历史报价参考】\n'+histText+'\n\n【CNC加工中心报价规则（固定+变动二元模型）】\n1. 变动成本/件 = 材料费 + 加工费 + 刀具费\n2. 固定成本分摊/件 = (编程费+夹具费+装夹换型费+检测费+外协费+CAM费) ÷ 订单数量\n3. 材料费 = 毛坯重量(kg) × 材料单价 × (1+损耗率%)，CNC材料利用率40%-75%\n4. 加工费 = 时间/3600 × 设备费率，三轴100元/h、五轴250元/h\n5. CNC独有固定费用：编程费100-500元、夹具费0-3000元、装夹换型费50-200元/次、检测费0-800元\n6. 含税价 = 单件成本 × (1+利润率%) × (1+税率13%)\n7. 利润率一般10%-20%，小批量偏高\n8. 批量越大固定成本摊薄越多，1件到50件单价降幅52%-64%\n\n请给出：\n1. 建议单价区间（最低价和推荐价）\n2. 变动成本与固定成本占比分析\n3. 利润率评估\n4. 批量折扣建议\n5. 报价注意事项\n\n用简洁的中文回答，适合手机屏幕阅读。';
   if(typeof showToast==='function') showToast('🤖 AI正在分析报价...');
   try{
     var res = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',{
