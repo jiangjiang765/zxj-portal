@@ -4465,20 +4465,59 @@ function _v3dToggleFilter(k){
   }
 }
 
-// --- 触屏支持（Pointer Events统一鼠标+触屏，兼容华为鸿蒙浏览器） ---
+// --- 触屏+鼠标支持（修复华为鸿蒙浏览器Pointer Events不生效问题） ---
 var _v3dPointerStart=null;
+var _v3dTouchStart=null;       // 触屏事件起点
 var _v3dLastMeasureTime=0;
-var _v3dOrbitControls=null; // 缓存OrbitControls引用
+var _v3dOrbitControls=null;    // 缓存OrbitControls引用
+var _v3dMeasureCanvas=null;    // 缓存canvas引用
+var _v3dSavedTouchAction=null; // 保存原始touch-action
+
+// 获取O3DV canvas元素
+function _v3dGetCanvas(){
+  try{
+    var v=_o3dvViewer.GetViewer();if(!v)return null;
+    return v.GetCanvas?v.GetCanvas():(v.canvas||null);
+  }catch(e){return null;}
+}
+
+// 稳健获取OrbitControls：多路径查找+兜底
 function _v3dGetOrbitControls(){
   try{
     var v=_o3dvViewer.GetViewer();if(!v)return null;
-    // O3DV Navigation stores OrbitControls in navigator._controls
+    // 路径1: O3DV Navigation stores OrbitControls in navigator._controls
     if(v.navigator&&v.navigator._controls)return v.navigator._controls;
-    // Alternative: some builds may store differently
+    // 路径2: viewer.__controls (某些构建版本)
+    if(v.__controls)return v.__controls;
+    // 路径3: viewer._controls
     if(v._controls)return v._controls;
+    // 路径4: 遍历viewer属性查找OrbitControls实例
+    var keys=Object.keys(v);
+    for(var i=0;i<keys.length;i++){
+      try{
+        var prop=v[keys[i]];
+        if(prop&&typeof prop==='object'&&prop.enabled!==undefined&&prop.enableRotate!==undefined){
+          return prop; // OrbitControls特征: enabled + enableRotate
+        }
+      }catch(e2){}
+    }
+    // 路径5: 检查navigator下的所有属性
+    if(v.navigator){
+      var navKeys=Object.keys(v.navigator);
+      for(var j=0;j<navKeys.length;j++){
+        try{
+          var navProp=v.navigator[navKeys[j]];
+          if(navProp&&typeof navProp==='object'&&navProp.enabled!==undefined&&navProp.enableRotate!==undefined){
+            return navProp;
+          }
+        }catch(e3){}
+      }
+    }
     return null;
   }catch(e){return null;}
 }
+
+// --- 桌面端 Pointer Events（保留，兼容桌面浏览器）---
 function _v3dOnPointerDown(e){
   if(!_v3dMeasuring)return;
   _v3dPointerStart={x:e.clientX,y:e.clientY,time:Date.now()};
@@ -4487,19 +4526,114 @@ function _v3dOnPointerUp(e){
   if(!_v3dMeasuring||!_v3dPointerStart)return;
   var dx=e.clientX-_v3dPointerStart.x,dy=e.clientY-_v3dPointerStart.y;
   var dt=Date.now()-_v3dPointerStart.time;
-  // 防误触: 移动距离>15px或持续时间>500ms → 视为拖拽而非点击
   if(dt>500||Math.sqrt(dx*dx+dy*dy)>15)return;
-  // 300ms debounce防误触（stpviewer.net经验）
   var now=Date.now();
   if(now-_v3dLastMeasureTime<300)return;
   _v3dLastMeasureTime=now;
   e.preventDefault();
   e.stopPropagation();
-  var v=_o3dvViewer.GetViewer();
-  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var canvas=_v3dMeasureCanvas||_v3dGetCanvas();
+  if(!canvas)return;
   var rect=canvas.getBoundingClientRect();
+  // 坐标计算与O3DV的SetMouseClickHandler一致: clientX-rect.left
   var mc={x:e.clientX-rect.left,y:e.clientY-rect.top};
   _v3dSmartClick(mc);
+}
+
+// --- 移动端 Touch Events（核心修复：直接监听canvas，capture阶段拦截）---
+function _v3dOnTouchStart(e){
+  if(!_v3dMeasuring)return;
+  // capture阶段拦截，阻止O3DV内部处理
+  e.preventDefault();
+  e.stopPropagation();
+  var t=e.touches[0];
+  _v3dTouchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+}
+function _v3dOnTouchEnd(e){
+  if(!_v3dMeasuring||!_v3dTouchStart)return;
+  // 阻止O3DV和浏览器的后续touch事件处理
+  e.preventDefault();
+  e.stopPropagation();
+  var t=e.changedTouches[0];
+  var dx=t.clientX-_v3dTouchStart.x,dy=t.clientY-_v3dTouchStart.y;
+  var dt=Date.now()-_v3dTouchStart.time;
+  // 防误触: 移动距离>15px或持续时间>500ms → 视为拖拽而非点击
+  if(dt>500||Math.sqrt(dx*dx+dy*dy)>15){_v3dTouchStart=null;return;}
+  // 300ms debounce防误触
+  var now=Date.now();
+  if(now-_v3dLastMeasureTime<300){_v3dTouchStart=null;return;}
+  _v3dLastMeasureTime=now;
+  _v3dTouchStart=null;
+  var canvas=_v3dMeasureCanvas||_v3dGetCanvas();
+  if(!canvas)return;
+  var rect=canvas.getBoundingClientRect();
+  // 坐标计算与O3DV的SetMouseClickHandler一致: clientX-rect.left
+  var mc={x:t.clientX-rect.left,y:t.clientY-rect.top};
+  _v3dSmartClick(mc);
+}
+
+// --- 辅助：在测量模式下禁用OrbitControls（稳健方式）---
+function _v3dDisableOrbitControls(){
+  _v3dOrbitControls=_v3dGetOrbitControls();
+  if(_v3dOrbitControls){
+    _v3dOrbitControls.enabled=false;
+    return;
+  }
+  // 兜底方案: 直接在canvas上设置touch-action:none阻止旋转手势
+  // 同时尝试查找OrbitControls内部使用的DOM事件目标并禁用
+  var canvas=_v3dMeasureCanvas||_v3dGetCanvas();
+  if(canvas){
+    _v3dSavedTouchAction=canvas.style.touchAction||'';
+    canvas.style.touchAction='none';
+    // 额外: 查找OrbitControls可能绑定的内部元素
+    try{
+      var v=_o3dvViewer.GetViewer();
+      if(v&&v.domElement){
+        v.domElement.style.touchAction='none';
+      }
+    }catch(e){}
+  }
+}
+
+// --- 辅助：恢复OrbitControls ---
+function _v3dEnableOrbitControls(){
+  if(_v3dOrbitControls){
+    _v3dOrbitControls.enabled=true;
+    _v3dOrbitControls=null;
+  }
+  // 恢复canvas的touch-action
+  var canvas=_v3dMeasureCanvas||_v3dGetCanvas();
+  if(canvas){
+    canvas.style.touchAction=_v3dSavedTouchAction||'';
+  }
+  try{
+    var v=_o3dvViewer.GetViewer();
+    if(v&&v.domElement){
+      v.domElement.style.touchAction='';
+    }
+  }catch(e){}
+  _v3dSavedTouchAction=null;
+}
+
+// --- 辅助：绑定/解绑canvas上的touch监听器 ---
+function _v3dBindCanvasTouchListeners(canvas,bind){
+  if(!canvas)return;
+  if(bind){
+    canvas.addEventListener('touchstart',_v3dOnTouchStart,{capture:true,passive:false});
+    canvas.addEventListener('touchend',_v3dOnTouchEnd,{capture:true,passive:false});
+    // 阻止touchmove防止测量模式下页面滚动
+    canvas.addEventListener('touchmove',_v3dOnTouchMove,{capture:true,passive:false});
+  }else{
+    canvas.removeEventListener('touchstart',_v3dOnTouchStart,true);
+    canvas.removeEventListener('touchend',_v3dOnTouchEnd,true);
+    canvas.removeEventListener('touchmove',_v3dOnTouchMove,true);
+  }
+}
+
+function _v3dOnTouchMove(e){
+  if(!_v3dMeasuring)return;
+  e.preventDefault();
+  e.stopPropagation();
 }
 
 // --- 测量开关 ---
@@ -4510,6 +4644,7 @@ function v3dToggleMeasure(){
   var filt=document.getElementById('v3d-filter');
   var ctr=document.getElementById('v3d-container');
   if(_v3dMeasuring){
+    // ===== 退出测量模式 =====
     _v3dMeasuring=false;
     _v3dSelStack=[];
     var v=_o3dvViewer.GetViewer();if(v)v.SetMouseClickHandler(null);
@@ -4517,16 +4652,21 @@ function v3dToggleMeasure(){
     mel.style.display='none';
     filt.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
+    // 移除container上的pointer事件（桌面端）
     if(ctr){
       ctr.removeEventListener('pointerdown',_v3dOnPointerDown,true);
       ctr.removeEventListener('pointerup',_v3dOnPointerUp,true);
       ctr.style.touchAction='';
     }
+    // 移除canvas上的touch事件（移动端核心修复）
+    _v3dBindCanvasTouchListeners(_v3dMeasureCanvas,false);
+    _v3dMeasureCanvas=null;
     // 恢复OrbitControls
-    if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
+    _v3dEnableOrbitControls();
     // 清除hover高亮
     _v3dClearHover();
   }else{
+    // ===== 进入测量模式 =====
     _v3dMeasuring=true;
     _v3dSelStack=[];
     if(btn)btn.style.background='#ff9800';
@@ -4535,13 +4675,19 @@ function v3dToggleMeasure(){
     _v3dShowPrompt();
     var v=_o3dvViewer.GetViewer();
     if(v)v.SetMouseClickHandler(function(mc){_v3dSmartClick(mc);});
-    // 禁用OrbitControls，防止触屏旋转拦截测量事件
-    _v3dOrbitControls=_v3dGetOrbitControls();
-    if(_v3dOrbitControls){_v3dOrbitControls.enabled=false;}
+    // 缓存canvas引用
+    _v3dMeasureCanvas=_v3dGetCanvas();
+    // 禁用OrbitControls（稳健方式：多路径查找+兜底）
+    _v3dDisableOrbitControls();
+    // 在container上绑定pointer事件（桌面端鼠标点击兼容）
     if(ctr){
       ctr.addEventListener('pointerdown',_v3dOnPointerDown,{capture:true,passive:false});
       ctr.addEventListener('pointerup',_v3dOnPointerUp,{capture:true,passive:false});
       ctr.style.touchAction='none';
+    }
+    // 核心修复：在canvas上绑定touch事件（capture阶段，移动端直接拦截）
+    if(_v3dMeasureCanvas){
+      _v3dBindCanvasTouchListeners(_v3dMeasureCanvas,true);
     }
   }
 }
