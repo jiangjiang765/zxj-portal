@@ -9,24 +9,6 @@
 <meta name="theme-color" content="#0D1B2A">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230D1B2A'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='%23D4A843'>⚙</text></svg>">
-<script>
-/* 强制覆盖旧SW + 清缓存 */
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js',{scope:'/'}).then(function(reg){
-    reg.update();
-    setTimeout(function(){
-      navigator.serviceWorker.getRegistrations().then(function(regs){
-        regs.forEach(function(r){r.unregister()});
-      });
-    },1000);
-  }).catch(function(){
-    navigator.serviceWorker.getRegistrations().then(function(regs){
-      regs.forEach(function(r){r.unregister()});
-    });
-  });
-}
-if('caches' in window){caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k)})})}
-</script>
 <title>走芯机管理系统</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -543,7 +525,7 @@ select.prog-input{appearance:none;-webkit-appearance:none;background:#0D1B2A url
 
 
 /* ===== 登录页 ===== */
-.login-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;min-height:100vh;z-index:9999;background:var(--bg-deep);display:none;align-items:center;justify-content:center;flex-direction:column;padding:24px calc(24px + env(safe-area-inset-right,0px)) 24px calc(24px + env(safe-area-inset-left,0px));box-sizing:border-box;text-align:center}
+.login-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;min-height:100vh;z-index:9999;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px calc(24px + env(safe-area-inset-right,0px)) 24px calc(24px + env(safe-area-inset-left,0px));box-sizing:border-box;text-align:center}
 .login-overlay.hidden{display:none}
 html.portal-auto .login-overlay{display:none!important}
 .login-logo{font-size:48px;margin-bottom:12px;line-height:1}
@@ -597,7 +579,7 @@ async function loadShiftRecords(){try{_shiftRecords=await vsGet('shift_records',
 function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=machineNo.toUpperCase().replace(/[^A-Z0-9]/g,'');var did=deviceId.toUpperCase();if(mn===did)return true;if(mn.length>2&&did.length>1&&mn.indexOf(did)>=0)return true;var mnSuffix=mn.replace(/^[A-Z]*/,'');var didSuffix=did.replace(/^[A-Z]*/,'');if(mnSuffix&&didSuffix&&mnSuffix===didSuffix)return true;return false}
 /* Anti-flash: hide login overlay immediately if Portal session exists */try{if(localStorage.getItem('zxj_session')){document.documentElement.classList.add('portal-auto')}}catch(e){}</script>
 <!-- 登录页 -->
-<div class="login-overlay hidden" id="login-overlay">
+<div class="login-overlay" id="login-overlay">
   <div class="login-logo">&#9881;</div>
   <div class="login-title">走芯机管理系统</div>
   <div class="login-subtitle">CNC Swiss-Type Management</div>
@@ -722,7 +704,7 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
     </div>
 
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
-      <div style="font-size:15px;font-weight:700;color:var(--gold);margin-bottom:8px">🔧 走芯机管理系统</div>
+      <div style="font-size:15px;font-weight:700;color:var(--gold);margin-bottom:8px">走芯机管理系统</div>
       <div style="font-size:13px;color:var(--text-dim);line-height:1.7">
         专为走芯机/走心机加工车间设计的生产管理工具，支持多品牌设备（斯大、西铁城、津上），覆盖从报价到生产的全流程。
       </div>
@@ -820,10 +802,10 @@ function matchMachineNo(machineNo,deviceId){if(!machineNo)return false;var mn=ma
 
 <div class="header">
   <span class="header-back-btn" onclick="location.href='./index.html'" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:20px;cursor:pointer;padding:6px 8px;line-height:1;color:var(--text-dim)">◀</span>
-  <h1>🔧 走芯机管理系统</h1>
+  <h1>走芯机管理系统</h1>
   <div class="header-user" id="header-user" style="display:none">
     <span class="header-user-name" id="header-username"></span>
-    <span class="header-help" onclick="showHelp()" style="font-size:16px;cursor:pointer;margin-right:6px">📖</span>
+    
     <span class="header-admin" id="header-admin-btn" onclick="openAdminPanel()" style="display:none;font-size:11px;color:var(--gold);cursor:pointer;padding:4px 8px;border:1px solid var(--gold);border-radius:6px;margin-right:4px">管理</span>
   </div>
 </div>
@@ -7725,14 +7707,8 @@ function initAuth() {
   var device = getAuthData('auth_device', null);
 
   if (!adminPwd) {
-    // 首次使用 → 自动以admin身份进入
-    _currentUser = {name:'老姜',code:'ADMIN',isAdmin:true};
-    _isAdmin = true;
-    try{localStorage.setItem('zxj_session',JSON.stringify({name:'老姜',code:'ADMIN',role:'admin'}))}catch(e){}
-    hideLoginOverlay();
-    showUserInfo();
-    init();
-    return;
+    // 首次使用，显示管理员设置
+    showPage('auth-admin-setup');
   } else if (device && device.activated) {
     // 已激活，检查授权码是否过期
     var codes = getAuthData('auth_codes', []);
@@ -7975,9 +7951,7 @@ function activateAuth() {
 }
 
 function showLoginOverlay() {
-  var lo=document.getElementById('login-overlay');
-  lo.classList.remove('hidden');
-  lo.style.display='flex';
+  document.getElementById('login-overlay').classList.remove('hidden');
   var adminPwd = localStorage.getItem('auth_admin_pwd');
   var device = getAuthData('auth_device', null);
   if (!adminPwd) {
@@ -7994,9 +7968,7 @@ function showLoginOverlay() {
 }
 
 function hideLoginOverlay() {
-  var lo=document.getElementById('login-overlay');
-  lo.classList.add('hidden');
-  lo.style.display='none';
+  document.getElementById('login-overlay').classList.add('hidden');
 }
 
 function showUserInfo() {
@@ -8278,36 +8250,6 @@ function init(){
 
 // 先检查认证状态，登录后再初始化系统
 initAuth();
-
-// 华为鸿蒙浏览器：给home-card主动绑click+touchend
-(function bindHomeCards(){
-  var cards=document.querySelectorAll('.home-card');
-  if(!cards.length){setTimeout(bindHomeCards,100);return;}
-  cards.forEach(function(card){
-    card.addEventListener('click',function(e){
-      var oc=card.getAttribute('onclick');
-      if(oc){e.stopPropagation();try{new Function(oc)();}catch(ex){console.error('hc-click',ex);}}
-    });
-    var sx=0,sy=0,moved=false;
-    card.addEventListener('touchstart',function(e){
-      moved=false;
-      if(e.touches.length===1){sx=e.touches[0].clientX;sy=e.touches[0].clientY;}
-    },{passive:true});
-    card.addEventListener('touchmove',function(e){
-      var t=e.touches[0];
-      if(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)moved=true;
-    },{passive:true});
-    card.addEventListener('touchend',function(e){
-      if(moved)return;
-      var t=e.changedTouches[0];
-      if(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)return;
-      e.preventDefault();
-      var oc=card.getAttribute('onclick');
-      if(oc){try{new Function(oc)();}catch(ex){console.error('hc-touch',ex);}}
-    });
-  });
-})();
-
 
 // === 华为浏览器touchend兜底（仅首页 con-btn） ===
 // 注意：早期版本扫描所有带 onclick 的元素，导致订单/产品等页面滑动时按钮被误触
