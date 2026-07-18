@@ -4465,23 +4465,40 @@ function _v3dToggleFilter(k){
   }
 }
 
-// --- 触屏支持 ---
-var _v3dTouchStart=null;
-function _v3dOnTouchStart(e){
-  var t=e.touches[0];
-  _v3dTouchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+// --- 触屏支持（Pointer Events统一鼠标+触屏，兼容华为鸿蒙浏览器） ---
+var _v3dPointerStart=null;
+var _v3dLastMeasureTime=0;
+var _v3dOrbitControls=null; // 缓存OrbitControls引用
+function _v3dGetOrbitControls(){
+  try{
+    var v=_o3dvViewer.GetViewer();if(!v)return null;
+    // O3DV Navigation stores OrbitControls in navigator._controls
+    if(v.navigator&&v.navigator._controls)return v.navigator._controls;
+    // Alternative: some builds may store differently
+    if(v._controls)return v._controls;
+    return null;
+  }catch(e){return null;}
 }
-function _v3dOnTouchEnd(e){
-  if(!_v3dMeasuring||!_v3dTouchStart)return;
-  var t=e.changedTouches[0];
-  var dx=t.clientX-_v3dTouchStart.x,dy=t.clientY-_v3dTouchStart.y;
-  var dt=Date.now()-_v3dTouchStart.time;
-  if(dt>400||Math.sqrt(dx*dx+dy*dy)>20)return;
+function _v3dOnPointerDown(e){
+  if(!_v3dMeasuring)return;
+  _v3dPointerStart={x:e.clientX,y:e.clientY,time:Date.now()};
+}
+function _v3dOnPointerUp(e){
+  if(!_v3dMeasuring||!_v3dPointerStart)return;
+  var dx=e.clientX-_v3dPointerStart.x,dy=e.clientY-_v3dPointerStart.y;
+  var dt=Date.now()-_v3dPointerStart.time;
+  // 防误触: 移动距离>15px或持续时间>500ms → 视为拖拽而非点击
+  if(dt>500||Math.sqrt(dx*dx+dy*dy)>15)return;
+  // 300ms debounce防误触（stpviewer.net经验）
+  var now=Date.now();
+  if(now-_v3dLastMeasureTime<300)return;
+  _v3dLastMeasureTime=now;
   e.preventDefault();
+  e.stopPropagation();
   var v=_o3dvViewer.GetViewer();
   var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
   var rect=canvas.getBoundingClientRect();
-  var mc={x:t.clientX-rect.left,y:t.clientY-rect.top};
+  var mc={x:e.clientX-rect.left,y:e.clientY-rect.top};
   _v3dSmartClick(mc);
 }
 
@@ -4500,7 +4517,13 @@ function v3dToggleMeasure(){
     mel.style.display='none';
     filt.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
-    if(ctr){ctr.removeEventListener('touchstart',_v3dOnTouchStart);ctr.removeEventListener('touchend',_v3dOnTouchEnd);}
+    if(ctr){
+      ctr.removeEventListener('pointerdown',_v3dOnPointerDown,true);
+      ctr.removeEventListener('pointerup',_v3dOnPointerUp,true);
+      ctr.style.touchAction='';
+    }
+    // 恢复OrbitControls
+    if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
     // 清除hover高亮
     _v3dClearHover();
   }else{
@@ -4512,7 +4535,14 @@ function v3dToggleMeasure(){
     _v3dShowPrompt();
     var v=_o3dvViewer.GetViewer();
     if(v)v.SetMouseClickHandler(function(mc){_v3dSmartClick(mc);});
-    if(ctr){ctr.addEventListener('touchstart',_v3dOnTouchStart,{passive:true});ctr.addEventListener('touchend',_v3dOnTouchEnd,{passive:false});}
+    // 禁用OrbitControls，防止触屏旋转拦截测量事件
+    _v3dOrbitControls=_v3dGetOrbitControls();
+    if(_v3dOrbitControls){_v3dOrbitControls.enabled=false;}
+    if(ctr){
+      ctr.addEventListener('pointerdown',_v3dOnPointerDown,{capture:true,passive:false});
+      ctr.addEventListener('pointerup',_v3dOnPointerUp,{capture:true,passive:false});
+      ctr.style.touchAction='none';
+    }
   }
 }
 
