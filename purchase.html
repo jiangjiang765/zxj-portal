@@ -8,20 +8,20 @@
 :root{--bg:#0D1B2A;--card:#1B2838;--gold:#D4A843;--gold2:#B8912E;--text:#E0E0E0;--dim:#8899AA;--blue:#4A8AB5;--green:#4CAF50;--red:#F44336;--orange:#FF9800;--radius:12px}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:15px;padding-bottom:70px;min-height:100vh}
-/* top bar */
 .top-bar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#0D1B2A,#1a3050);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,168,67,.3)}
 .top-bar h1{font-size:18px;color:var(--gold);font-weight:700}
+.top-bar .right{display:flex;align-items:center;gap:12px}
 .top-bar .user{font-size:12px;color:var(--dim)}
+.notif-btn{position:relative;font-size:20px;cursor:pointer;padding:4px}
+.notif-btn .nb{position:absolute;top:-2px;right:-4px;background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;display:none}
+.notif-btn .nb.show{display:block}
 .back-btn{color:var(--gold);font-size:22px;cursor:pointer;margin-right:10px;text-decoration:none}
-/* tabs */
 .tabs{display:flex;background:var(--card);border-bottom:2px solid rgba(212,168,67,.2);position:sticky;top:52px;z-index:99}
 .tab{flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:600;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent;transition:.2s}
 .tab.active{color:var(--gold);border-bottom-color:var(--gold)}
 .tab .badge{display:inline-block;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:top}
-/* panels */
 .panel{display:none;padding:16px}
 .panel.active{display:block}
-/* form */
 .form-group{margin-bottom:14px}
 .form-group label{display:block;font-size:13px;color:var(--gold);margin-bottom:6px;font-weight:600}
 .form-group label .req{color:var(--red);margin-left:2px}
@@ -31,7 +31,6 @@ select.form-ctrl{appearance:none;background-image:url("data:image/svg+xml,%3Csvg
 .form-row{display:flex;gap:10px}
 .form-row .form-group{flex:1}
 textarea.form-ctrl{resize:vertical;min-height:60px}
-/* btns */
 .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 24px;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;transition:.15s}
 .btn:active{transform:scale(.96)}
 .btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0D1B2A}
@@ -41,7 +40,6 @@ textarea.form-ctrl{resize:vertical;min-height:60px}
 .btn-outline{background:transparent;border:1px solid var(--gold);color:var(--gold)}
 .btn-sm{padding:7px 14px;font-size:12px;border-radius:8px}
 .btn-block{width:100%;margin-top:8px}
-/* list card */
 .req-card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;border-left:4px solid var(--gold)}
 .req-card.status-pending{border-left-color:var(--orange)}
 .req-card.status-buying{border-left-color:var(--blue)}
@@ -64,30 +62,43 @@ textarea.form-ctrl{resize:vertical;min-height:60px}
 .urg-normal{color:var(--dim)}
 .urg-urgent{background:rgba(255,152,0,.15);color:var(--orange)}
 .urg-critical{background:rgba(244,67,54,.15);color:var(--red)}
-/* filter bar */
 .filter-bar{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
 .filter-bar::-webkit-scrollbar{display:none}
 .fbtn{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a6a;background:transparent;color:var(--dim);transition:.2s}
 .fbtn.active{background:rgba(212,168,67,.15);border-color:var(--gold);color:var(--gold)}
-/* toast */
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);padding:10px 24px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:.3s;pointer-events:none}
 .toast.show{opacity:1}
 .toast-ok{background:rgba(76,175,80,.9);color:#fff}
 .toast-err{background:rgba(244,67,54,.9);color:#fff}
 .toast-info{background:rgba(74,138,181,.9);color:#fff}
-/* empty */
 .empty{text-align:center;padding:40px 20px;color:var(--dim)}
 .empty .icon{font-size:48px;margin-bottom:10px;opacity:.5}
-/* autocomplete */
 .ac-wrap{position:relative}
 .ac-list{position:absolute;top:100%;left:0;right:0;background:#0f2133;border:1px solid #2a4a6a;border-radius:0 0 8px 8px;z-index:50;max-height:150px;overflow-y:auto;display:none}
 .ac-list.show{display:block}
 .ac-item{padding:10px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid #1a3050}
 .ac-item:hover,.ac-item:active{background:rgba(212,168,67,.1)}
-/* print */
+/* 通知面板 */
+.notif-panel{position:fixed;top:0;right:0;bottom:0;width:85%;max-width:380px;background:var(--card);z-index:300;transform:translateX(100%);transition:transform .25s;overflow-y:auto;border-left:1px solid rgba(212,168,67,.3)}
+.notif-panel.open{transform:translateX(0)}
+.notif-panel .np-head{padding:16px;border-bottom:1px solid #2a4a6a;display:flex;justify-content:space-between;align-items:center}
+.notif-panel .np-head h3{color:var(--gold);font-size:16px}
+.notif-panel .np-head .np-close{font-size:22px;cursor:pointer;color:var(--dim)}
+.notif-panel .np-clear{font-size:12px;color:var(--dim);cursor:pointer;padding:2px 8px}
+.notif-panel .np-clear:hover{color:var(--gold)}
+.np-item{padding:14px 16px;border-bottom:1px solid #1a3050;cursor:pointer;transition:.15s}
+.np-item:active{background:rgba(212,168,67,.05)}
+.np-item.unread{border-left:3px solid var(--gold)}
+.np-item.read{opacity:.6}
+.np-item .ni-time{font-size:11px;color:var(--dim);margin-bottom:4px}
+.np-item .ni-body{font-size:14px;color:var(--text);line-height:1.5}
+.np-item .ni-body b{color:var(--gold)}
+.np-empty{padding:40px;text-align:center;color:var(--dim)}
+.notif-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:299}
+.notif-overlay.show{display:block}
 @media print{
   body{background:#fff!important;color:#000!important;padding:0!important}
-  .top-bar,.tabs,.panel .btn,.filter-bar,.req-card .actions,.toast,.back-btn,#formPanel,#listPanel{display:none!important}
+  .top-bar,.tabs,.panel .btn,.filter-bar,.req-card .actions,.toast,.back-btn,.notif-btn,.notif-panel,.notif-overlay,#formPanel,#listPanel,#todoPanel,#notifPanelWrap{display:none!important}
   #printArea{display:block!important}
   .print-form{max-width:700px;margin:0 auto;font-size:12px;color:#000}
   .print-form h2{text-align:center;font-size:20px;margin-bottom:4px;border-bottom:2px solid #000;padding-bottom:8px}
@@ -98,12 +109,7 @@ textarea.form-ctrl{resize:vertical;min-height:60px}
   .sign-area{display:flex;justify-content:space-between;margin-top:40px}
   .sign-box{width:30%;text-align:center;font-size:13px}
   .sign-box .line{border-bottom:1px solid #999;margin-top:40px;margin-bottom:4px}
-  .req-card{border-left:none!important;background:#fff!important;page-break-inside:avoid}
-  .req-card .title,.req-card .meta b{color:#000!important}
 }
-.print-only{display:none}
-@media print{.print-only{display:block}}
-/* modal */
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal{background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto}
@@ -118,7 +124,10 @@ textarea.form-ctrl{resize:vertical;min-height:60px}
     <a class="back-btn" href="./portal.html">‹</a>
     <h1>📋 采购申请</h1>
   </div>
-  <div class="user" id="userInfo"></div>
+  <div class="right">
+    <div class="notif-btn" id="notifBtn" onclick="toggleNotif()">🔔<span class="nb" id="notifBadge"></span></div>
+    <div class="user" id="userInfo"></div>
+  </div>
 </div>
 
 <div class="tabs">
@@ -249,6 +258,16 @@ textarea.form-ctrl{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- 通知侧滑面板 -->
+<div class="notif-overlay" id="notifOverlay" onclick="toggleNotif()"></div>
+<div class="notif-panel" id="notifPanel">
+  <div class="np-head">
+    <h3>🔔 通知</h3>
+    <span class="np-clear" onclick="clearAllNotif()">全部已读</span>
+  </div>
+  <div id="notifList"></div>
+</div>
+
 <script>
 // ===== 配置 =====
 var SB_URL='https://prqievwybuzwmmcdoqdq.supabase.co';
@@ -284,16 +303,142 @@ var SPARE_SUBS={
 var DATA_KEY='purchaseRequests';
 var MODEL_HIST_KEY='purchaseModelHist';
 var TUHAO_HIST_KEY='purchaseTuhaoHist';
+var NOTIF_KEY='purchaseNotif';
 
 function gd(k){try{return JSON.parse(localStorage.getItem(k))||[]}catch{return[]}}
 function sd(k,v){localStorage.setItem(k,JSON.stringify(v));scheduleSync()}
-
 function getReqs(){return gd(DATA_KEY)}
 function saveReqs(r){sd(DATA_KEY,r)}
 function getModelHist(){return gd(MODEL_HIST_KEY)}
 function saveModelHist(h){sd(MODEL_HIST_KEY,h)}
 function getTuhaoHist(){return gd(TUHAO_HIST_KEY)}
 function saveTuhaoHist(h){sd(TUHAO_HIST_KEY,h)}
+
+// ===== 系统内通知 =====
+function getNotifs(){return gd(NOTIF_KEY)}
+function saveNotifs(n){sd(NOTIF_KEY,n)}
+
+function addNotif(toUser,type,body,reqId){
+  var notifs=getNotifs();
+  notifs.unshift({
+    id:'N'+Date.now(),
+    to:toUser,
+    type:type,
+    body:body,
+    reqId:reqId||'',
+    read:false,
+    createdAt:new Date().toISOString()
+  });
+  // 最多保留200条
+  if(notifs.length>200)notifs=notifs.slice(0,200);
+  saveNotifs(notifs);
+  refreshNotifBadge();
+  // 同步到云端，其他设备也能看到
+  syncNotifToCloud();
+}
+
+function getMyUnread(){
+  var name=_user?_user.name:'';
+  return getNotifs().filter(function(n){return n.to===name&&!n.read});
+}
+
+function refreshNotifBadge(){
+  var unread=getMyUnread().length;
+  var badge=document.getElementById('notifBadge');
+  if(unread>0){badge.textContent=unread>99?'99+':unread;badge.classList.add('show')}
+  else{badge.classList.remove('show')}
+}
+
+function toggleNotif(){
+  var panel=document.getElementById('notifPanel');
+  var overlay=document.getElementById('notifOverlay');
+  var isOpen=panel.classList.contains('open');
+  if(isOpen){
+    panel.classList.remove('open');overlay.classList.remove('show');
+  }else{
+    panel.classList.add('open');overlay.classList.add('show');
+    renderNotifList();
+  }
+}
+
+function renderNotifList(){
+  var name=_user?_user.name:'';
+  var notifs=getNotifs().filter(function(n){return n.to===name}).slice(0,50);
+  var el=document.getElementById('notifList');
+  if(!notifs.length){el.innerHTML='<div class="np-empty">📭 暂无通知</div>';return}
+  el.innerHTML=notifs.map(function(n){
+    var timeStr=new Date(n.createdAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return '<div class="np-item '+(n.read?'read':'unread')+'" onclick="readNotif(\''+n.id+'\')">'+
+      '<div class="ni-time">'+timeStr+'</div>'+
+      '<div class="ni-body">'+n.body+'</div></div>';
+  }).join('');
+}
+
+function readNotif(id){
+  var notifs=getNotifs();
+  var idx=notifs.findIndex(function(n){return n.id===id});
+  if(idx>=0&&!notifs[idx].read){
+    notifs[idx].read=true;
+    saveNotifs(notifs);
+    refreshNotifBadge();
+    renderNotifList();
+  }
+  // 如果关联了采购单，跳转
+  var n=notifs.find(function(x){return x.id===id});
+  if(n&&n.reqId){switchTab('list')}
+}
+
+function clearAllNotif(){
+  var name=_user?_user.name:'';
+  var notifs=getNotifs();
+  notifs.forEach(function(n){if(n.to===name)n.read=true});
+  saveNotifs(notifs);
+  refreshNotifBadge();
+  renderNotifList();
+  showToast('已全部标为已读','ok');
+}
+
+async function syncNotifToCloud(){
+  try{
+    var d={};var v=localStorage.getItem(NOTIF_KEY);if(v)d[NOTIF_KEY]=v;
+    var existing=await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).then(function(r){return r.json()});
+    var allData={};
+    if(existing&&existing.length>0&&existing[0].data)allData=existing[0].data;
+    Object.keys(d).forEach(function(k){allData[k]=d[k]});
+    await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{
+      method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({data:allData,updated_at:new Date().toISOString()})
+    });
+  }catch(e){console.warn('notif sync err',e)}
+}
+
+// 拉取云端通知
+async function pullCloudNotifs(){
+  try{
+    var res=await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID+'&select=data',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    var d=await res.json();
+    if(d&&d.length>0&&d[0].data&&d[0].data[NOTIF_KEY]){
+      var cloudNotifs=JSON.parse(d[0].data[NOTIF_KEY]);
+      var localNotifs=getNotifs();
+      // 合并：本地没有的就补上
+      var localIds=localNotifs.map(function(n){return n.id});
+      var newOnes=cloudNotifs.filter(function(n){return localIds.indexOf(n.id)<0});
+      if(newOnes.length){
+        var merged=newOnes.concat(localNotifs);
+        if(merged.length>200)merged=merged.slice(0,200);
+        saveNotifs(merged);
+        refreshNotifBadge();
+      }
+    }
+  }catch(e){console.warn('pull notif err',e)}
+}
+
+// 定期拉取云端通知（15秒一次）
+var _pollTimer=null;
+function startNotifPoll(){
+  pullCloudNotifs();
+  _pollTimer=setInterval(pullCloudNotifs,15000);
+}
 
 // ===== 认证 =====
 var _user=null;
@@ -352,9 +497,7 @@ function showModelAC(){
   if(!hist.length){hideModelAC();return}
   var filtered=v?hist.filter(function(m){return m.toLowerCase().indexOf(v)>=0}):hist.slice(0,10);
   if(!filtered.length){hideModelAC();return}
-  var html='';
-  filtered.forEach(function(m){html+='<div class="ac-item" onmousedown="pickModel(\''+m.replace(/'/g,"\\'")+'\')">'+m+'</div>'});
-  document.getElementById('modelAC').innerHTML=html;
+  document.getElementById('modelAC').innerHTML=filtered.map(function(m){return '<div class="ac-item" onmousedown="pickModel(\''+m.replace(/'/g,"\\'")+'\')">'+m+'</div>'}).join('');
   document.getElementById('modelAC').classList.add('show');
 }
 function hideModelAC(){document.getElementById('modelAC').classList.remove('show')}
@@ -363,7 +506,6 @@ function pickModel(v){document.getElementById('f_model').value=v;hideModelAC()}
 // ===== 图号自动补全 =====
 function showTuhaoAC(){
   var v=document.getElementById('f_tuhao').value.trim().toLowerCase();
-  // 也从产品库补全
   var prods=gd('products');
   var hist=getTuhaoHist();
   var all=hist.slice();
@@ -371,9 +513,7 @@ function showTuhaoAC(){
   if(!all.length){hideTuhaoAC();return}
   var filtered=v?all.filter(function(t){return t.toLowerCase().indexOf(v)>=0}):all.slice(0,10);
   if(!filtered.length){hideTuhaoAC();return}
-  var html='';
-  filtered.forEach(function(t){html+='<div class="ac-item" onmousedown="pickTuhao(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</div>'});
-  document.getElementById('tuhaoAC').innerHTML=html;
+  document.getElementById('tuhaoAC').innerHTML=filtered.map(function(t){return '<div class="ac-item" onmousedown="pickTuhao(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</div>'}).join('');
   document.getElementById('tuhaoAC').classList.add('show');
 }
 function hideTuhaoAC(){document.getElementById('tuhaoAC').classList.remove('show')}
@@ -394,7 +534,6 @@ function submitReq(){
   var purchaser=document.getElementById('f_purchaser').value;
   var remark=document.getElementById('f_remark').value.trim();
 
-  // 校验
   if(!type){return showToast('请选择采购类型','err')}
   if(!subtype){return showToast('请选择分类','err')}
   if(!spec){return showToast('请选择规格','err')}
@@ -416,11 +555,16 @@ function submitReq(){
 
   var reqs=getReqs();reqs.unshift(req);saveReqs(reqs);
 
-  // 更新型号历史
+  // 更新型号/图号历史
   var mh=getModelHist();
   if(mh.indexOf(model)<0){mh.unshift(model);if(mh.length>50)mh.pop();saveModelHist(mh)}
-  // 更新图号历史
   if(tuhao){var th=getTuhaoHist();if(th.indexOf(tuhao)<0){th.unshift(tuhao);if(th.length>50)th.pop();saveTuhaoHist(th)}}
+
+  // 🔔 创建系统内通知给采购人
+  var urgText={普通:'',加急:'⚡加急 ',特急:'🔥特急 '};
+  addNotif(purchaser,'new_req',
+    urgText[urgency]+'<b>'+applicant+'</b> 申请采购 <b>'+subtype+' '+spec+'</b> 型号<b>'+model+'</b> ×'+qty+unit+(urgency==='特急'?' 请立即处理！':''),
+    req.id);
 
   // 清空表单
   ['f_type','f_subtype','f_spec','f_model','f_qty','f_tuhao','f_remark'].forEach(function(id){
@@ -431,39 +575,9 @@ function submitReq(){
   document.getElementById('f_urgency').selectedIndex=0;
   document.getElementById('f_unit').selectedIndex=0;
 
-  showToast('✅ 申请已提交！','ok');
-  notifyPurchaser(req);
+  showToast('✅ 申请已提交，已通知 '+purchaser,'ok');
   refreshBadges();
   switchTab('list');
-}
-
-// ===== 通知采购人 =====
-function notifyPurchaser(req){
-  // 尝试浏览器通知
-  if('Notification' in window && Notification.permission==='granted'){
-    new Notification('新的采购申请',{body:req.applicant+'申请采购'+req.type+' - '+req.subtype+' '+req.spec+' '+req.model+' ×'+req.qty,tag:req.id});
-  }
-  // 请求通知权限
-  if('Notification' in window && Notification.permission==='default'){
-    Notification.requestPermission();
-  }
-}
-
-function notifyByEmail(req){
-  var subject='采购申请 - '+req.type+'/'+req.subtype+'/'+req.spec;
-  var body='采购申请单 '+req.id+'%0D%0A'+
-    '类型: '+req.type+'%0D%0A'+
-    '分类: '+req.subtype+'%0D%0A'+
-    '规格: '+req.spec+'%0D%0A'+
-    '型号: '+req.model+'%0D%0A'+
-    '数量: '+req.qty+req.unit+'%0D%0A'+
-    '申请人: '+req.applicant+'%0D%0A'+
-    '部门: '+req.dept+'%0D%0A'+
-    (req.tuhao?'图号: '+req.tuhao+'%0D%0A':'')+
-    '紧急: '+req.urgency+'%0D%0A'+
-    (req.remark?'备注: '+req.remark+'%0D%0A':'')+
-    '%0D%0A请尽快处理';
-  window.open('mailto:?subject='+encodeURIComponent(subject)+'&body='+body);
 }
 
 // ===== Tab 切换 =====
@@ -509,15 +623,13 @@ function renderCard(r){
   var urgCls={普通:'urg-normal',加急:'urg-urgent',特急:'urg-critical'};
   var typeCls=r.type==='刀具'?'tag-tool':'tag-spare';
   var dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
-
   var actions='';
   if(r.status==='pending'){
     actions='<button class="btn btn-blue btn-sm" onclick="openStatusModal(\''+r.id+'\')">处理</button>';
   }else if(r.status==='buying'){
     actions='<button class="btn btn-green btn-sm" onclick="openStatusModal(\''+r.id+'\')">更新</button>';
   }
-  actions+='<button class="btn btn-outline btn-sm" onclick="printReq(\''+r.id+'\')">🖨 打印</button>';
-  actions+='<button class="btn btn-outline btn-sm" onclick="notifyByEmail(getReqById(\''+r.id+'\'))">📧 通知</button>';
+  actions+='<button class="btn btn-outline btn-sm" onclick="printReq(\''+r.id+'\')">🖨</button>';
 
   return '<div class="req-card status-'+r.status+'">'+
     '<div class="row"><span class="type-tag '+typeCls+'">'+r.type+'</span><span class="urgency '+(urgCls[r.urgency]||'')+'">'+r.urgency+'</span><span class="status-badge '+stCls[r.status]+'">'+stMap[r.status]+'</span></div>'+
@@ -544,9 +656,20 @@ function changeStatus(st){
   var reqs=getReqs();
   var idx=reqs.findIndex(function(r){return r.id===_statusId});
   if(idx>=0){
-    reqs[idx].status=st;
-    reqs[idx].updatedAt=new Date().toISOString();
+    var r=reqs[idx];
+    var oldSt=r.status;
+    r.status=st;r.updatedAt=new Date().toISOString();
     saveReqs(reqs);
+
+    // 🔔 状态变更通知申请人
+    if(st==='buying'){
+      addNotif(r.applicant,'status_change','<b>'+r.purchaser+'</b> 已开始采购 <b>'+r.subtype+' '+r.spec+' '+r.model+'</b>',r.id);
+    }else if(st==='arrived'){
+      addNotif(r.applicant,'arrived','📦 <b>'+r.subtype+' '+r.spec+' '+r.model+'</b> ×'+r.qty+r.unit+' 已到货！',r.id);
+    }else if(st==='cancelled'){
+      addNotif(r.applicant,'cancelled','❌ 采购 <b>'+r.subtype+' '+r.spec+' '+r.model+'</b> 已取消',r.id);
+    }
+
     showToast('✅ 状态已更新','ok');
   }
   closeStatusModal();
@@ -605,7 +728,7 @@ function scheduleSync(){if(_syncTimer)clearTimeout(_syncTimer);_syncTimer=setTim
 async function doSync(){
   try{
     var d={};
-    [DATA_KEY,MODEL_HIST_KEY,TUHAO_HIST_KEY].forEach(function(k){var v=localStorage.getItem(k);if(v)d[k]=v});
+    [DATA_KEY,MODEL_HIST_KEY,TUHAO_HIST_KEY,NOTIF_KEY].forEach(function(k){var v=localStorage.getItem(k);if(v)d[k]=v});
     var existing=await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).then(function(r){return r.json()});
     if(existing&&existing.length>0&&existing[0].data){Object.keys(existing[0].data).forEach(function(k){if(!(k in d))d[k]=existing[0].data[k]})}
     await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{
@@ -616,11 +739,12 @@ async function doSync(){
 }
 
 // ===== 初始化 =====
-initAuth();fillStaff();refreshBadges();
+initAuth();fillStaff();refreshBadges();refreshNotifBadge();
+startNotifPoll();
 
-// 请求浏览器通知权限
+// 请求浏览器通知权限（辅助）
 if('Notification' in window && Notification.permission==='default'){
-  setTimeout(function(){Notification.requestPermission()},3000);
+  setTimeout(function(){Notification.requestPermission()},5000);
 }
 </script>
 </body>
