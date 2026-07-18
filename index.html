@@ -486,7 +486,9 @@ function renderCards(role){
       {icon:'🏭',title:'CNC加工中心',desc:'铣削 / 钻孔 / 五轴 / 钻攻',url:'./cnc.html?v='+Date.now()+'',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'刀具 / 原材料 / 备品 / 成品',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
+            {icon:'🛒',title:'采购申请',desc:'刀具 / 备品 / 申请',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
       {icon:'🤝',title:'交班系统',desc:'交班记录 / 设备状态',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'},
+            {icon:'🛒',title:'采购申请',desc:'刀具 / 备品 / 审批 / 打印',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
       {icon:'🛠️',title:'后台管理',desc:'账号 / 权限 / 门户设置',action:'openAdminPanel()',bg:'linear-gradient(135deg,#374151,#6b7280)',permKey:'admin'}
     ],
     leader:[
@@ -494,6 +496,7 @@ function renderCards(role){
       {icon:'🏭',title:'CNC加工中心',desc:'铣削 / 钻孔 / 五轴 / 钻攻',url:'./cnc.html?v='+Date.now()+'',bg:'linear-gradient(135deg,#7c2d12,#ea580c)',permKey:'cnc'},
       {icon:'📋',title:'生产计划',desc:'订单 / 排产 / 进度 / 外发',url:'./production_plan.html',bg:'linear-gradient(135deg,#1a4a3a,#2d8a6e)',permKey:'pp'},
       {icon:'📦',title:'仓库系统',desc:'领料 / 查库存',url:'./warehouse.html',bg:'linear-gradient(135deg,#065f46,#10b981)',permKey:'wh'},
+            {icon:'🛒',title:'采购申请',desc:'申请 / 查进度',url:'./purchase.html?v='+Date.now(),bg:'linear-gradient(135deg,#1a3a6a,#4a7ab5)',permKey:'purchase'},
       {icon:'🤝',title:'交班系统',desc:'填交班记录',url:'./handover.html',bg:'linear-gradient(135deg,#581c87,#9333ea)',permKey:'ho'}
     ],
     operator:[
@@ -518,6 +521,7 @@ function renderCards(role){
       return Object.values(mcCards).some(function(v){return v===true;});
     }
     if(c.permKey==='pp') return true; // 生产计划对所有人可见
+    if(c.permKey==='purchase') return true; // 采购申请对所有人可见
     return true;
   }
   var list=(CARDS[role]||[]).filter(cardVisible);
