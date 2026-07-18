@@ -564,7 +564,24 @@ html.portal-auto .login-overlay{display:none!important}
 <body>
 <script>
 // 清除旧Service Worker和缓存
-if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()))}
+if('serviceWorker' in navigator){
+  // 先注册passthrough SW覆盖旧SW（旧SW会拦截fetch导致页面永远拿旧版本）
+  navigator.serviceWorker.register('./sw.js',{scope:'/'}).then(function(reg){
+    console.log('[ZXJ] passthrough SW registered');
+    reg.update();
+    // 等新SW激活后注销所有SW
+    setTimeout(function(){
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(r){r.unregister();console.log('[ZXJ] SW unregistered:',r.scope)});
+      });
+    },1000);
+  }).catch(function(e){
+    console.log('[ZXJ] SW reg failed, trying direct unregister:',e);
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){r.unregister()});
+    });
+  });
+}
 if('caches' in window){caches.keys().then(ks=>ks.forEach(k=>caches.delete(k)))}
 
 /* ===== 火山引擎 Supabase (orders/dispatches) ===== */
