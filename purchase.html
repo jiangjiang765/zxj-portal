@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>采购申请系统</title>
+<style>
+:root{--bg:#0D1B2A;--card:#1B2838;--gold:#D4A843;--gold2:#B8912E;--text:#E0E0E0;--dim:#8899AA;--blue:#4A8AB5;--green:#4CAF50;--red:#F44336;--orange:#FF9800;--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:15px;padding-bottom:70px;min-height:100vh}
+/* top bar */
+.top-bar{position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#0D1B2A,#1a3050);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,168,67,.3)}
+.top-bar h1{font-size:18px;color:var(--gold);font-weight:700}
+.top-bar .user{font-size:12px;color:var(--dim)}
+.back-btn{color:var(--gold);font-size:22px;cursor:pointer;margin-right:10px;text-decoration:none}
+/* tabs */
+.tabs{display:flex;background:var(--card);border-bottom:2px solid rgba(212,168,67,.2);position:sticky;top:52px;z-index:99}
+.tab{flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:600;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent;transition:.2s}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab .badge{display:inline-block;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:top}
+/* panels */
+.panel{display:none;padding:16px}
+.panel.active{display:block}
+/* form */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;color:var(--gold);margin-bottom:6px;font-weight:600}
+.form-group label .req{color:var(--red);margin-left:2px}
+.form-ctrl{width:100%;padding:11px 12px;background:#0f2133;border:1px solid #2a4a6a;border-radius:8px;color:var(--text);font-size:15px;outline:none;transition:.2s}
+.form-ctrl:focus{border-color:var(--gold)}
+select.form-ctrl{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23D4A843' stroke-width='2' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.form-row{display:flex;gap:10px}
+.form-row .form-group{flex:1}
+textarea.form-ctrl{resize:vertical;min-height:60px}
+/* btns */
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 24px;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;transition:.15s}
+.btn:active{transform:scale(.96)}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0D1B2A}
+.btn-blue{background:linear-gradient(135deg,#2a5a8a,var(--blue));color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--gold);color:var(--gold)}
+.btn-sm{padding:7px 14px;font-size:12px;border-radius:8px}
+.btn-block{width:100%;margin-top:8px}
+/* list card */
+.req-card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;border-left:4px solid var(--gold)}
+.req-card.status-pending{border-left-color:var(--orange)}
+.req-card.status-buying{border-left-color:var(--blue)}
+.req-card.status-arrived{border-left-color:var(--green)}
+.req-card.status-cancelled{border-left-color:#666}
+.req-card .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.req-card .type-tag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600}
+.tag-tool{background:rgba(74,138,181,.2);color:var(--blue)}
+.tag-spare{background:rgba(76,175,80,.2);color:var(--green)}
+.req-card .title{font-size:15px;font-weight:700;color:var(--text)}
+.req-card .meta{font-size:12px;color:var(--dim);line-height:1.7}
+.req-card .meta b{color:var(--text);font-weight:600}
+.req-card .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.status-badge{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700}
+.st-pending{background:rgba(255,152,0,.15);color:var(--orange)}
+.st-buying{background:rgba(74,138,181,.15);color:var(--blue)}
+.st-arrived{background:rgba(76,175,80,.15);color:var(--green)}
+.st-cancelled{background:rgba(102,102,102,.15);color:#999}
+.urgency{font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600}
+.urg-normal{color:var(--dim)}
+.urg-urgent{background:rgba(255,152,0,.15);color:var(--orange)}
+.urg-critical{background:rgba(244,67,54,.15);color:var(--red)}
+/* filter bar */
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
+.filter-bar::-webkit-scrollbar{display:none}
+.fbtn{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a6a;background:transparent;color:var(--dim);transition:.2s}
+.fbtn.active{background:rgba(212,168,67,.15);border-color:var(--gold);color:var(--gold)}
+/* toast */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);padding:10px 24px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:.3s;pointer-events:none}
+.toast.show{opacity:1}
+.toast-ok{background:rgba(76,175,80,.9);color:#fff}
+.toast-err{background:rgba(244,67,54,.9);color:#fff}
+.toast-info{background:rgba(74,138,181,.9);color:#fff}
+/* empty */
+.empty{text-align:center;padding:40px 20px;color:var(--dim)}
+.empty .icon{font-size:48px;margin-bottom:10px;opacity:.5}
+/* autocomplete */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#0f2133;border:1px solid #2a4a6a;border-radius:0 0 8px 8px;z-index:50;max-height:150px;overflow-y:auto;display:none}
+.ac-list.show{display:block}
+.ac-item{padding:10px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid #1a3050}
+.ac-item:hover,.ac-item:active{background:rgba(212,168,67,.1)}
+/* print */
+@media print{
+  body{background:#fff!important;color:#000!important;padding:0!important}
+  .top-bar,.tabs,.panel .btn,.filter-bar,.req-card .actions,.toast,.back-btn,#formPanel,#listPanel{display:none!important}
+  #printArea{display:block!important}
+  .print-form{max-width:700px;margin:0 auto;font-size:12px;color:#000}
+  .print-form h2{text-align:center;font-size:20px;margin-bottom:4px;border-bottom:2px solid #000;padding-bottom:8px}
+  .print-form .info-row{display:flex;justify-content:space-between;margin:6px 0;font-size:13px}
+  .print-form table{width:100%;border-collapse:collapse;margin:12px 0}
+  .print-form th,.print-form td{border:1px solid #333;padding:8px 10px;text-align:left;font-size:13px}
+  .print-form th{background:#f0f0f0;font-weight:700}
+  .sign-area{display:flex;justify-content:space-between;margin-top:40px}
+  .sign-box{width:30%;text-align:center;font-size:13px}
+  .sign-box .line{border-bottom:1px solid #999;margin-top:40px;margin-bottom:4px}
+  .req-card{border-left:none!important;background:#fff!important;page-break-inside:avoid}
+  .req-card .title,.req-card .meta b{color:#000!important}
+}
+.print-only{display:none}
+@media print{.print-only{display:block}}
+/* modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto}
+.modal h3{color:var(--gold);margin-bottom:16px;font-size:17px}
+.modal .btn-block+.btn-block{margin-top:8px}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div style="display:flex;align-items:center">
+    <a class="back-btn" href="./portal.html">‹</a>
+    <h1>📋 采购申请</h1>
+  </div>
+  <div class="user" id="userInfo"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="form">新建申请</div>
+  <div class="tab" data-tab="list">申请记录<span class="badge" id="pendBadge" style="display:none">0</span></div>
+  <div class="tab" data-tab="todo">我的待办<span class="badge" id="todoBadge" style="display:none">0</span></div>
+</div>
+
+<!-- 新建申请 -->
+<div class="panel active" id="formPanel">
+  <div class="form-group">
+    <label>采购类型<span class="req">*</span></label>
+    <select class="form-ctrl" id="f_type" onchange="onTypeChange()">
+      <option value="">请选择</option>
+      <option value="刀具">刀具</option>
+      <option value="备品">备品</option>
+    </select>
+  </div>
+  <div class="form-group" id="f_subWrap" style="display:none">
+    <label>分类<span class="req">*</span></label>
+    <select class="form-ctrl" id="f_subtype" onchange="onSubtypeChange()">
+      <option value="">请选择</option>
+    </select>
+  </div>
+  <div class="form-group" id="f_specWrap" style="display:none">
+    <label>规格<span class="req">*</span></label>
+    <select class="form-ctrl" id="f_spec">
+      <option value="">请选择</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>型号<span class="req">*</span></label>
+    <div class="ac-wrap">
+      <input class="form-ctrl" id="f_model" placeholder="输入型号" autocomplete="off" oninput="showModelAC()" onfocus="showModelAC()" onblur="setTimeout(hideModelAC,200)">
+      <div class="ac-list" id="modelAC"></div>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>数量<span class="req">*</span></label>
+      <input class="form-ctrl" id="f_qty" type="number" min="1" placeholder="0">
+    </div>
+    <div class="form-group">
+      <label>单位</label>
+      <select class="form-ctrl" id="f_unit">
+        <option value="个">个</option><option value="支">支</option><option value="把">把</option>
+        <option value="片">片</option><option value="根">根</option><option value="套">套</option>
+        <option value="盒">盒</option><option value="箱">箱</option><option value="卷">卷</option>
+        <option value="瓶">瓶</option><option value="桶">桶</option><option value="米">米</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>申请人<span class="req">*</span></label>
+      <select class="form-ctrl" id="f_applicant">
+        <option value="">请选择</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>申请部门<span class="req">*</span></label>
+      <select class="form-ctrl" id="f_dept">
+        <option value="">请选择</option>
+        <option value="生产部">生产部</option>
+        <option value="工程部">工程部</option>
+        <option value="品质部">品质部</option>
+        <option value="采购部">采购部</option>
+        <option value="管理层">管理层</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>图号</label>
+    <div class="ac-wrap">
+      <input class="form-ctrl" id="f_tuhao" placeholder="关联图号" autocomplete="off" oninput="showTuhaoAC()" onfocus="showTuhaoAC()" onblur="setTimeout(hideTuhaoAC,200)">
+      <div class="ac-list" id="tuhaoAC"></div>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>紧急程度</label>
+    <select class="form-ctrl" id="f_urgency">
+      <option value="普通">普通</option>
+      <option value="加急">加急</option>
+      <option value="特急">特急</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>采购人<span class="req">*</span></label>
+    <select class="form-ctrl" id="f_purchaser">
+      <option value="">请选择</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>备注</label>
+    <textarea class="form-ctrl" id="f_remark" rows="2" placeholder="补充说明..."></textarea>
+  </div>
+  <button class="btn btn-gold btn-block" onclick="submitReq()">提交申请</button>
+</div>
+
+<!-- 申请记录 -->
+<div class="panel" id="listPanel">
+  <div class="filter-bar" id="filterBar">
+    <div class="fbtn active" data-f="all">全部</div>
+    <div class="fbtn" data-f="pending">待采购</div>
+    <div class="fbtn" data-f="buying">采购中</div>
+    <div class="fbtn" data-f="arrived">已到货</div>
+    <div class="fbtn" data-f="cancelled">已取消</div>
+  </div>
+  <div id="reqList"></div>
+</div>
+
+<!-- 我的待办 -->
+<div class="panel" id="todoPanel">
+  <div id="todoList"></div>
+</div>
+
+<!-- 打印区 -->
+<div id="printArea" style="display:none"></div>
+
+<!-- 状态变更弹窗 -->
+<div class="modal-overlay" id="statusModal">
+  <div class="modal">
+    <h3>变更状态</h3>
+    <button class="btn btn-blue btn-block" onclick="changeStatus('buying')">📦 采购中</button>
+    <button class="btn btn-green btn-block" onclick="changeStatus('arrived')">✅ 已到货</button>
+    <button class="btn btn-red btn-block" onclick="changeStatus('cancelled')">❌ 取消</button>
+    <button class="btn btn-outline btn-block" onclick="closeStatusModal()">返回</button>
+  </div>
+</div>
+
+<script>
+// ===== 配置 =====
+var SB_URL='https://prqievwybuzwmmcdoqdq.supabase.co';
+var SB_KEY='sb_publishable_QIyZMuUReK3-gudQwrqbfg_7-0z48bw';
+var ZXJ_USER_ID='laojiang';
+
+// ===== 人员 =====
+var STAFF=['老姜','徐森','逯荣方','唐志鹏','高杰','桑经理'];
+
+// ===== 刀具分类及规格 =====
+var TOOL_SUBS={
+  '刀片':{specs:['CCMT09T304','CCMT060204','DCMT11T304','VBMT110304','WNMG080408','DNMG150608','CNMG120408','WNMG080404','CCMT120404','DCMT070204','VCMT110302','SCMT09T304']},
+  '钻头':{specs:['Φ2','Φ2.5','Φ3','Φ3.2','Φ3.5','Φ4','Φ4.2','Φ4.5','Φ5','Φ5.5','Φ6','Φ6.5','Φ6.8','Φ7','Φ8','Φ9','Φ10','Φ11','Φ12','Φ13','Φ14','Φ15','Φ16','Φ18','Φ20']},
+  '刀杆':{specs:['S12M-SCLCR06','S16M-SCLCR09','S20M-SCLCR11','S12M-SDJCR07','S16M-SDJCR11','S16M-SVJCR11','S20M-SVJCR16','ER32-SCLCR12','ER40-SCLCR16','MCLNR2020-K12','MWLNR2020-K08']},
+  '铰刀':{specs:['Φ4H7','Φ5H7','Φ6H7','Φ8H7','Φ10H7','Φ12H7','Φ3H7','Φ3.5H7','Φ7H7','Φ14H7']},
+  '丝锥':{specs:['M2','M2.5','M3','M3.5','M4','M5','M6','M8','M10','M12','G1/8','G1/4','G3/8','G1/2','NPT1/8','NPT1/4']},
+  '车刀':{specs:['SCLCR','SDJCR','SVJCR','SWCR','MWLNR','MCLNR','PDJNR','PCLNR','PTFNR','MWLNR']},
+  '铣刀':{specs:['Φ4','Φ6','Φ8','Φ10','Φ12','Φ14','Φ16','Φ20','Φ25','R0.5','R1','R1.5','R2','R3','R4','R5']},
+  '其他':{specs:['自定义']}
+};
+var SPARE_SUBS={
+  '导套':{specs:['Φ3','Φ4','Φ5','Φ6','Φ8','Φ10','Φ12','Φ13','Φ14','Φ16','Φ20']},
+  '夹头':{specs:['ER11','ER16','ER20','ER25','ER32','ER40','5C','16C','3J']},
+  '弹簧':{specs:['Φ3导套弹簧','Φ4导套弹簧','Φ5导套弹簧','Φ6导套弹簧','Φ8导套弹簧','夹头弹簧']},
+  '轴承':{specs:['6201','6202','6203','6204','6205','6206','6207','6208','7001','7002','7004','7902']},
+  '皮带':{specs:['150J5','180J5','200J5','225J5','250J5','150J6','180J6','200J6']},
+  '油品':{specs:['切削油5L','切削油18L','导轨油5L','主轴油5L','防锈油5L','清洗剂5L','润滑脂']},
+  '量具':{specs:['通规2.02','通规2.03','塞规','千分尺0-25','千分尺25-50','游标卡尺']},
+  '其他':{specs:['自定义']}
+};
+
+// ===== 数据 =====
+var DATA_KEY='purchaseRequests';
+var MODEL_HIST_KEY='purchaseModelHist';
+var TUHAO_HIST_KEY='purchaseTuhaoHist';
+
+function gd(k){try{return JSON.parse(localStorage.getItem(k))||[]}catch{return[]}}
+function sd(k,v){localStorage.setItem(k,JSON.stringify(v));scheduleSync()}
+
+function getReqs(){return gd(DATA_KEY)}
+function saveReqs(r){sd(DATA_KEY,r)}
+function getModelHist(){return gd(MODEL_HIST_KEY)}
+function saveModelHist(h){sd(MODEL_HIST_KEY,h)}
+function getTuhaoHist(){return gd(TUHAO_HIST_KEY)}
+function saveTuhaoHist(h){sd(TUHAO_HIST_KEY,h)}
+
+// ===== 认证 =====
+var _user=null;
+function initAuth(){
+  try{
+    var s=new URLSearchParams(location.search).get('zxj_user');
+    var o=s?JSON.parse(decodeURIComponent(s)):null;
+    if(!o){var ls=localStorage.getItem('zxj_session');if(ls)o=JSON.parse(ls)}
+    if(o&&o.name){_user=o;document.getElementById('userInfo').textContent=o.name}
+  }catch{}
+  if(!_user){_user={name:'老姜',role:'admin'};document.getElementById('userInfo').textContent='老姜'}
+}
+
+// ===== 下拉填充 =====
+function fillStaff(){
+  var html='<option value="">请选择</option>';
+  STAFF.forEach(function(s){html+='<option value="'+s+'">'+s+'</option>'});
+  document.getElementById('f_applicant').innerHTML=html;
+  document.getElementById('f_purchaser').innerHTML=html;
+  if(_user&&_user.name){
+    var a=document.getElementById('f_applicant');
+    for(var i=0;i<a.options.length;i++){if(a.options[i].value===_user.name){a.selectedIndex=i;break}}
+  }
+}
+
+function onTypeChange(){
+  var t=document.getElementById('f_type').value;
+  var subW=document.getElementById('f_subWrap');
+  var specW=document.getElementById('f_specWrap');
+  if(!t){subW.style.display='none';specW.style.display='none';return}
+  subW.style.display='block';
+  var subs=t==='刀具'?TOOL_SUBS:SPARE_SUBS;
+  var html='<option value="">请选择分类</option>';
+  Object.keys(subs).forEach(function(k){html+='<option value="'+k+'">'+k+'</option>'});
+  document.getElementById('f_subtype').innerHTML=html;
+  specW.style.display='none';
+}
+
+function onSubtypeChange(){
+  var t=document.getElementById('f_type').value;
+  var st=document.getElementById('f_subtype').value;
+  var specW=document.getElementById('f_specWrap');
+  if(!st){specW.style.display='none';return}
+  specW.style.display='block';
+  var subs=t==='刀具'?TOOL_SUBS:SPARE_SUBS;
+  var specs=subs[st]?subs[st].specs:['自定义'];
+  var html='<option value="">请选择规格</option>';
+  specs.forEach(function(s){html+='<option value="'+s+'">'+s+'</option>'});
+  document.getElementById('f_spec').innerHTML=html;
+}
+
+// ===== 型号自动补全 =====
+function showModelAC(){
+  var v=document.getElementById('f_model').value.trim().toLowerCase();
+  var hist=getModelHist();
+  if(!hist.length){hideModelAC();return}
+  var filtered=v?hist.filter(function(m){return m.toLowerCase().indexOf(v)>=0}):hist.slice(0,10);
+  if(!filtered.length){hideModelAC();return}
+  var html='';
+  filtered.forEach(function(m){html+='<div class="ac-item" onmousedown="pickModel(\''+m.replace(/'/g,"\\'")+'\')">'+m+'</div>'});
+  document.getElementById('modelAC').innerHTML=html;
+  document.getElementById('modelAC').classList.add('show');
+}
+function hideModelAC(){document.getElementById('modelAC').classList.remove('show')}
+function pickModel(v){document.getElementById('f_model').value=v;hideModelAC()}
+
+// ===== 图号自动补全 =====
+function showTuhaoAC(){
+  var v=document.getElementById('f_tuhao').value.trim().toLowerCase();
+  // 也从产品库补全
+  var prods=gd('products');
+  var hist=getTuhaoHist();
+  var all=hist.slice();
+  prods.forEach(function(p){if(p.tuhao&&all.indexOf(p.tuhao)<0)all.push(p.tuhao)});
+  if(!all.length){hideTuhaoAC();return}
+  var filtered=v?all.filter(function(t){return t.toLowerCase().indexOf(v)>=0}):all.slice(0,10);
+  if(!filtered.length){hideTuhaoAC();return}
+  var html='';
+  filtered.forEach(function(t){html+='<div class="ac-item" onmousedown="pickTuhao(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</div>'});
+  document.getElementById('tuhaoAC').innerHTML=html;
+  document.getElementById('tuhaoAC').classList.add('show');
+}
+function hideTuhaoAC(){document.getElementById('tuhaoAC').classList.remove('show')}
+function pickTuhao(v){document.getElementById('f_tuhao').value=v;hideTuhaoAC()}
+
+// ===== 提交申请 =====
+function submitReq(){
+  var type=document.getElementById('f_type').value;
+  var subtype=document.getElementById('f_subtype').value;
+  var spec=document.getElementById('f_spec').value;
+  var model=document.getElementById('f_model').value.trim();
+  var qty=parseInt(document.getElementById('f_qty').value)||0;
+  var unit=document.getElementById('f_unit').value;
+  var applicant=document.getElementById('f_applicant').value;
+  var dept=document.getElementById('f_dept').value;
+  var tuhao=document.getElementById('f_tuhao').value.trim();
+  var urgency=document.getElementById('f_urgency').value;
+  var purchaser=document.getElementById('f_purchaser').value;
+  var remark=document.getElementById('f_remark').value.trim();
+
+  // 校验
+  if(!type){return showToast('请选择采购类型','err')}
+  if(!subtype){return showToast('请选择分类','err')}
+  if(!spec){return showToast('请选择规格','err')}
+  if(!model){return showToast('请填写型号','err')}
+  if(qty<1){return showToast('请填写数量','err')}
+  if(!applicant){return showToast('请选择申请人','err')}
+  if(!dept){return showToast('请选择申请部门','err')}
+  if(!purchaser){return showToast('请选择采购人','err')}
+
+  var req={
+    id:'P'+Date.now(),
+    type:type,subtype:subtype,spec:spec,model:model,
+    qty:qty,unit:unit,applicant:applicant,dept:dept,
+    tuhao:tuhao,urgency:urgency,purchaser:purchaser,
+    remark:remark,status:'pending',
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString()
+  };
+
+  var reqs=getReqs();reqs.unshift(req);saveReqs(reqs);
+
+  // 更新型号历史
+  var mh=getModelHist();
+  if(mh.indexOf(model)<0){mh.unshift(model);if(mh.length>50)mh.pop();saveModelHist(mh)}
+  // 更新图号历史
+  if(tuhao){var th=getTuhaoHist();if(th.indexOf(tuhao)<0){th.unshift(tuhao);if(th.length>50)th.pop();saveTuhaoHist(th)}}
+
+  // 清空表单
+  ['f_type','f_subtype','f_spec','f_model','f_qty','f_tuhao','f_remark'].forEach(function(id){
+    var el=document.getElementById(id);if(el.tagName==='SELECT')el.selectedIndex=0;else el.value='';
+  });
+  document.getElementById('f_subWrap').style.display='none';
+  document.getElementById('f_specWrap').style.display='none';
+  document.getElementById('f_urgency').selectedIndex=0;
+  document.getElementById('f_unit').selectedIndex=0;
+
+  showToast('✅ 申请已提交！','ok');
+  notifyPurchaser(req);
+  refreshBadges();
+  switchTab('list');
+}
+
+// ===== 通知采购人 =====
+function notifyPurchaser(req){
+  // 尝试浏览器通知
+  if('Notification' in window && Notification.permission==='granted'){
+    new Notification('新的采购申请',{body:req.applicant+'申请采购'+req.type+' - '+req.subtype+' '+req.spec+' '+req.model+' ×'+req.qty,tag:req.id});
+  }
+  // 请求通知权限
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
+}
+
+function notifyByEmail(req){
+  var subject='采购申请 - '+req.type+'/'+req.subtype+'/'+req.spec;
+  var body='采购申请单 '+req.id+'%0D%0A'+
+    '类型: '+req.type+'%0D%0A'+
+    '分类: '+req.subtype+'%0D%0A'+
+    '规格: '+req.spec+'%0D%0A'+
+    '型号: '+req.model+'%0D%0A'+
+    '数量: '+req.qty+req.unit+'%0D%0A'+
+    '申请人: '+req.applicant+'%0D%0A'+
+    '部门: '+req.dept+'%0D%0A'+
+    (req.tuhao?'图号: '+req.tuhao+'%0D%0A':'')+
+    '紧急: '+req.urgency+'%0D%0A'+
+    (req.remark?'备注: '+req.remark+'%0D%0A':'')+
+    '%0D%0A请尽快处理';
+  window.open('mailto:?subject='+encodeURIComponent(subject)+'&body='+body);
+}
+
+// ===== Tab 切换 =====
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.dataset.tab===name)});
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.toggle('active',p.id===name+'Panel')});
+  if(name==='list')renderList();
+  if(name==='todo')renderTodo();
+}
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click',function(){switchTab(t.dataset.tab)});
+  t.addEventListener('touchend',function(e){e.preventDefault();switchTab(t.dataset.tab)});
+});
+
+// ===== 渲染列表 =====
+var curFilter='all';
+document.getElementById('filterBar').addEventListener('click',function(e){
+  if(!e.target.classList.contains('fbtn'))return;
+  curFilter=e.target.dataset.f;
+  document.querySelectorAll('.fbtn').forEach(function(b){b.classList.toggle('active',b.dataset.f===curFilter)});
+  renderList();
+});
+
+function renderList(){
+  var reqs=getReqs();
+  if(curFilter!=='all')reqs=reqs.filter(function(r){return r.status===curFilter});
+  var el=document.getElementById('reqList');
+  if(!reqs.length){el.innerHTML='<div class="empty"><div class="icon">📋</div>暂无申请记录</div>';return}
+  el.innerHTML=reqs.map(function(r){return renderCard(r)}).join('');
+}
+
+function renderTodo(){
+  var name=_user?_user.name:'';
+  var reqs=getReqs().filter(function(r){return r.purchaser===name&&r.status==='pending'});
+  var el=document.getElementById('todoList');
+  if(!reqs.length){el.innerHTML='<div class="empty"><div class="icon">🎉</div>没有待办采购任务</div>';return}
+  el.innerHTML='<div style="font-size:13px;color:var(--dim);margin-bottom:12px">以下是分配给你的待采购申请</div>'+reqs.map(function(r){return renderCard(r)}).join('');
+}
+
+function renderCard(r){
+  var stMap={pending:'待采购',buying:'采购中',arrived:'已到货',cancelled:'已取消'};
+  var stCls={pending:'st-pending',buying:'st-buying',arrived:'st-arrived',cancelled:'st-cancelled'};
+  var urgCls={普通:'urg-normal',加急:'urg-urgent',特急:'urg-critical'};
+  var typeCls=r.type==='刀具'?'tag-tool':'tag-spare';
+  var dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+
+  var actions='';
+  if(r.status==='pending'){
+    actions='<button class="btn btn-blue btn-sm" onclick="openStatusModal(\''+r.id+'\')">处理</button>';
+  }else if(r.status==='buying'){
+    actions='<button class="btn btn-green btn-sm" onclick="openStatusModal(\''+r.id+'\')">更新</button>';
+  }
+  actions+='<button class="btn btn-outline btn-sm" onclick="printReq(\''+r.id+'\')">🖨 打印</button>';
+  actions+='<button class="btn btn-outline btn-sm" onclick="notifyByEmail(getReqById(\''+r.id+'\'))">📧 通知</button>';
+
+  return '<div class="req-card status-'+r.status+'">'+
+    '<div class="row"><span class="type-tag '+typeCls+'">'+r.type+'</span><span class="urgency '+(urgCls[r.urgency]||'')+'">'+r.urgency+'</span><span class="status-badge '+stCls[r.status]+'">'+stMap[r.status]+'</span></div>'+
+    '<div class="row"><span class="title">'+r.subtype+' · '+r.spec+'</span><span style="font-size:12px;color:var(--dim)">'+r.id+'</span></div>'+
+    '<div class="meta">'+
+      '型号: <b>'+r.model+'</b> × '+r.qty+r.unit+'<br>'+
+      '申请人: <b>'+r.applicant+'</b> | 部门: '+r.dept+'<br>'+
+      '采购人: <b>'+r.purchaser+'</b>'+(r.tuhao?' | 图号: '+r.tuhao:'')+'<br>'+
+      (r.remark?'备注: '+r.remark+'<br>':'')+
+      '<span style="color:var(--dim)">'+dateStr+'</span>'+
+    '</div>'+
+    '<div class="actions">'+actions+'</div>'+
+  '</div>';
+}
+
+function getReqById(id){return getReqs().find(function(r){return r.id===id})}
+
+// ===== 状态变更 =====
+var _statusId=null;
+function openStatusModal(id){_statusId=id;document.getElementById('statusModal').classList.add('show')}
+function closeStatusModal(){_statusId=null;document.getElementById('statusModal').classList.remove('show')}
+function changeStatus(st){
+  if(!_statusId)return;
+  var reqs=getReqs();
+  var idx=reqs.findIndex(function(r){return r.id===_statusId});
+  if(idx>=0){
+    reqs[idx].status=st;
+    reqs[idx].updatedAt=new Date().toISOString();
+    saveReqs(reqs);
+    showToast('✅ 状态已更新','ok');
+  }
+  closeStatusModal();
+  renderList();renderTodo();refreshBadges();
+}
+
+// ===== 打印 =====
+function printReq(id){
+  var r=getReqById(id);if(!r)return;
+  var stMap={pending:'待采购',buying:'采购中',arrived:'已到货',cancelled:'已取消'};
+  var html='<div class="print-form">'+
+    '<h2>采购申请单</h2>'+
+    '<div class="info-row"><span>申请单号: '+r.id+'</span><span>日期: '+(r.createdAt?new Date(r.createdAt).toLocaleDateString('zh-CN'):'')+'</span></div>'+
+    '<div class="info-row"><span>申请人: '+r.applicant+'</span><span>部门: '+r.dept+'</span></div>'+
+    '<table><tr><th>类型</th><th>分类</th><th>规格</th><th>型号</th><th>数量</th><th>紧急</th><th>状态</th></tr>'+
+    '<tr><td>'+r.type+'</td><td>'+r.subtype+'</td><td>'+r.spec+'</td><td>'+r.model+'</td><td>'+r.qty+r.unit+'</td><td>'+r.urgency+'</td><td>'+stMap[r.status]+'</td></tr></table>'+
+    (r.tuhao?'<div class="info-row"><span>图号: '+r.tuhao+'</span></div>':'')+
+    (r.remark?'<div class="info-row"><span>备注: '+r.remark+'</span></div>':'')+
+    '<div class="info-row"><span>采购人: '+r.purchaser+'</span></div>'+
+    '<div class="sign-area">'+
+      '<div class="sign-box"><div class="line"></div>申请人签字</div>'+
+      '<div class="sign-box"><div class="line"></div>采购人签字</div>'+
+      '<div class="sign-box"><div class="line"></div>主管审批</div>'+
+    '</div>'+
+  '</div>';
+  document.getElementById('printArea').innerHTML=html;
+  document.getElementById('printArea').style.display='block';
+  setTimeout(function(){window.print();document.getElementById('printArea').style.display='none'},100);
+}
+
+// ===== Badge =====
+function refreshBadges(){
+  var reqs=getReqs();
+  var pending=reqs.filter(function(r){return r.status==='pending'}).length;
+  var myName=_user?_user.name:'';
+  var todo=reqs.filter(function(r){return r.purchaser===myName&&r.status==='pending'}).length;
+  var pb=document.getElementById('pendBadge');
+  var tb=document.getElementById('todoBadge');
+  if(pending>0){pb.textContent=pending;pb.style.display='inline-block'}else{pb.style.display='none'}
+  if(todo>0){tb.textContent=todo;tb.style.display='inline-block'}else{tb.style.display='none'}
+}
+
+// ===== Toast =====
+function showToast(msg,type){
+  var t=document.createElement('div');
+  t.className='toast toast-'+(type==='err'?'err':type==='ok'?'ok':'info');
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(function(){t.classList.add('show')},10);
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},2200);
+}
+
+// ===== 云同步 =====
+var _syncTimer=null;
+function scheduleSync(){if(_syncTimer)clearTimeout(_syncTimer);_syncTimer=setTimeout(doSync,2000)}
+async function doSync(){
+  try{
+    var d={};
+    [DATA_KEY,MODEL_HIST_KEY,TUHAO_HIST_KEY].forEach(function(k){var v=localStorage.getItem(k);if(v)d[k]=v});
+    var existing=await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}}).then(function(r){return r.json()});
+    if(existing&&existing.length>0&&existing[0].data){Object.keys(existing[0].data).forEach(function(k){if(!(k in d))d[k]=existing[0].data[k]})}
+    await fetch(SB_URL+'/rest/v1/zxj_kv?id=eq.'+ZXJ_USER_ID,{
+      method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({data:d,updated_at:new Date().toISOString()})
+    });
+  }catch(e){console.warn('sync err',e)}
+}
+
+// ===== 初始化 =====
+initAuth();fillStaff();refreshBadges();
+
+// 请求浏览器通知权限
+if('Notification' in window && Notification.permission==='default'){
+  setTimeout(function(){Notification.requestPermission()},3000);
+}
+</script>
+</body>
+</html>
