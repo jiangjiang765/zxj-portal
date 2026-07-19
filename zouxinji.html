@@ -4360,15 +4360,15 @@ var _v3dMeasuring=false;
 // --- 弹窗控制 ---
 function openV3dSelect(){
   var modal=document.getElementById('v3d-modal-select');
-  if(modal)modal.classList.add('v3d-show');
+  if(modal)modal.style.display='flex';
   var measureModal=document.getElementById('v3d-modal-measure');
-  if(measureModal)measureModal.classList.remove('v3d-show');
+  if(measureModal)measureModal.style.display='none';
 }
 function closeV3dAll(){
   var selectModal=document.getElementById('v3d-modal-select');
-  if(selectModal)selectModal.classList.remove('v3d-show');
+  if(selectModal)selectModal.style.display='none';
   var measureModal=document.getElementById('v3d-modal-measure');
-  if(measureModal)measureModal.classList.remove('v3d-show');
+  if(measureModal)measureModal.style.display='none';
   // 销毁viewer
   if(_o3dvViewer){
     try{
@@ -4392,9 +4392,9 @@ function handleV3dFile(input){
   v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f6');
   loadO3dvEngine().then(function(){
     // Hide select modal, show measure modal
-    document.getElementById('v3d-modal-select').classList.remove('v3d-show');
+    document.getElementById('v3d-modal-select').style.display='none';
     var measureModal=document.getElementById('v3d-modal-measure');
-    measureModal.classList.add('v3d-show');
+    measureModal.style.display='flex';
     // Set filename in top bar
     document.getElementById('v3d-filename').textContent=name;
     // Reset state
@@ -4637,8 +4637,17 @@ function _v3dProject(p){
 function _v3dDetectGeometry(mouseCoords){
   if(!_o3dvViewer)return null;
   var v=_o3dvViewer.GetViewer();if(!v)return null;
-  var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
-  var hit=v.GetMeshIntersectionUnderMouse(mode,mouseCoords);
+  // 改用Three.js原生Raycaster（比O3DV的GetMeshIntersectionUnderMouse更可靠，兼容华为鸿蒙）
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var mouse=new THREE.Vector2();
+  mouse.x=(mouseCoords.x/rect.width)*2-1;
+  mouse.y=-(mouseCoords.y/rect.height)*2+1;
+  var rc=new THREE.Raycaster();
+  rc.setFromCamera(mouse,v.camera);
+  var isects=rc.intersectObjects(v.scene.children,true);
+  if(!isects||isects.length===0)return null;
+  var hit=isects[0];
   if(!hit||!hit.point||!hit.object||!hit.face)return null;
 
   var obj=hit.object;
