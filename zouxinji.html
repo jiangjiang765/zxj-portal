@@ -4819,52 +4819,45 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S4:无canvas尺寸');}
   }catch(e){dbg.push('S4:异常 '+e.message);}
 
-  // 策略5：深度缓冲读取（v16增强：多格式+帧缓冲诊断）
+  // 策略5：深度缓冲读取（v17：追踪render target + 读RT）
   try{
     var gl=canvas.getContext('webgl2')||canvas.getContext('webgl');
     if(gl){
-      var isWebGL2=!!window.WebGL2RenderingContext&&gl instanceof WebGL2RenderingContext;
       var dbBits=gl.getParameter(gl.DEPTH_BITS)||0;
       var sx=canvas.width/rect.width, sy=canvas.height/rect.height;
       var px=Math.round(mouseCoords.x*sx), py=canvas.height-Math.round(mouseCoords.y*sy);
-      // 帧缓冲：先存后绑
-      var oldFb=null;try{oldFb=gl.getParameter(gl.FRAMEBUFFER_BINDING);}catch(e){}
-      gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-      var depth=null,readFmt='';
-      // 按优先级尝试多种深度格式
-      var fmts=[
-        ['FLOAT',gl.DEPTH_COMPONENT,gl.FLOAT,function(buf){depth=buf[0];}],
-        ['UINT',gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,function(buf){depth=buf[0]/4294967295;}],
-        ['USHORT',gl.DEPTH_COMPONENT,gl.UNSIGNED_SHORT,function(buf){depth=buf[0]/65535;}]
-      ];
-      if(isWebGL2){
-        fmts.push(['UI24_8',gl.DEPTH_STENCIL,gl.UNSIGNED_INT_24_8,function(buf){depth=(buf[0]>>>8)/16777215;}]);
-      }
-      for(var fi=0;fi<fmts.length;fi++){
-        var fmt=fmts[fi];
-        try{
-          var buf=fi===0?new Float32Array(1):(fi===1?new Uint32Array(1):(fi===2?new Uint16Array(1):new Uint32Array(1)));
-          gl.readPixels(px,py,1,1,fmt[1],fmt[2],buf);
-          fmt[3](buf);
-          readFmt=fmt[0];
-          break;
-        }catch(e){depth=null;}
-      }
-      // 恢复帧缓冲
-      try{if(oldFb!==undefined)gl.bindFramebuffer(gl.FRAMEBUFFER,oldFb);}catch(e){}
-      if(depth!==null){
-        // 诊断：如果触摸点深度为0，也读一下画布中心点对比
-        var ctrDepth=null;
-        if(depth<0.001){
-          var cx=Math.round(canvas.width/2), cy=Math.round(canvas.height/2);
+      // 帧缓冲：先看当前绑定的是不是render target
+      var oldFb=null,fbType='null';
+      try{oldFb=gl.getParameter(gl.FRAMEBUFFER_BINDING);fbType=oldFb?'RT':'null';}catch(e){fbType='err';}
+      var depth=null,readFmt='',readFrom='def';
+      // 辅助函数：从指定帧缓冲读深度
+      function _tryReadDepth(targetFb){
+        var formats=[['FLOAT',gl.DEPTH_COMPONENT,gl.FLOAT,function(b){return b[0];}],
+          ['UINT',gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,function(b){return b[0]/4294967295;}],
+          ['USHORT',gl.DEPTH_COMPONENT,gl.UNSIGNED_SHORT,function(b){return b[0]/65535;}]];
+        for(var i=0;i<formats.length;i++){
           try{
-            gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-            var cbuf=new Float32Array(1);
-            gl.readPixels(cx,cy,1,1,gl.DEPTH_COMPONENT,gl.FLOAT,cbuf);
-            ctrDepth=cbuf[0];
-            gl.bindFramebuffer(gl.FRAMEBUFFER,oldFb);
+            var f=formats[i],buf=i===0?new Float32Array(1):(i===1?new Uint32Array(1):new Uint16Array(1));
+            gl.bindFramebuffer(gl.FRAMEBUFFER,targetFb);
+            gl.readPixels(px,py,1,1,f[1],f[2],buf);
+            return {d:f[3](buf),fmt:f[0]};
           }catch(e){}
         }
+        return null;
+      }
+      // 先读当前绑定的RT（如果有的话）
+      if(oldFb){
+        var rtRes=_tryReadDepth(oldFb);
+        if(rtRes){depth=rtRes.d;readFmt=rtRes.fmt;readFrom='RT';}
+      }
+      // 如果RT读不到，再读默认帧缓冲
+      if(depth===null){
+        var defRes=_tryReadDepth(null);
+        if(defRes){depth=defRes.d;readFmt=defRes.fmt;readFrom='def';}
+      }
+      // 恢复RT绑定
+      if(oldFb)try{gl.bindFramebuffer(gl.FRAMEBUFFER,oldFb);}catch(e){}
+      if(depth!==null){
         if(depth>0.001&&depth<0.999){
           var Vec3=null;v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor)Vec3=o.position.constructor;});
           if(Vec3&&v.camera){
@@ -4877,14 +4870,13 @@ function _v3dDetectGeometry(mouseCoords){
               nearPt.y+(farPt.y-nearPt.y)*d,
               nearPt.z+(farPt.z-nearPt.z)*d
             );
-            dbg.push('S5:命中('+wp.x.toFixed(1)+','+wp.y.toFixed(1)+','+wp.z.toFixed(1)+') d='+d.toFixed(4)+' fmt='+readFmt+' db='+dbBits);
+            dbg.push('S5:命中('+wp.x.toFixed(1)+','+wp.y.toFixed(1)+','+wp.z.toFixed(1)+') d='+d.toFixed(4)+' fmt='+readFmt+' fb='+fbType+' from='+readFrom);
             return {geo:{type:'vert',pt:{x:wp.x,y:wp.y,z:wp.z},rawPt:{x:wp.x,y:wp.y,z:wp.z}},dbg:dbg};
           }
         }
-        var ctrStr=ctrDepth!==null?(' ctr='+ctrDepth.toFixed(4)):'';
-        dbg.push('S5:depth='+(depth).toFixed(4)+' fmt='+readFmt+' db='+dbBits+ctrStr+' (no hit)');
+        dbg.push('S5:depth='+(depth).toFixed(4)+' fmt='+readFmt+' fb='+fbType+' from='+readFrom+' db='+dbBits+' (no hit)');
       }else{
-        dbg.push('S5:readPixels failed all formats db='+dbBits);
+        dbg.push('S5:readPixels failed all fb='+fbType+' db='+dbBits);
       }
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
