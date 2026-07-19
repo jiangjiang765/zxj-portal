@@ -4594,18 +4594,13 @@ function v3dToggleMeasure(){
     if(mel)mel.style.display='none';
     if(filt)filt.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
-    // 隐藏覆盖层，恢复canvas交互
-    if(overlay)overlay.classList.remove('v3d-active');
-    var vv=_o3dvViewer.GetViewer();
-    if(vv){
-      var cvs=vv.GetCanvas?vv.GetCanvas():vv.canvas;
-      if(cvs)cvs.style.pointerEvents='';
-    }
     // 恢复OrbitControls
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
+    // 隐藏覆盖层
+    if(overlay)overlay.style.display='none';
     _v3dClearHover();
   }else{
-    // 开启测量模式
+    // 开启测量模式 — 让O3DV直接处理touch，不拦截
     _v3dMeasuring=true;
     _v3dSelStack=[];
     if(btn)btn.style.background='#ff9800';
@@ -4613,17 +4608,13 @@ function v3dToggleMeasure(){
     if(filt)filt.style.display='flex';
     _v3dShowPrompt();
     var v2=_o3dvViewer.GetViewer();
+    // O3DV的SetMouseClickHandler：内部处理touch→click，坐标天然正确
     if(v2)v2.SetMouseClickHandler(function(mc){_v3dSmartClick(mc);});
-    // 禁用OrbitControls
+    // 禁用OrbitControls（防止测量时旋转模型）
     _v3dOrbitControls=_v3dGetOrbitControls();
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=false;}
-    // 显示覆盖层，设置canvas pointer-events:none（阻止O3DV接收touch做旋转）
-    if(overlay)overlay.classList.add('v3d-active');
-    var vv2=_o3dvViewer.GetViewer();
-    if(vv2){
-      var cvs2=vv2.GetCanvas?vv2.GetCanvas():vv2.canvas;
-      if(cvs2)cvs2.style.pointerEvents='none';
-    }
+    // 覆盖层穿透，不拦截事件（仅显示十字光标）
+    if(overlay){overlay.style.display='block';overlay.style.pointerEvents='none';}
   }
 }
 
