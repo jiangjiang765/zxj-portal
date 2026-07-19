@@ -4654,24 +4654,32 @@ function _v3dProject(p){
 
 // --- 几何体检测：用射线拾取+重心坐标判断顶点/边/面 ---
 function _v3dDetectGeometry(mouseCoords){
-  if(!_o3dvViewer)return null;
-  var v=_o3dvViewer.GetViewer();if(!v)return null;
+  if(!_o3dvViewer)return {geo:null,dbg:['no viewer']};
+  var v=_o3dvViewer.GetViewer();if(!v)return {geo:null,dbg:['no GetViewer()']};
   var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
   var rect=canvas.getBoundingClientRect();
   var dpr=window.devicePixelRatio||1;
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
+  var dbg=[];
 
   // 策略1：O3DV原生方法，不乘DPR
   var hit=v.GetMeshIntersectionUnderMouse(mode,{x:mouseCoords.x,y:mouseCoords.y});
-  if(hit&&hit.point&&hit.object&&hit.face){
-    return _v3dProcessHit(hit,v);
-  }
+  if(hit){
+    if(!hit.point)dbg.push('S1:有结果无point');
+    else if(!hit.object)dbg.push('S1:有point无object');
+    else if(!hit.face)dbg.push('S1:有point+object无face');
+    else {dbg.push('S1:命中('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+')');return {geo:_v3dProcessHit(hit,v),dbg:dbg};}
+  }else{dbg.push('S1:null css('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+')');}
 
   // 策略2：O3DV原生方法，乘DPR
-  var hit2=v.GetMeshIntersectionUnderMouse(mode,{x:mouseCoords.x*dpr,y:mouseCoords.y*dpr});
-  if(hit2&&hit2.point&&hit2.object&&hit2.face){
-    return _v3dProcessHit(hit2,v);
-  }
+  var sx=Math.round(mouseCoords.x*dpr), sy=Math.round(mouseCoords.y*dpr);
+  var hit2=v.GetMeshIntersectionUnderMouse(mode,{x:sx,y:sy});
+  if(hit2){
+    if(!hit2.point)dbg.push('S2:有结果无point');
+    else if(!hit2.object)dbg.push('S2:有point无object');
+    else if(!hit2.face)dbg.push('S2:有point+object无face');
+    else {dbg.push('S2:命中('+sx+','+sy+')');return {geo:_v3dProcessHit(hit2,v),dbg:dbg};}
+  }else{dbg.push('S2:null phys('+sx+','+sy+')');}
 
   // 策略3：Three.js Raycaster 兜底（scene遍历）
   try{
@@ -4681,15 +4689,16 @@ function _v3dDetectGeometry(mouseCoords){
     );
     var camera=v.camera;
     if(!camera||!camera.isCamera){v.scene.traverse(function(o){if(o.isCamera&&!camera)camera=o;});}
-    if(!camera)return null;
+    if(!camera){dbg.push('S3:无camera');return {geo:null,dbg:dbg};}
     var rc=new THREE.Raycaster();
     rc.setFromCamera(mouse,camera);
     var isects=[];
     v.scene.traverse(function(o){if(o.isMesh&&o.geometry){try{var h=rc.intersectObject(o,false);if(h.length)isects.push(h[0]);}catch(e){}}});
-    if(isects.length){isects.sort(function(a,b){return a.distance-b.distance;});return _v3dProcessHit(isects[0],v);}
-  }catch(e){}
+    if(isects.length){isects.sort(function(a,b){return a.distance-b.distance;});dbg.push('S3:命中');return {geo:_v3dProcessHit(isects[0],v),dbg:dbg};}
+    dbg.push('S3:无交点 ndc('+mouse.x.toFixed(2)+','+mouse.y.toFixed(2)+')');
+  }catch(e){dbg.push('S3:异常 '+e.message);}
 
-  return null;
+  return {geo:null,dbg:dbg};
 }
 
 // 提取：处理命中结果（O3DV/Three.js统一入口）
@@ -4870,15 +4879,17 @@ function _v3dSmartClick(mouseCoords){
   var meshCount=0;
   try{v.scene.traverse(function(o){if(o.isMesh)meshCount++;});}catch(e){}
 
-  var geo=_v3dDetectGeometry(mouseCoords);
-  if(!geo){
+  var result=_v3dDetectGeometry(mouseCoords);
+  if(!result.geo){
     var mel=document.getElementById('v3d-measure');
     var dbg='mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
     dbg+='r'+rect.width.toFixed(0)+'x'+rect.height.toFixed(0)+' ';
     dbg+='dpr:'+dpr+' m:'+meshCount;
+    if(result.dbg&&result.dbg.length)dbg+=' | '+result.dbg.join('; ');
     if(mel)mel.innerHTML='⚠️ 未检测到模型 '+dbg;
     return;
   }
+  var geo=result.geo;
 
   var mel=document.getElementById('v3d-measure');
 
