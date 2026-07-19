@@ -4483,6 +4483,8 @@ function _v3dToggleFilter(k){
 var _v3dLastMeasureTime=0;
 var _v3dOrbitControls=null; // 缓存OrbitControls引用
 var _v3dOverlayTouchStart=null;
+var _v3dCanvasClickHandler=null; // 原生canvas click兜底
+var _v3dLastClickTime=0; // 上次点击时间（防重复）
 function _v3dGetOrbitControls(){
   try{
     var v=_o3dvViewer.GetViewer();if(!v)return null;
@@ -4594,13 +4596,17 @@ function v3dToggleMeasure(){
     if(mel)mel.style.display='none';
     if(filt)filt.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
-    // 恢复OrbitControls
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
-    // 隐藏覆盖层
     if(overlay)overlay.style.display='none';
+    // 移除canvas原生click监听
+    if(_v3dCanvasClickHandler){
+      var v3=_o3dvViewer.GetViewer();var cvs=v3?(v3.GetCanvas?v3.GetCanvas():v3.canvas):null;
+      if(cvs)cvs.removeEventListener('click',_v3dCanvasClickHandler);
+      _v3dCanvasClickHandler=null;
+    }
     _v3dClearHover();
   }else{
-    // 开启测量模式 — 让O3DV直接处理touch，不拦截
+    // 开启测量模式
     _v3dMeasuring=true;
     _v3dSelStack=[];
     if(btn)btn.style.background='#ff9800';
@@ -4608,12 +4614,24 @@ function v3dToggleMeasure(){
     if(filt)filt.style.display='flex';
     _v3dShowPrompt();
     var v2=_o3dvViewer.GetViewer();
-    // O3DV的SetMouseClickHandler：内部处理touch→click，坐标天然正确
+    // 方式1：O3DV SetMouseClickHandler
     if(v2)v2.SetMouseClickHandler(function(mc){_v3dSmartClick(mc);});
-    // 禁用OrbitControls（防止测量时旋转模型）
+    // 方式2：原生canvas click兜底（用offsetX/Y，华为兼容）
+    var cvs=v2?(v2.GetCanvas?v2.GetCanvas():v2.canvas):null;
+    if(cvs){
+      _v3dCanvasClickHandler=function(e){
+        if(!_v3dMeasuring)return;
+        var ox=e.offsetX!==undefined?e.offsetX:e.clientX-cvs.getBoundingClientRect().left;
+        var oy=e.offsetY!==undefined?e.offsetY:e.clientY-cvs.getBoundingClientRect().top;
+        // 只在O3DV handler没触发时兜底（避免重复）
+        if(!_v3dLastClickTime||Date.now()-_v3dLastClickTime>500){
+          _v3dSmartClick({x:ox,y:oy,source:'canvas'});
+        }
+      };
+      cvs.addEventListener('click',_v3dCanvasClickHandler,false);
+    }
     _v3dOrbitControls=_v3dGetOrbitControls();
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=false;}
-    // 覆盖层穿透，不拦截事件（仅显示十字光标）
     if(overlay){overlay.style.display='block';overlay.style.pointerEvents='none';}
   }
 }
@@ -4640,16 +4658,21 @@ function _v3dDetectGeometry(mouseCoords){
   var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
   var rect=canvas.getBoundingClientRect();
   var dpr=window.devicePixelRatio||1;
-
-  // 策略1：O3DV原生方法，DPR修正坐标
-  var mcCanvas={x:mouseCoords.x*dpr, y:mouseCoords.y*dpr};
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
-  var hit=v.GetMeshIntersectionUnderMouse(mode,mcCanvas);
+
+  // 策略1：O3DV原生方法，不乘DPR
+  var hit=v.GetMeshIntersectionUnderMouse(mode,{x:mouseCoords.x,y:mouseCoords.y});
   if(hit&&hit.point&&hit.object&&hit.face){
     return _v3dProcessHit(hit,v);
   }
 
-  // 策略2：Three.js Raycaster 兜底（scene遍历）
+  // 策略2：O3DV原生方法，乘DPR
+  var hit2=v.GetMeshIntersectionUnderMouse(mode,{x:mouseCoords.x*dpr,y:mouseCoords.y*dpr});
+  if(hit2&&hit2.point&&hit2.object&&hit2.face){
+    return _v3dProcessHit(hit2,v);
+  }
+
+  // 策略3：Three.js Raycaster 兜底（scene遍历）
   try{
     var mouse=new THREE.Vector2(
       (mouseCoords.x/rect.width)*2-1,
@@ -4836,11 +4859,23 @@ function _v3dFitCircle3(p1,p2,p3){
 // --- 智能点击：自动识别+测量 ---
 function _v3dSmartClick(mouseCoords){
   if(!_o3dvViewer||!_v3dMeasuring)return;
+  _v3dLastClickTime=Date.now();
+
+  // 调试：收集场景信息
+  var v=_o3dvViewer.GetViewer();
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var dpr=window.devicePixelRatio||1;
+  var meshCount=0;
+  try{v.scene.traverse(function(o){if(o.isMesh)meshCount++;});}catch(e){}
+
   var geo=_v3dDetectGeometry(mouseCoords);
   if(!geo){
-    // 调试反馈：告诉用户点击未命中
     var mel=document.getElementById('v3d-measure');
-    if(mel)mel.innerHTML='⚠️ 未检测到模型，请点击零件表面重试 <span style="color:#999;font-size:10px">('+new Date().getSeconds()+'s)</span>';
+    var dbg='mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
+    dbg+='r'+rect.width.toFixed(0)+'x'+rect.height.toFixed(0)+' ';
+    dbg+='dpr:'+dpr+' m:'+meshCount;
+    if(mel)mel.innerHTML='⚠️ 未检测到模型 '+dbg;
     return;
   }
 
