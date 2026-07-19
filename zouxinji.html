@@ -4681,22 +4681,79 @@ function _v3dDetectGeometry(mouseCoords){
     else {dbg.push('S2:命中('+sx+','+sy+')');return {geo:_v3dProcessHit(hit2,v),dbg:dbg};}
   }else{dbg.push('S2:null phys('+sx+','+sy+')');}
 
-  // 策略3：Three.js Raycaster 兜底（scene遍历）
+  // 策略3：手动射线投射（不依赖全局THREE，从scene对象获取Vector3）
   try{
-    var mouse=new THREE.Vector2(
-      (mouseCoords.x/rect.width)*2-1,
-      -(mouseCoords.y/rect.height)*2+1
-    );
     var camera=v.camera;
     if(!camera||!camera.isCamera){v.scene.traverse(function(o){if(o.isCamera&&!camera)camera=o;});}
-    if(!camera){dbg.push('S3:无camera');return {geo:null,dbg:dbg};}
-    var rc=new THREE.Raycaster();
-    rc.setFromCamera(mouse,camera);
-    var isects=[];
-    v.scene.traverse(function(o){if(o.isMesh&&o.geometry){try{var h=rc.intersectObject(o,false);if(h.length)isects.push(h[0]);}catch(e){}}});
-    if(isects.length){isects.sort(function(a,b){return a.distance-b.distance;});dbg.push('S3:命中');return {geo:_v3dProcessHit(isects[0],v),dbg:dbg};}
-    dbg.push('S3:无交点 ndc('+mouse.x.toFixed(2)+','+mouse.y.toFixed(2)+')');
+    if(!camera){dbg.push('S3:无camera');}
+    else{
+      // 从scene里拿Vector3构造器（O3DV封装的Three.js）
+      var Vec3=null;
+      v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor){Vec3=o.position.constructor;}});
+      if(!Vec3){dbg.push('S3:无Vec3');}
+      else{
+        var ndcX=(mouseCoords.x/rect.width)*2-1;
+        var ndcY=-(mouseCoords.y/rect.height)*2+1;
+        var nearPt=new Vec3(ndcX,ndcY,-1);
+        var farPt=new Vec3(ndcX,ndcY,1);
+        nearPt.unproject(camera);
+        farPt.unproject(camera);
+        var rayDir=new Vec3().subVectors(farPt,nearPt).normalize();
+        var rayOrg=nearPt.clone();
+        // 手动遍历所有mesh做射线-三角形检测
+        var bestHit=null,bestDist=Infinity;
+        v.scene.traverse(function(o){
+          if(!o.isMesh||!o.geometry||!o.geometry.attributes||!o.geometry.attributes.position)return;
+          if(!o.geometry.index)return;
+          o.updateMatrixWorld(true);
+          var pos=o.geometry.attributes.position;
+          var idx=o.geometry.index;
+          var invMat=new o.matrix.constructor().copy(o.matrixWorld).invert();
+          var lOrg=rayOrg.clone().applyMatrix4(invMat);
+          var lDir=rayDir.clone().transformDirection(invMat);
+          for(var i=0;i<idx.count;i+=3){
+            var a=idx.getX(i),b=idx.getX(i+1),c=idx.getX(i+2);
+            var v0=new Vec3().fromBufferAttribute(pos,a);
+            var v1=new Vec3().fromBufferAttribute(pos,b);
+            var v2=new Vec3().fromBufferAttribute(pos,c);
+            var e1=new Vec3().subVectors(v1,v0);
+            var e2=new Vec3().subVectors(v2,v0);
+            var h=new Vec3().crossVectors(lDir,e2);
+            var det=e1.dot(h);
+            if(det>-1e-10&&det<1e-10)continue;
+            var f=1/det;
+            var s=new Vec3().subVectors(lOrg,v0);
+            var u=f*s.dot(h);
+            if(u<0||u>1)continue;
+            var q=new Vec3().crossVectors(s,e1);
+            var v=f*lDir.dot(q);
+            if(v<0||u+v>1)continue;
+            var t=f*e2.dot(q);
+            if(t>1e-10&&t<bestDist){
+              bestDist=t;
+              var wPt=new Vec3().copy(lOrg).addScaledVector(lDir,t);
+              var wwPt=wPt.clone().applyMatrix4(o.matrixWorld);
+              bestHit={object:o,point:wwPt,face:{a:a,b:b,c:c},distance:t};
+            }
+          }
+        });
+        if(bestHit){dbg.push('S3:命中 dist='+bestDist.toFixed(2));return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};}
+        dbg.push('S3:无交点 ndc('+ndcX.toFixed(2)+','+ndcY.toFixed(2)+')');
+      }
+    }
   }catch(e){dbg.push('S3:异常 '+e.message);}
+
+  // 策略4：O3DV原生方法，canvas实际像素尺寸坐标
+  try{
+    var cw=canvas.width,ch=canvas.height;
+    if(cw&&ch){
+      var rx=mouseCoords.x/rect.width,ry=mouseCoords.y/rect.height;
+      var sx4=Math.round(rx*cw),sy4=Math.round(ry*ch);
+      var hit4=v.GetMeshIntersectionUnderMouse(mode,{x:sx4,y:sy4});
+      if(hit4&&hit4.point&&hit4.object&&hit4.face){dbg.push('S4:命中('+sx4+','+sy4+')');return {geo:_v3dProcessHit(hit4,v),dbg:dbg};}
+      dbg.push('S4:null cvs('+sx4+','+sy4+') cw='+cw+' ch='+ch);
+    }else{dbg.push('S4:无canvas尺寸');}
+  }catch(e){dbg.push('S4:异常 '+e.message);}
 
   return {geo:null,dbg:dbg};
 }
