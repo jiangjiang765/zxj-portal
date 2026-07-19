@@ -4437,6 +4437,35 @@ function _o3dvPostProcess(viewer,name,file){
       }
     });
     v.Render();
+    // v18: monkey-patch renderer.render 缓存深度缓冲（渲染后立即读取RT深度）
+    if(!window.__zxj_depthPatched){
+      try{
+        var r=v.renderer;
+        var gl2=r&&r.getContext?r.getContext():null;
+        if(r&&gl2&&r.render){
+          var _origRender=r.render.bind(r);
+          r.render=function(scene,camera){
+            _origRender(scene,camera);
+            try{
+              var curFb=gl2.getParameter(gl2.FRAMEBUFFER_BINDING);
+              if(curFb!==null){
+                // 渲染到RT，读取RT深度缓冲
+                var cw=gl2.drawingBufferWidth||gl2.getParameter(gl2.VIEWPORT)[2];
+                var ch=gl2.drawingBufferHeight||gl2.getParameter(gl2.VIEWPORT)[3];
+                if(cw&&ch){
+                  var depthBuf=new Float32Array(cw*ch);
+                  gl2.readPixels(0,0,cw,ch,gl2.DEPTH_COMPONENT,gl2.FLOAT,depthBuf);
+                  window.__zxj_depthCache=depthBuf;
+                  window.__zxj_depthWidth=cw;
+                  window.__zxj_depthHeight=ch;
+                }
+              }
+            }catch(e){}
+          };
+          window.__zxj_depthPatched=true;
+        }
+      }catch(e){}
+    }
     // 2. 显示包围盒外形尺寸
     var bbox=v.GetBoundingBox(function(){return true;});
     if(bbox&&bbox.min&&bbox.max){
@@ -4826,6 +4855,31 @@ function _v3dDetectGeometry(mouseCoords){
       var dbBits=gl.getParameter(gl.DEPTH_BITS)||0;
       var sx=canvas.width/rect.width, sy=canvas.height/rect.height;
       var px=Math.round(mouseCoords.x*sx), py=canvas.height-Math.round(mouseCoords.y*sy);
+      // v18: 优先从缓存深度缓冲读取（monkey-patch renderer.render 时缓存）
+      if(window.__zxj_depthCache&&window.__zxj_depthWidth&&window.__zxj_depthHeight){
+        var cacheDx=Math.round((mouseCoords.x/rect.width)*window.__zxj_depthWidth);
+        var cacheDy=Math.round((1-mouseCoords.y/rect.height)*window.__zxj_depthHeight);
+        cacheDx=Math.max(0,Math.min(window.__zxj_depthWidth-1,cacheDx));
+        cacheDy=Math.max(0,Math.min(window.__zxj_depthHeight-1,cacheDy));
+        var cacheD=window.__zxj_depthCache[cacheDy*window.__zxj_depthWidth+cacheDx];
+        if(cacheD>0.001&&cacheD<0.999){
+          var Vec3=null;v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor)Vec3=o.position.constructor;});
+          if(Vec3&&v.camera){
+            var ndcX=(mouseCoords.x/rect.width)*2-1, ndcY=-(mouseCoords.y/rect.height)*2+1;
+            var nearPt=new Vec3(ndcX,ndcY,-1), farPt=new Vec3(ndcX,ndcY,1);
+            nearPt.unproject(v.camera);farPt.unproject(v.camera);
+            var d=cacheD;
+            var wp=new Vec3(
+              nearPt.x+(farPt.x-nearPt.x)*d,
+              nearPt.y+(farPt.y-nearPt.y)*d,
+              nearPt.z+(farPt.z-nearPt.z)*d
+            );
+            dbg.push('S5:命中('+wp.x.toFixed(1)+','+wp.y.toFixed(1)+','+wp.z.toFixed(1)+') d='+d.toFixed(4)+' from=cache');
+            return {geo:{type:'vert',pt:{x:wp.x,y:wp.y,z:wp.z},rawPt:{x:wp.x,y:wp.y,z:wp.z}},dbg:dbg};
+          }
+        }
+        dbg.push('S5:cache depth='+cacheD.toFixed(4)+' (no hit, fallback)');
+      }
       // 帧缓冲：先看当前绑定的是不是render target
       var oldFb=null,fbType='null';
       try{oldFb=gl.getParameter(gl.FRAMEBUFFER_BINDING);fbType=oldFb?'RT':'null';}catch(e){fbType='err';}
