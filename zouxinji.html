@@ -4662,6 +4662,50 @@ function _v3dDetectGeometry(mouseCoords){
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
   var dbg=[];
 
+  // 强制Render确保camera矩阵最新
+  try{v.Render();v.mainModel&&v.mainModel.UpdateWorldMatrix();}catch(e){}
+
+  // 策略0：尝试从O3DV内部获取THREE.Raycaster
+  try{
+    var THREE_=null;
+    // 方法A：从renderer找
+    if(v.renderer){
+      var rp=v.renderer;while(rp&&!THREE_){if(rp.Raycaster)THREE_=rp;rp=Object.getPrototypeOf(rp);}
+    }
+    // 方法B：从scene找
+    if(!THREE_&&v.scene&&v.scene.constructor){
+      var sc=v.scene.constructor;if(sc.Raycaster)THREE_=sc;
+    }
+    // 方法C：从Raycaster通过mesh.raycast找
+    if(!THREE_){
+      var foundMesh=null;v.scene.traverse(function(o){if(!foundMesh&&o.isMesh)foundMesh=o;});
+      if(foundMesh){
+        var rcStr=foundMesh.raycast.toString();
+        // 尝试从原型链获取Raycaster
+        var mp=foundMesh;while(mp&&!THREE_){if(mp.constructor&&mp.constructor.Raycaster)THREE_=mp.constructor;mp=Object.getPrototypeOf(mp);}
+      }
+    }
+    if(THREE_&&THREE_.Raycaster){
+      var Rc=THREE_.Raycaster;
+      var rootObj=v.mainModel?v.mainModel.GetRootObject():null;
+      if(!rootObj)v.scene.traverse(function(o){if(!rootObj&&o.parent===v.scene&&o.type==='Group')rootObj=o;});
+      if(rootObj){
+        var csz=v.GetCanvasSize?v.GetCanvasSize():{width:rect.width,height:rect.height};
+        var mp=new (v.scene.position.constructor)((mouseCoords.x/csz.width)*2-1,-(mouseCoords.y/csz.height)*2+1);
+        var rc=new Rc();rc.setFromCamera(mp,v.camera);
+        var iSects=rc.intersectObject(rootObj,true);
+        for(var i=0;i<iSects.length;i++){
+          var is=iSects[i];
+          if(is.object.visible&&is.object.isMesh&&is.point&&is.face){
+            dbg.push('S0:命中('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+')');
+            return {geo:_v3dProcessHit(is,v),dbg:dbg};
+          }
+        }
+        dbg.push('S0:无交点 root='+rootObj.type+' iSects='+iSects.length+' csz='+csz.width+'x'+csz.height);
+      }else{dbg.push('S0:无rootObj');}
+    }else{dbg.push('S0:无THREE');}
+  }catch(e){dbg.push('S0:异常 '+e.message);}
+
   // 策略1：O3DV原生方法，不乘DPR
   var hit=v.GetMeshIntersectionUnderMouse(mode,{x:mouseCoords.x,y:mouseCoords.y});
   if(hit){
@@ -4681,7 +4725,7 @@ function _v3dDetectGeometry(mouseCoords){
     else {dbg.push('S2:命中('+sx+','+sy+')');return {geo:_v3dProcessHit(hit2,v),dbg:dbg};}
   }else{dbg.push('S2:null phys('+sx+','+sy+')');}
 
-  // 策略3：手动射线投射（不依赖全局THREE，从scene对象获取Vector3）
+  // 策略3：手动射线（用scene自带Vec3，增强geometry探测）
   try{
     var camera=v.camera;
     if(!camera||!camera.isCamera){v.scene.traverse(function(o){if(o.isCamera&&!camera)camera=o;});}
@@ -4689,8 +4733,8 @@ function _v3dDetectGeometry(mouseCoords){
     else{
       camera.updateMatrixWorld();camera.updateProjectionMatrix();
       var camType=camera.isPerspectiveCamera?'P':'O';
-      var Vec3=null;
-      v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor){Vec3=o.position.constructor;}});
+      var Vec3=null,Mat4=null;
+      v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor){Vec3=o.position.constructor;Mat4=o.matrix.constructor;}});
       if(!Vec3){dbg.push('S3:无Vec3');}
       else{
         var ndcX=(mouseCoords.x/rect.width)*2-1;
@@ -4701,25 +4745,36 @@ function _v3dDetectGeometry(mouseCoords){
         farPt.unproject(camera);
         var rayDir=new Vec3().subVectors(farPt,nearPt).normalize();
         var rayOrg=nearPt.clone();
-        var triCount=0,meshCount=0,skipNoIdx=0;
+        var triCount=0,meshCount=0,skipNoIdx=0,geoDbg=[];
         var bestHit=null,bestDist=Infinity;
         v.scene.traverse(function(o){
-          if(!o.isMesh||!o.geometry)return;
-          var pos=o.geometry.attributes?o.geometry.attributes.position:null;
-          if(!pos)return;
+          if(!o.isMesh||!o.geometry||!o.visible)return;
+          var geo=o.geometry;
+          // 增强geometry检测：检查多种可能的三角形数据源
+          var pos=geo.attributes?geo.attributes.position:null;
+          if(!pos&&geo.attributes&&geo.attributes.POSITION)pos=geo.attributes.POSITION;
+          if(!pos){
+            geoDbg.push('noPos:'+geo.type);
+            return;
+          }
           o.updateMatrixWorld(true);
           meshCount++;
-          var invMat=new o.matrix.constructor().copy(o.matrixWorld).invert();
+          var invMat=new Mat4().copy(o.matrixWorld).invert();
           var lOrg=rayOrg.clone().applyMatrix4(invMat);
           var lDir=rayDir.clone().transformDirection(invMat).normalize();
-          var idx=o.geometry.index;
-          var cnt=idx?idx.count:(pos.count-pos.count%3);
-          var step=idx?3:1;
+          var idx=geo.index;
+          var cnt=0;
+          if(idx){cnt=idx.count;}
+          else{cnt=pos.count-(pos.count%3);}
+          if(cnt===0){
+            geoDbg.push('cnt0:'+geo.type+' idx='+(idx?idx.count:'null')+' pos='+pos.count);
+            return;
+          }
           for(var i=0;i<cnt;i+=3){
             var a,b,c;
             if(idx){a=idx.getX(i);b=idx.getX(i+1);c=idx.getX(i+2);}
             else{a=i;b=i+1;c=i+2;}
-            if(a>=pos.count||b>=pos.count||c>=pos.count)continue;
+            if(a>=pos.count||b>=pos.count||c>=pos.count){skipNoIdx++;continue;}
             var v0=new Vec3().fromBufferAttribute(pos,a);
             var v1=new Vec3().fromBufferAttribute(pos,b);
             var v2=new Vec3().fromBufferAttribute(pos,c);
@@ -4733,8 +4788,8 @@ function _v3dDetectGeometry(mouseCoords){
             var u=f*s.dot(h);
             if(u<0||u>1)continue;
             var q=new Vec3().crossVectors(s,e1);
-            var v=f*lDir.dot(q);
-            if(v<0||u+v>1)continue;
+            var vv=f*lDir.dot(q);
+            if(vv<0||u+vv>1)continue;
             var t=f*e2.dot(q);
             if(t>1e-10&&t<bestDist){
               bestDist=t;
@@ -4746,7 +4801,8 @@ function _v3dDetectGeometry(mouseCoords){
           }
         });
         if(bestHit){dbg.push('S3:命中 t='+bestDist.toFixed(1)+' tri='+triCount);return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};}
-        dbg.push('S3:无交点 ndc('+ndcX.toFixed(2)+','+ndcY.toFixed(2)+') cam='+camType+' m='+meshCount+' tri='+triCount+' skip='+skipNoIdx+' org('+rayOrg.x.toFixed(1)+','+rayOrg.y.toFixed(1)+','+rayOrg.z.toFixed(1)+')');
+        var gd=geoDbg.length?(' geo:'+geoDbg.join('|')):'';
+        dbg.push('S3:无交点 ndc('+ndcX.toFixed(2)+','+ndcY.toFixed(2)+') cam='+camType+' m='+meshCount+' tri='+triCount+' skip='+skipNoIdx+gd+' org('+rayOrg.x.toFixed(1)+','+rayOrg.y.toFixed(1)+','+rayOrg.z.toFixed(1)+')');
       }
     }
   }catch(e){dbg.push('S3:异常 '+e.message);}
