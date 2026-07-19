@@ -4819,6 +4819,36 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S4:无canvas尺寸');}
   }catch(e){dbg.push('S4:异常 '+e.message);}
 
+  // 策略5：深度缓冲读取（GPU级精确拾取，不依赖任何框架API）
+  try{
+    var gl=canvas.getContext('webgl2')||canvas.getContext('webgl');
+    if(gl){
+      var sx=canvas.width/rect.width, sy=canvas.height/rect.height;
+      var px=Math.round(mouseCoords.x*sx), py=canvas.height-Math.round(mouseCoords.y*sy);
+      var depth=new Float32Array(1), readOk=false;
+      try{gl.readPixels(px,py,1,1,gl.DEPTH_COMPONENT,gl.FLOAT,depth);readOk=true;}
+      catch(e1){var us=new Uint16Array(1);try{gl.readPixels(px,py,1,1,gl.DEPTH_COMPONENT,gl.UNSIGNED_SHORT,us);depth[0]=us[0]/65535;readOk=true;}catch(e2){}}
+      if(readOk&&depth[0]>0.001&&depth[0]<0.999){
+        var Vec3=null;v.scene.traverse(function(o){if(!Vec3&&o.position&&o.position.constructor)Vec3=o.position.constructor;});
+        if(Vec3&&v.camera){
+          var ndcX=(mouseCoords.x/rect.width)*2-1, ndcY=-(mouseCoords.y/rect.height)*2+1;
+          var nearPt=new Vec3(ndcX,ndcY,-1), farPt=new Vec3(ndcX,ndcY,1);
+          nearPt.unproject(v.camera);farPt.unproject(v.camera);
+          var d=depth[0];
+          var wp=new Vec3(
+            nearPt.x+(farPt.x-nearPt.x)*d,
+            nearPt.y+(farPt.y-nearPt.y)*d,
+            nearPt.z+(farPt.z-nearPt.z)*d
+          );
+          dbg.push('S5:命中('+wp.x.toFixed(1)+','+wp.y.toFixed(1)+','+wp.z.toFixed(1)+') d='+d.toFixed(4));
+          return {geo:{type:'vert',pt:{x:wp.x,y:wp.y,z:wp.z},rawPt:{x:wp.x,y:wp.y,z:wp.z}},dbg:dbg};
+        }
+      }else if(readOk){
+        dbg.push('S5:depth='+(depth[0]).toFixed(4)+' (no hit)');
+      }else{dbg.push('S5:readPixels failed');}
+    }else{dbg.push('S5:无WebGL');}
+  }catch(e){dbg.push('S5:异常 '+e.message);}
+
   return {geo:null,dbg:dbg};
 }
 
