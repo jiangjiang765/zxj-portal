@@ -4465,8 +4465,9 @@ function _v3dToggleFilter(k){
   }
 }
 
-// --- 触屏支持（Pointer Events统一鼠标+触屏，兼容华为鸿蒙浏览器） ---
+// --- 触屏+鼠标支持 ---
 var _v3dPointerStart=null;
+var _v3dTouchStart=null;
 var _v3dLastMeasureTime=0;
 var _v3dOrbitControls=null; // 缓存OrbitControls引用
 function _v3dGetOrbitControls(){
@@ -4502,6 +4503,33 @@ function _v3dOnPointerUp(e){
   _v3dSmartClick(mc);
 }
 
+// --- 移动端Touch Events（直接监听canvas，capture阶段拦截，解决华为鸿蒙Pointer Events不生效）---
+function _v3dOnTouchStart(e){
+  if(!_v3dMeasuring)return;
+  e.preventDefault();
+  e.stopPropagation();
+  var t=e.touches[0];
+  _v3dTouchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+}
+function _v3dOnTouchEnd(e){
+  if(!_v3dMeasuring||!_v3dTouchStart)return;
+  e.preventDefault();
+  e.stopPropagation();
+  var t=e.changedTouches[0];
+  var dx=t.clientX-_v3dTouchStart.x,dy=t.clientY-_v3dTouchStart.y;
+  var dt=Date.now()-_v3dTouchStart.time;
+  if(dt>500||Math.sqrt(dx*dx+dy*dy)>15){_v3dTouchStart=null;return;}
+  var now=Date.now();
+  if(now-_v3dLastMeasureTime<300){_v3dTouchStart=null;return;}
+  _v3dLastMeasureTime=now;
+  _v3dTouchStart=null;
+  var v=_o3dvViewer.GetViewer();
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var mc={x:t.clientX-rect.left,y:t.clientY-rect.top};
+  _v3dSmartClick(mc);
+}
+
 // --- 测量开关 ---
 function v3dToggleMeasure(){
   if(!_o3dvViewer)return;
@@ -4521,6 +4549,14 @@ function v3dToggleMeasure(){
       ctr.removeEventListener('pointerdown',_v3dOnPointerDown,true);
       ctr.removeEventListener('pointerup',_v3dOnPointerUp,true);
       ctr.style.touchAction='';
+    }
+    // 移除canvas上的touch监听（移动端）
+    var cv=_o3dvViewer.GetViewer();
+    var cvs=cv.GetCanvas?cv.GetCanvas():cv.canvas;
+    if(cvs){
+      cvs.removeEventListener('touchstart',_v3dOnTouchStart,{capture:true});
+      cvs.removeEventListener('touchend',_v3dOnTouchEnd,{capture:true});
+      cvs.style.touchAction='';
     }
     // 恢复OrbitControls
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
@@ -4542,6 +4578,14 @@ function v3dToggleMeasure(){
       ctr.addEventListener('pointerdown',_v3dOnPointerDown,{capture:true,passive:false});
       ctr.addEventListener('pointerup',_v3dOnPointerUp,{capture:true,passive:false});
       ctr.style.touchAction='none';
+    }
+    // 移动端核心修复：在canvas上直接监听touch事件，capture阶段拦截
+    var vv=_o3dvViewer.GetViewer();
+    var cvv=vv.GetCanvas?vv.GetCanvas():vv.canvas;
+    if(cvv){
+      cvv.addEventListener('touchstart',_v3dOnTouchStart,{capture:true,passive:false});
+      cvv.addEventListener('touchend',_v3dOnTouchEnd,{capture:true,passive:false});
+      cvv.style.touchAction='none';
     }
   }
 }
