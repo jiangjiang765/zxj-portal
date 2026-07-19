@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>3D图纸测量</title>
+<style>
+:root{
+  --bg-deep:#0D1B2A;
+  --bg-card:#152238;
+  --bg-input:#0D1B2A;
+  --border:#1B3A5C;
+  --border-focus:#2E5984;
+  --gold:#D4A843;
+  --blue:#2E5984;
+  --blue-light:#4FC3F7;
+  --text:#fff;
+  --text-dim:#8098B0;
+  --text-dark:#607890;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg-deep);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden;height:100vh;width:100vw;-webkit-tap-highlight-color:transparent;}
+
+/* ===== 第一步：选文件界面 ===== */
+#step-select{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100vh;padding:40px 20px;text-align:center;
+}
+#step-select h1{
+  font-size:28px;color:var(--gold);letter-spacing:3px;margin-bottom:40px;
+  text-shadow:0 0 30px rgba(212,168,67,.2);
+}
+#upload-zone{
+  width:90%;max-width:400px;height:220px;
+  border:2.5px dashed var(--border-focus);border-radius:20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:.3s;background:rgba(21,34,56,.5);
+}
+#upload-zone:active{background:rgba(46,89,132,.3);border-color:var(--gold);}
+#upload-zone .icon{font-size:48px;margin-bottom:12px;}
+#upload-zone .label{font-size:16px;color:var(--text);margin-bottom:8px;}
+#upload-zone .hint{font-size:12px;color:var(--text-dim);}
+#file-input{display:none;}
+#status-msg{
+  margin-top:20px;font-size:13px;padding:10px 16px;border-radius:10px;
+  min-height:20px;display:none;max-width:90%;
+}
+#format-note{
+  margin-top:24px;font-size:11px;color:var(--text-dark);
+  letter-spacing:.5px;
+}
+
+/* ===== 第二步：测量界面 ===== */
+#step-measure{display:none;height:100vh;flex-direction:column;}
+
+/* 顶部栏 */
+#top-bar{
+  display:flex;align-items:center;padding:8px 12px;gap:8px;
+  background:var(--bg-card);border-bottom:1px solid var(--border);
+  min-height:48px;flex-shrink:0;
+}
+#btn-back{
+  background:var(--border);color:#fff;border:none;border-radius:8px;
+  padding:6px 12px;font-size:13px;cursor:pointer;flex-shrink:0;
+}
+#file-info{
+  flex:1;font-size:12px;color:var(--text-dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+}
+#file-info b{color:var(--gold);}
+#dimensions-box{
+  display:none;padding:4px 10px;background:var(--bg-input);
+  border-radius:8px;font-size:11px;flex-shrink:0;
+}
+#dimensions-box .dim-val{color:#fff;font-weight:700;font-size:14px;}
+
+/* 3D查看区 */
+#viewer-wrap{
+  flex:1;position:relative;overflow:hidden;background:#1a1a2e;
+}
+#v3d-container{width:100%;height:100%;position:relative;}
+#touch-overlay{
+  display:none;position:absolute;top:0;left:0;width:100%;height:100%;
+  z-index:20;background:transparent;
+}
+#measure-status{
+  display:none;position:absolute;bottom:0;left:0;right:0;
+  padding:8px 12px;background:rgba(13,27,42,.9);
+  border-top:1px solid rgba(30,136,229,.3);font-size:12px;
+  color:#64b5f6;line-height:1.5;z-index:25;
+}
+#loading-overlay{
+  display:none;position:absolute;top:0;left:0;width:100%;height:100%;
+  background:rgba(13,27,42,.85);z-index:30;
+  flex-direction:column;align-items:center;justify-content:center;
+}
+#loading-overlay .spinner{
+  width:40px;height:40px;border:3px solid var(--border);
+  border-top-color:var(--gold);border-radius:50%;
+  animation:spin .8s linear infinite;margin-bottom:12px;
+}
+#loading-overlay .txt{font-size:13px;color:var(--text-dim);}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* 底部工具栏 */
+#bottom-bar{
+  display:flex;align-items:center;padding:8px 10px;gap:6px;
+  background:var(--bg-card);border-top:1px solid var(--border);
+  flex-shrink:0;flex-wrap:wrap;justify-content:center;
+}
+.bar-btn{
+  border:none;border-radius:8px;color:#fff;font-size:12px;
+  padding:6px 12px;cursor:pointer;min-width:54px;text-align:center;
+  transition:opacity .2s;
+}
+.bar-btn:active{opacity:.7;}
+#btn-measure{background:#1e88e5;}
+#btn-measure.active{background:#ff9800;}
+#btn-clear{background:#e74c3c;}
+#btn-snap-vert{background:#4caf50;font-size:10px;padding:4px 8px;border-radius:4px;}
+#btn-snap-vert.off{opacity:.4;}
+#btn-snap-edge{background:#ff9800;font-size:10px;padding:4px 8px;border-radius:4px;}
+#btn-snap-edge.off{opacity:.4;}
+#btn-snap-face{background:#2196f3;font-size:10px;padding:4px 8px;border-radius:4px;}
+#btn-snap-face.off{opacity:.4;}
+.snap-label{font-size:10px;color:var(--text-dim);line-height:24px;}
+</style>
+</head>
+<body>
+
+<!-- ===== 第一步：选文件界面 ===== -->
+<div id="step-select">
+  <h1>📐 3D图纸测量</h1>
+  <div id="upload-zone">
+    <div class="icon">📁</div>
+    <div class="label">点击选择3D文件</div>
+    <div class="hint">或拖拽文件到此区域</div>
+  </div>
+  <input type="file" id="file-input" accept=".step,.stp,.stl,.obj,.gltf,.glb">
+  <div id="status-msg"></div>
+  <div id="format-note">支持格式：STEP / STP / STL / OBJ / GLTF / GLB</div>
+</div>
+
+<!-- ===== 第二步：测量界面 ===== -->
+<div id="step-measure">
+  <!-- 顶部栏 -->
+  <div id="top-bar">
+    <button id="btn-back" class="bar-btn">← 返回</button>
+    <div id="file-info"></div>
+    <div id="dimensions-box"></div>
+  </div>
+
+  <!-- 3D查看区 -->
+  <div id="viewer-wrap">
+    <div id="v3d-container"></div>
+    <div id="touch-overlay"></div>
+    <div id="measure-status"></div>
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <div class="txt" id="loading-text">正在加载3D引擎...</div>
+    </div>
+  </div>
+
+  <!-- 底部工具栏 -->
+  <div id="bottom-bar">
+    <button id="btn-measure" class="bar-btn">📏 测量</button>
+    <button id="btn-clear" class="bar-btn">🗑️ 清除</button>
+    <span class="snap-label">捕捉:</span>
+    <button id="btn-snap-vert" class="bar-btn">● 顶点</button>
+    <button id="btn-snap-edge" class="bar-btn">━ 边</button>
+    <button id="btn-snap-face" class="bar-btn">◻ 面</button>
+  </div>
+</div>
+
+<script>
+// ===== 全局状态 =====
+var _o3dvViewer=null;
+var _o3dvLoading=false;
+var _v3dMeasuring=false;
+var _v3dSelStack=[];
+var _v3dMeasureList=[];
+var _v3dMeasureId=0;
+var _v3dFilter={vert:true,edge:true,face:true};
+var _v3dPreviewEl=null;
+var _v3dLastMeasureTime=0;
+var _v3dRenderLoopId=null;
+
+// ===== 工具函数 =====
+function esc(s){return String(s||'').replace(/[<>&"']/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]})}
+function formatFileSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';}
+function _v3dFmtPt(p){return '('+p.x.toFixed(2)+','+p.y.toFixed(2)+','+p.z.toFixed(2)+')';}
+
+function showStatus(msg,color){
+  var el=document.getElementById('status-msg');
+  if(el){el.style.display='block';el.innerHTML=msg;el.style.color=color||'var(--text)';}
+}
+
+// ===== O3DV引擎动态加载 =====
+function loadO3dvEngine(){
+  return new Promise(function(resolve,reject){
+    if(window.OV&&OV.EmbeddedViewer){resolve();return;}
+    if(_o3dvLoading){
+      var ck=setInterval(function(){if(window.OV&&OV.EmbeddedViewer){clearInterval(ck);resolve();}},200);
+      return;
+    }
+    _o3dvLoading=true;
+    showStatus('⏳ 正在加载3D引擎（首次约5秒）...','#64b5f6');
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/online-3d-viewer@0.18.0/build/engine/o3dv.min.js';
+    s.onload=function(){
+      _o3dvLoading=false;
+      if(window.OV&&OV.EmbeddedViewer){showStatus('✅ 3D引擎就绪','#4caf50');resolve();}
+      else{reject(new Error('O3DV引擎加载异常'));}
+    };
+    s.onerror=function(){_o3dvLoading=false;reject(new Error('3D引擎下载失败，请检查网络'));};
+    document.head.appendChild(s);
+  });
+}
+
+// ===== 文件处理 =====
+function handleV3dFile(file){
+  if(!file)return;
+  var name=file.name;
+  showStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f6');
+
+  // 显示loading
+  var loadingEl=document.getElementById('loading-overlay');
+  if(loadingEl)loadingEl.style.display='flex';
+  var loadingTxt=document.getElementById('loading-text');
+  if(loadingTxt)loadingTxt.textContent='正在加载3D引擎...';
+
+  loadO3dvEngine().then(function(){
+    if(loadingTxt)loadingTxt.textContent='正在加载模型...';
+
+    var container=document.getElementById('v3d-container');
+    container.innerHTML='';
+    _o3dvViewer=null;
+    _v3dMeasuring=false;
+    _v3dSelStack=[];
+    _v3dMeasureList=[];
+    _v3dMeasureId=0;
+
+    try{
+      var viewer=new OV.EmbeddedViewer(container,{
+        backgroundColor:new OV.RGBAColor(26,26,46,255),
+        defaultColor:new OV.RGBColor(190,193,200),
+        onModelLoaded:function(){
+          _o3dvPostProcess(viewer,name,file);
+          // 切换到测量界面
+          document.getElementById('step-select').style.display='none';
+          document.getElementById('step-measure').style.display='flex';
+          // 更新文件信息
+          var fileInfo=document.getElementById('file-info');
+          if(fileInfo){
+            fileInfo.innerHTML='<b>'+esc(name)+'</b> ('+formatFileSize(file.size)+')';
+          }
+          // 隐藏loading
+          if(loadingEl)loadingEl.style.display='none';
+          // 启动渲染循环
+          _v3dStartRenderLoop();
+        }
+      });
+      _o3dvViewer=viewer;
+      viewer.LoadModelFromFileList([file]);
+    }catch(err){
+      if(loadingEl)loadingEl.style.display='none';
+      showStatus('❌ 加载失败: '+err.message,'#f44336');
+    }
+  }).catch(function(err){
+    if(loadingEl)loadingEl.style.display='none';
+    showStatus('❌ '+err.message+'<br>💡 请检查网络连接后重试','#f44336');
+  });
+}
+
+// ===== 模型加载后处理 =====
+function _o3dvPostProcess(viewer,name,file){
+  try{
+    var v=viewer.GetViewer();
+    if(!v||!v.scene)return;
+    // 1. 覆盖颜色为金属银灰（机加工钢件质感）
+    v.scene.traverse(function(obj){
+      if(obj.isMesh&&obj.material){
+        var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+        mats.forEach(function(mat){
+          if(mat.color){mat.color.setRGB(0.745,0.757,0.784);}
+          if(mat.metalness!==undefined){mat.metalness=0.55;mat.roughness=0.4;}
+          mat.needsUpdate=true;
+        });
+      }
+    });
+    v.Render();
+    // 2. 显示包围盒外形尺寸
+    var bbox=v.GetBoundingBox(function(){return true;});
+    if(bbox&&bbox.min&&bbox.max){
+      var dx=Math.abs(bbox.max.x-bbox.min.x);
+      var dy=Math.abs(bbox.max.y-bbox.min.y);
+      var dz=Math.abs(bbox.max.z-bbox.min.z);
+      var dims=[{l:'X',v:dx},{l:'Y',v:dy},{l:'Z',v:dz}].sort(function(a,b){return b.v-a.v;});
+      var el=document.getElementById('dimensions-box');
+      if(el){
+        el.style.display='block';
+        el.innerHTML='<b style="color:var(--gold)">📐</b> <span class="dim-val">'+
+          dims[0].v.toFixed(2)+' × '+dims[1].v.toFixed(2)+' × '+dims[2].v.toFixed(2)+'</span> mm<br>'+
+          '<span style="font-size:10px;color:var(--text-dim)">长('+dims[0].l+')×宽('+dims[1].l+')×高('+dims[2].l+')</span>';
+      }
+    }
+  }catch(e){}
+}
+
+// ===== 3D坐标→屏幕坐标投影 =====
+function _v3dProject(p){
+  try{
+    var v=_o3dvViewer.GetViewer(),c=v.camera,canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+    var w=canvas.clientWidth,h=canvas.clientHeight;
+    var so=v.scene.children[0];
+    if(!so||!so.position)return null;
+    var ox=so.position.x,oy=so.position.y,oz=so.position.z;
+    so.position.set(p.x,p.y,p.z);
+    var pr=so.position.clone().project(c);
+    so.position.set(ox,oy,oz);
+    return{x:(pr.x*0.5+0.5)*w,y:(-pr.y*0.5+0.5)*h};
+  }catch(e){return null;}
+}
+
+// ===== 几何体检测 =====
+function _v3dDetectGeometry(mouseCoords){
+  if(!_o3dvViewer)return null;
+  var v=_o3dvViewer.GetViewer();if(!v)return null;
+  var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
+  var hit=v.GetMeshIntersectionUnderMouse(mode,mouseCoords);
+  if(!hit||!hit.point||!hit.object||!hit.face)return null;
+
+  var obj=hit.object;
+  obj.updateMatrixWorld(true);
+  var f=hit.face;
+  var posAttr=obj.geometry.attributes.position;
+
+  var ia=f.a,ib=f.b,ic=f.c;
+  var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
+  var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
+  var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
+
+  var pt=hit.point;
+  var bary=_v3dBarycentric(pt,va,vb,vc);
+  var baryArr=[{v:bary.x,i:0,label:'A',pt:va},{v:bary.y,i:1,label:'B',pt:vb},{v:bary.z,i:2,label:'C',pt:vc}];
+  baryArr.sort(function(a,b){return a.v-b.v;});
+
+  var minBary=baryArr[0].v;
+  var maxBary=baryArr[2].v;
+
+  var edge1=new THREE.Vector3().subVectors(vb,va);
+  var edge2=new THREE.Vector3().subVectors(vc,va);
+  var faceNormal=new THREE.Vector3().crossVectors(edge1,edge2).normalize();
+  var faceArea=0.5*edge1.clone().cross(edge2).length();
+
+  if(maxBary>0.85&&_v3dFilter.vert){
+    var snapPt=_v3dSnapToVertex({x:baryArr[2].pt.x,y:baryArr[2].pt.y,z:baryArr[2].pt.z},_o3dvViewer);
+    return{type:'vert',pt:snapPt,rawPt:{x:baryArr[2].pt.x,y:baryArr[2].pt.y,z:baryArr[2].pt.z}};
+  }
+
+  if(minBary<0.12&&_v3dFilter.edge){
+    var edgeVerts;
+    if(baryArr[0].i===0) edgeVerts={a:vb,b:vc};
+    else if(baryArr[0].i===1) edgeVerts={a:va,b:vc};
+    else edgeVerts={a:va,b:vb};
+
+    var edgeLen=edgeVerts.a.distanceTo(edgeVerts.b);
+    var edgeMid=new THREE.Vector3().addVectors(edgeVerts.a,edgeVerts.b).multiplyScalar(0.5);
+    var edgeDir=new THREE.Vector3().subVectors(edgeVerts.b,edgeVerts.a).normalize();
+
+    var isCircular=_v3dDetectCircularEdge(obj,ia,ib,ic,baryArr[0].i,faceNormal);
+    if(isCircular){
+      var arcPts=_v3dTraceArcEdge(obj,ia,ib,ic,baryArr[0].i);
+      if(arcPts&&arcPts.length>=3){
+        var circle=_v3dFitCircle3(arcPts[0],arcPts[1],arcPts[2]);
+        if(circle){
+          return{type:'arc',pt:{x:edgeMid.x,y:edgeMid.y,z:edgeMid.z},
+            radius:circle.radius,center:circle.center,
+            edgeA:{x:edgeVerts.a.x,y:edgeVerts.a.y,z:edgeVerts.a.z},
+            edgeB:{x:edgeVerts.b.x,y:edgeVerts.b.y,z:edgeVerts.b.z}};
+        }
+      }
+    }
+
+    return{type:'edge',pt:{x:edgeMid.x,y:edgeMid.y,z:edgeMid.z},
+      edgeA:{x:edgeVerts.a.x,y:edgeVerts.a.y,z:edgeVerts.a.z},
+      edgeB:{x:edgeVerts.b.x,y:edgeVerts.b.y,z:edgeVerts.b.z},
+      length:edgeLen,dir:edgeDir};
+  }
+
+  if(_v3dFilter.face){
+    return{type:'face',pt:{x:pt.x,y:pt.y,z:pt.z},
+      normal:{x:faceNormal.x,y:faceNormal.y,z:faceNormal.z},
+      area:faceArea,obj:obj,faceIndex:hit.faceIndex};
+  }
+
+  return{type:'vert',pt:_v3dSnapToVertex({x:pt.x,y:pt.y,z:pt.z},_o3dvViewer)};
+}
+
+// ===== 重心坐标计算 =====
+function _v3dBarycentric(p,va,vb,vc){
+  var v0=new THREE.Vector3().subVectors(vc,va);
+  var v1=new THREE.Vector3().subVectors(vb,va);
+  var v2=new THREE.Vector3().subVectors(p,va);
+  var d00=v0.dot(v0),d01=v0.dot(v1),d02=v0.dot(v2);
+  var d11=v1.dot(v1),d12=v1.dot(v2);
+  var denom=d00*d11-d01*d01;
+  if(Math.abs(denom)<1e-10)return{x:0,y:0,z:1};
+  var u=(d11*d02-d01*d12)/denom;
+  var v2c=(d00*d12-d01*d02)/denom;
+  return{x:1-u-v2c,y:v2c,z:u};
+}
+
+// ===== 顶点吸附 =====
+function _v3dSnapToVertex(p,viewer){
+  try{
+    var v=viewer.GetViewer();if(!v||!v.scene)return p;
+    var best=p,bestD=0.8;
+    v.scene.traverse(function(obj){
+      if(!obj.isMesh||!obj.geometry)return;
+      var pos=obj.geometry.attributes.position;if(!pos)return;
+      obj.updateMatrixWorld(true);
+      for(var i=0;i<pos.count;i++){
+        var wp=new THREE.Vector3(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(obj.matrixWorld);
+        var dx=wp.x-p.x,dy=wp.y-p.y,dz=wp.z-p.z;
+        var d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d<bestD){bestD=d;best={x:wp.x,y:wp.y,z:wp.z};}
+      }
+    });
+    return best;
+  }catch(e){return p;}
+}
+
+// ===== 圆弧边检测 =====
+function _v3dDetectCircularEdge(obj,ia,ib,ic,skipIdx,faceNormal){
+  try{
+    var posAttr=obj.geometry.attributes.position;
+    var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia);
+    var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib);
+    var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic);
+    var d1=va.distanceTo(vb),d2=vb.distanceTo(vc),d3=vc.distanceTo(va);
+    var sides=[d1,d2,d3].sort(function(a,b){return a-b;});
+    if(sides[2]>sides[1]*1.5&&sides[0]>sides[1]*0.3)return true;
+    return false;
+  }catch(e){return false;}
+}
+
+// ===== 沿圆弧边追踪 =====
+function _v3dTraceArcEdge(obj,ia,ib,ic,skipIdx){
+  try{
+    var posAttr=obj.geometry.attributes.position;
+    var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
+    var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
+    var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
+    return[{x:va.x,y:va.y,z:va.z},{x:vb.x,y:vb.y,z:vb.z},{x:vc.x,y:vc.y,z:vc.z}];
+  }catch(e){return null;}
+}
+
+// ===== 三点拟合圆 =====
+function _v3dFitCircle3(p1,p2,p3){
+  var v1={x:p2.x-p1.x,y:p2.y-p1.y,z:p2.z-p1.z};
+  var v2={x:p3.x-p1.x,y:p3.y-p1.y,z:p3.z-p1.z};
+  var nx=v1.y*v2.z-v1.z*v2.y,ny=v1.z*v2.x-v1.x*v2.z,nz=v1.x*v2.y-v1.y*v2.x;
+  var ax=Math.abs(nx),ay=Math.abs(ny),az=Math.abs(nz);
+  var q1,q2;
+  if(ax>=ay&&ax>=az){q1='y';q2='z';}else if(ay>=az){q1='x';q2='z';}else{q1='x';q2='y';}
+  var ax1=p1[q1],ay1=p1[q2],ax2=p2[q1],ay2=p2[q2],ax3=p3[q1],ay3=p3[q2];
+  var D=2*(ax1*(ay2-ay3)+ax2*(ay3-ay1)+ax3*(ay1-ay2));
+  if(Math.abs(D)<1e-6)return null;
+  var cx=((ax1*ax1+ay1*ay1)*(ay2-ay3)+(ax2*ax2+ay2*ay2)*(ay3-ay1)+(ax3*ax3+ay3*ay3)*(ay1-ay2))/D;
+  var cy=((ax1*ax1+ay1*ay1)*(ax3-ax2)+(ax2*ax2+ay2*ay2)*(ax1-ax3)+(ax3*ax3+ay3*ay3)*(ax2-ax1))/D;
+  var R=Math.sqrt((ax1-cx)*(ax1-cx)+(ay1-cy)*(ay1-cy));
+  return{radius:R,center:{x:cx,y:cy}};
+}
+
+// ===== 智能点击：自动识别+测量 =====
+function _v3dSmartClick(mouseCoords){
+  if(!_o3dvViewer||!_v3dMeasuring)return;
+  var geo=_v3dDetectGeometry(mouseCoords);
+  if(!geo){return;}
+
+  var mel=document.getElementById('measure-status');
+
+  // 点击边(直线) → 自动量长度
+  if(geo.type==='edge'){
+    _v3dFinishMeasure({
+      type:'edge_len',label:'━ 边长',
+      value:geo.length.toFixed(3)+' mm',
+      pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B'],
+      detail:'方向: ('+geo.dir.x.toFixed(2)+', '+geo.dir.y.toFixed(2)+', '+geo.dir.z.toFixed(2)+')'
+    });
+    return;
+  }
+
+  // 点击圆弧边 → 自动量半径/直径
+  if(geo.type==='arc'){
+    _v3dFinishMeasure({
+      type:'arc_r',label:'⭕ 半径',
+      value:'R = '+geo.radius.toFixed(3)+' mm',
+      pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B'],
+      detail:'直径 D = '+(geo.radius*2).toFixed(3)+' mm'
+    });
+    return;
+  }
+
+  // 点击面 → 显示面积
+  if(geo.type==='face'&&_v3dSelStack.length===0){
+    _v3dSelStack.push(geo);
+    v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
+    mel.innerHTML='📍 已选面F1，再点一个面量<b>夹角</b>，或点空白完成<b>面积</b>测量 <span style="color:#999;font-size:10px">🧲</span>';
+    return;
+  }
+
+  // 顶点
+  if(geo.type==='vert'){
+    if(_v3dSelStack.length===0){
+      _v3dSelStack.push(geo);
+      v3dAddMeasureMarker(geo.pt,'A','#4caf50');
+      mel.innerHTML='📍 A('+_v3dFmtPt(geo.pt)+')<br>点第2个点量<b>距离</b>，或点面量<b>点到面距离</b> <span style="color:#999;font-size:10px">🧲</span>';
+    }else{
+      var first=_v3dSelStack[0];
+      if(first.type==='vert'){
+        var a=first.pt,p=geo.pt;
+        var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
+        var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        _v3dFinishMeasure({
+          type:'dist',label:'📏 距离',
+          value:dist.toFixed(3)+' mm',
+          pts:[a,p],markerLabels:['A','B'],
+          detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)
+        });
+      }else if(first.type==='face'){
+        var pt=geo.pt;
+        var fn=first.normal;
+        var fpt=first.pt;
+        var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
+        _v3dFinishMeasure({
+          type:'pt2face',label:'📏 点到面',
+          value:dist.toFixed(3)+' mm',
+          pts:[pt,fpt],markerLabels:['P','F']
+        });
+      }
+    }
+    return;
+  }
+
+  // 第二次点面
+  if(geo.type==='face'&&_v3dSelStack.length>0){
+    var first=_v3dSelStack[0];
+    if(first.type==='face'){
+      var n1=first.normal,n2=geo.normal;
+      var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
+      if(dot>1)dot=1;if(dot<-1)dot=-1;
+      var ang=Math.acos(dot)*180/Math.PI;
+      _v3dFinishMeasure({
+        type:'face_angle',label:'📐 面夹角',
+        value:ang.toFixed(2)+'°',
+        pts:[first.pt,geo.pt],markerLabels:['F1','F2'],
+        detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')
+      });
+    }else if(first.type==='vert'){
+      var pt=first.pt;
+      var fn=geo.normal;
+      var fpt=geo.pt;
+      var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
+      _v3dFinishMeasure({
+        type:'pt2face',label:'📏 点到面',
+        value:dist.toFixed(3)+' mm',
+        pts:[pt,fpt],markerLabels:['P','F']
+      });
+    }
+    return;
+  }
+}
+
+// ===== 完成一次测量 =====
+function _v3dFinishMeasure(info){
+  var id=++_v3dMeasureId;
+  var container=document.getElementById('v3d-container');
+  var mel=document.getElementById('measure-status');
+
+  var markers=[];
+  var lines=[];
+  if(info.pts&&info.pts.length>=2){
+    for(var i=0;i<info.pts.length;i++){
+      var lbl=info.markerLabels?info.markerLabels[i]:String.fromCharCode(65+i);
+      var col=i===0?'#4caf50':'#ff9800';
+      v3dAddMeasureMarker(info.pts[i],lbl,col);
+      markers.push({pt:info.pts[i],label:lbl,color:col});
+    }
+    v3dDrawMeasureLine(info.pts[0],info.pts[1]);
+  }else if(info.pts&&info.pts.length===1){
+    var lbl=info.markerLabels?info.markerLabels[0]:'A';
+    v3dAddMeasureMarker(info.pts[0],lbl,'#4caf50');
+    markers.push({pt:info.pts[0],label:lbl,color:'#4caf50'});
+  }
+
+  // callout标签
+  var callout=null;
+  if(info.pts&&info.pts.length>=2){
+    var mid={x:(info.pts[0].x+info.pts[1].x)/2,y:(info.pts[0].y+info.pts[1].y)/2,z:(info.pts[0].z+info.pts[1].z)/2};
+    callout=_v3dAddCallout(mid,info.label+': '+info.value,id);
+  }else{
+    callout=_v3dAddCallout(info.pts[0],info.label+': '+info.value,id);
+  }
+
+  _v3dMeasureList.push({id:id,type:info.type,info:info,markers:markers,lines:lines,callout:callout});
+
+  var detailStr=info.detail?'<br><span style="color:var(--text-dim);font-size:11px">'+info.detail+'</span>':'';
+  mel.innerHTML='✅ <b style="color:#fff">'+info.label+'</b>：'+info.value+detailStr+'<br>'+
+    '<span style="color:#999;font-size:10px">继续点击可量下一个 | 点✕删除单个</span>';
+
+  _v3dSelStack=[];
+}
+
+// ===== Callout标签 =====
+function _v3dAddCallout(pos3d,text,measureId){
+  var container=document.getElementById('v3d-container');
+  var div=document.createElement('div');
+  div.className='v3d-callout';
+  div.dataset.mId=measureId;
+  div.style.cssText='position:absolute;transform:translate(-50%,-100%);pointer-events:auto;z-index:15;'+
+    'background:rgba(0,0,0,.82);color:#fff;font-size:11px;padding:3px 8px;border-radius:4px;'+
+    'white-space:nowrap;border:1px solid rgba(255,152,0,.5);box-shadow:0 2px 8px rgba(0,0,0,.4)';
+  var span=document.createElement('span');
+  span.textContent=text;
+  span.style.marginRight='6px';
+  var del=document.createElement('span');
+  del.textContent='\u2715';
+  del.style.cssText='color:#f44336;cursor:pointer;font-size:10px;font-weight:700;margin-left:2px';
+  del.addEventListener('click',function(e){e.stopPropagation();_v3dDeleteMeasure(measureId);});
+  div.appendChild(span);
+  div.appendChild(del);
+  container.appendChild(div);
+  _v3dPositionCallout(div,pos3d);
+  div._pos3d=pos3d;
+  return div;
+}
+
+function _v3dPositionCallout(div,pos3d){
+  var sp=_v3dProject(pos3d);
+  if(sp){
+    div.style.left=sp.x+'px';
+    div.style.top=(sp.y-12)+'px';
+  }
+}
+
+// ===== 更新所有callout位置 =====
+function _v3dUpdateCallouts(){
+  var container=document.getElementById('v3d-container');
+  if(!container)return;
+  container.querySelectorAll('.v3d-callout').forEach(function(el){
+    if(el._pos3d)_v3dPositionCallout(el,el._pos3d);
+  });
+  container.querySelectorAll('.v3d-measure-dot').forEach(function(el){
+    if(el._pos3d){
+      var sp=_v3dProject(el._pos3d);
+      if(sp){el.style.left=sp.x+'px';el.style.top=sp.y+'px';}
+    }
+  });
+}
+
+// ===== 删除单个测量 =====
+function _v3dDeleteMeasure(id){
+  _v3dMeasureList=_v3dMeasureList.filter(function(m){return m.id!==id;});
+  var container=document.getElementById('v3d-container');
+  if(container){
+    container.querySelectorAll('.v3d-callout').forEach(function(el){
+      if(parseInt(el.dataset.mId)===id)el.remove();
+    });
+  }
+  _v3dRedrawAllMarkers();
+  if(_v3dMeasureList.length===0){
+    _v3dShowPrompt();
+  }else{
+    var mel=document.getElementById('measure-status');
+    mel.innerHTML='📋 已完成 '+_v3dMeasureList.length+' 个测量 | 继续点击量下一个';
+  }
+}
+
+// ===== 重绘所有标记 =====
+function _v3dRedrawAllMarkers(){
+  var container=document.getElementById('v3d-container');
+  container.querySelectorAll('.v3d-measure-dot,.v3d-measure-line').forEach(function(el){el.remove();});
+  _v3dMeasureList.forEach(function(m){
+    if(m.info.pts&&m.info.pts.length>=2){
+      for(var i=0;i<m.info.pts.length;i++){
+        var lbl=m.info.markerLabels?m.info.markerLabels[i]:String.fromCharCode(65+i);
+        var col=i===0?'#4caf50':'#ff9800';
+        v3dAddMeasureMarker(m.info.pts[i],lbl,col);
+      }
+      v3dDrawMeasureLine(m.info.pts[0],m.info.pts[1]);
+    }else if(m.info.pts&&m.info.pts.length===1){
+      var lbl=m.info.markerLabels?m.info.markerLabels[0]:'A';
+      v3dAddMeasureMarker(m.info.pts[0],lbl,'#4caf50');
+    }
+  });
+}
+
+// ===== 清除所有测量 =====
+function v3dClearAllMeasures(){
+  _v3dMeasureList=[];
+  _v3dSelStack=[];
+  v3dClearMeasureMarkers();
+  var container=document.getElementById('v3d-container');
+  if(container)container.querySelectorAll('.v3d-callout').forEach(function(el){el.remove();});
+  if(_v3dMeasuring)_v3dShowPrompt();
+}
+
+// ===== 提示信息 =====
+function _v3dShowPrompt(){
+  var mel=document.getElementById('measure-status');
+  if(!mel)return;
+  mel.innerHTML='📍 点击模型测量 — <b>自动识别</b>：顶点→距离，边→长度，圆弧→半径，面→面积/夹角 <span style="color:#999;font-size:10px">🧲吸附</span>';
+}
+
+// ===== 清除hover高亮 =====
+function _v3dClearHover(){}
+
+// ===== 标记点 =====
+function v3dAddMeasureMarker(p,label,color){
+  var container=document.getElementById('v3d-container');
+  var marker=document.createElement('div');
+  marker.className='v3d-measure-dot';
+  var c=color||'#ff9800';
+  marker.style.cssText='position:absolute;width:20px;height:20px;border-radius:50%;background:'+c+';border:2px solid #fff;transform:translate(-50%,-50%);pointer-events:none;z-index:10;font-size:9px;color:#fff;text-align:center;line-height:16px;font-weight:700;box-shadow:0 0 6px '+c+'80';
+  marker.textContent=label;
+  var sp=_v3dProject(p);
+  if(sp){marker.style.left=sp.x+'px';marker.style.top=sp.y+'px';}
+  marker._pos3d=p;
+  container.appendChild(marker);
+}
+
+// ===== 测量线 =====
+function v3dDrawMeasureLine(pA,pB){
+  var container=document.getElementById('v3d-container');
+  var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.className='v3d-measure-line';
+  svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9';
+  try{
+    var a=_v3dProject(pA),b=_v3dProject(pB);
+    if(a&&b){
+      var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
+      line.setAttribute('stroke','#ff9800');line.setAttribute('stroke-width','2');
+      line.setAttribute('stroke-dasharray','6,3');
+      svg.appendChild(line);
+    }
+  }catch(e){}
+  container.appendChild(svg);
+}
+
+// ===== 清除标记 =====
+function v3dClearMeasureMarkers(){
+  var c=document.getElementById('v3d-container');if(!c)return;
+  c.querySelectorAll('.v3d-measure-dot,.v3d-measure-line').forEach(function(el){el.remove();});
+}
+
+// ===== 渲染循环 =====
+function _v3dStartRenderLoop(){
+  if(_v3dRenderLoopId)return;
+  _v3dRenderLoopId=setInterval(function(){
+    if(_v3dMeasuring||_v3dMeasureList.length>0)_v3dUpdateCallouts();
+  },200);
+}
+
+// ===================================================================
+// ===== 透明覆盖层方案：解决华为鸿蒙浏览器触摸测量不工作的问题 =====
+// ===================================================================
+
+var _touchStartInfo=null;
+
+function _onOverlayTouchStart(e){
+  if(!_v3dMeasuring)return;
+  var t=e.touches[0];
+  _touchStartInfo={x:t.clientX,y:t.clientY,time:Date.now()};
+}
+
+function _onOverlayTouchEnd(e){
+  if(!_v3dMeasuring||!_touchStartInfo)return;
+  e.preventDefault();
+  var t=e.changedTouches[0];
+  var dx=t.clientX-_touchStartInfo.x,dy=t.clientY-_touchStartInfo.y;
+  var dt=Date.now()-_touchStartInfo.time;
+  _touchStartInfo=null;
+  // 防误触: 移动>15px或时长>500ms → 视为拖拽，忽略
+  if(dt>500||Math.sqrt(dx*dx+dy*dy)>15)return;
+  // 300ms防抖
+  var now=Date.now();
+  if(now-_v3dLastMeasureTime<300)return;
+  _v3dLastMeasureTime=now;
+  // 计算canvas内坐标
+  var v=_o3dvViewer.GetViewer();
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var mc={x:t.clientX-rect.left,y:t.clientY-rect.top};
+  _v3dSmartClick(mc);
+}
+
+function _onOverlayClick(e){
+  if(!_v3dMeasuring)return;
+  // 桌面端鼠标点击支持
+  var now=Date.now();
+  if(now-_v3dLastMeasureTime<300)return;
+  _v3dLastMeasureTime=now;
+  var v=_o3dvViewer.GetViewer();
+  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+  var rect=canvas.getBoundingClientRect();
+  var mc={x:e.clientX-rect.left,y:e.clientY-rect.top};
+  _v3dSmartClick(mc);
+}
+
+// ===== 测量开关 =====
+function toggleMeasure(){
+  if(!_o3dvViewer)return;
+  var btn=document.getElementById('btn-measure');
+  var overlay=document.getElementById('touch-overlay');
+  var mel=document.getElementById('measure-status');
+
+  if(_v3dMeasuring){
+    // 关闭测量模式
+    _v3dMeasuring=false;
+    _v3dSelStack=[];
+    if(btn){btn.classList.remove('active');btn.textContent='📏 测量';}
+    mel.style.display='none';
+    // 隐藏overlay，恢复O3DV正常交互
+    if(overlay){
+      overlay.style.display='none';
+      overlay.removeEventListener('touchstart',_onOverlayTouchStart,false);
+      overlay.removeEventListener('touchend',_onOverlayTouchEnd,false);
+      overlay.removeEventListener('click',_onOverlayClick,false);
+    }
+    _v3dClearHover();
+  }else{
+    // 开启测量模式
+    _v3dMeasuring=true;
+    _v3dSelStack=[];
+    if(btn){btn.classList.add('active');btn.textContent='📏 测量中';}
+    mel.style.display='block';
+    _v3dShowPrompt();
+    // 显示overlay，挡住canvas让O3DV收不到触摸事件
+    // 在overlay上监听touch/click事件
+    if(overlay){
+      overlay.style.display='block';
+      overlay.addEventListener('touchstart',_onOverlayTouchStart,{passive:true});
+      overlay.addEventListener('touchend',_onOverlayTouchEnd,{passive:false});
+      overlay.addEventListener('click',_onOverlayClick,false);
+    }
+  }
+}
+
+// ===== 捕捉模式切换 =====
+function toggleFilter(k){
+  _v3dFilter[k]=!_v3dFilter[k];
+  var btn=document.getElementById('btn-snap-'+k);
+  if(btn){
+    if(_v3dFilter[k]){btn.classList.remove('off');}else{btn.classList.add('off');}
+  }
+}
+
+// ===== 返回按钮 =====
+function goBack(){
+  // 销毁viewer
+  if(_o3dvViewer){
+    try{
+      var v=_o3dvViewer.GetViewer();
+      if(v&&v.Destroy)v.Destroy();
+    }catch(e){}
+    _o3dvViewer=null;
+  }
+  _v3dMeasuring=false;
+  _v3dSelStack=[];
+  _v3dMeasureList=[];
+  _v3dMeasureId=0;
+
+  // 清理container
+  var container=document.getElementById('v3d-container');
+  if(container)container.innerHTML='';
+
+  // 隐藏overlay
+  var overlay=document.getElementById('touch-overlay');
+  if(overlay)overlay.style.display='none';
+
+  // 重置按钮状态
+  var btnM=document.getElementById('btn-measure');
+  if(btnM){btnM.classList.remove('active');btnM.textContent='📏 测量';}
+
+  // 切换界面
+  document.getElementById('step-measure').style.display='none';
+  document.getElementById('step-select').style.display='flex';
+  document.getElementById('status-msg').style.display='none';
+  document.getElementById('dimensions-box').style.display='none';
+  document.getElementById('measure-status').style.display='none';
+}
+
+// ===== 事件绑定 =====
+document.addEventListener('DOMContentLoaded',function(){
+  // 上传区域点击
+  var uploadZone=document.getElementById('upload-zone');
+  var fileInput=document.getElementById('file-input');
+  uploadZone.addEventListener('click',function(){
+    fileInput.click();
+  });
+  fileInput.addEventListener('change',function(){
+    var file=fileInput.files[0];
+    if(file)handleV3dFile(file);
+  });
+
+  // 拖拽支持
+  uploadZone.addEventListener('dragover',function(e){
+    e.preventDefault();e.stopPropagation();
+    uploadZone.style.borderColor='var(--gold)';
+    uploadZone.style.background='rgba(212,168,67,.1)';
+  });
+  uploadZone.addEventListener('dragleave',function(e){
+    e.preventDefault();e.stopPropagation();
+    uploadZone.style.borderColor='';
+    uploadZone.style.background='';
+  });
+  uploadZone.addEventListener('drop',function(e){
+    e.preventDefault();e.stopPropagation();
+    uploadZone.style.borderColor='';
+    uploadZone.style.background='';
+    var file=e.dataTransfer.files[0];
+    if(file){
+      var ext=file.name.split('.').pop().toLowerCase();
+      var allowed=['step','stp','stl','obj','gltf','glb'];
+      if(allowed.indexOf(ext)>=0){
+        handleV3dFile(file);
+      }else{
+        showStatus('❌ 不支持的格式: .'+ext+'<br>支持: STEP/STP/STL/OBJ/GLTF/GLB','#f44336');
+      }
+    }
+  });
+
+  // 测量按钮
+  document.getElementById('btn-measure').addEventListener('click',toggleMeasure);
+
+  // 清除按钮
+  document.getElementById('btn-clear').addEventListener('click',v3dClearAllMeasures);
+
+  // 捕捉模式按钮
+  document.getElementById('btn-snap-vert').addEventListener('click',function(){toggleFilter('vert');});
+  document.getElementById('btn-snap-edge').addEventListener('click',function(){toggleFilter('edge');});
+  document.getElementById('btn-snap-face').addEventListener('click',function(){toggleFilter('face');});
+
+  // 返回按钮
+  document.getElementById('btn-back').addEventListener('click',goBack);
+});
+</script>
+</body>
+</html>
