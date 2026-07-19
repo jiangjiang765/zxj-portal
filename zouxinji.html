@@ -4504,6 +4504,8 @@ function _v3dInjectOverlay(){
   // 绑定touch事件
   overlay.addEventListener('touchstart',_v3dOnOverlayTouchStart,{passive:false});
   overlay.addEventListener('touchend',_v3dOnOverlayTouchEnd,{passive:false});
+  overlay.addEventListener('touchmove',_v3dOnOverlayTouchMove,{passive:false});
+  overlay.addEventListener('touchcancel',_v3dOnOverlayTouchEnd,{passive:false});
   // 桌面端click支持
   overlay.addEventListener('click',_v3dOnOverlayClick,false);
   console.log('[v3d] Touch overlay injected');
@@ -4515,6 +4517,8 @@ function _v3dRemoveOverlay(){
   if(overlay){
     overlay.removeEventListener('touchstart',_v3dOnOverlayTouchStart);
     overlay.removeEventListener('touchend',_v3dOnOverlayTouchEnd);
+    overlay.removeEventListener('touchmove',_v3dOnOverlayTouchMove);
+    overlay.removeEventListener('touchcancel',_v3dOnOverlayTouchEnd);
     overlay.removeEventListener('click',_v3dOnOverlayClick);
     overlay.remove();
   }
@@ -4532,6 +4536,11 @@ function _v3dOnOverlayTouchStart(e){
   document.body.appendChild(dot);
   setTimeout(function(){if(dot.parentNode)dot.remove();},400);
 }
+// 覆盖层touchmove（阻止滚动干扰）
+function _v3dOnOverlayTouchMove(e){
+  if(!_v3dMeasuring)return;
+  e.preventDefault();
+}
 // 覆盖层touchend
 function _v3dOnOverlayTouchEnd(e){
   if(!_v3dMeasuring||!_v3dOverlayTouchStart)return;
@@ -4541,8 +4550,8 @@ function _v3dOnOverlayTouchEnd(e){
   var dy=t.clientY-_v3dOverlayTouchStart.y;
   var dt=Date.now()-_v3dOverlayTouchStart.time;
   _v3dOverlayTouchStart=null;
-  // 防误触
-  if(dt>500||Math.sqrt(dx*dx+dy*dy)>15)return;
+  // 防误触（放宽：华为浏览器touch事件可能延迟）
+  if(dt>1000||Math.sqrt(dx*dx+dy*dy)>30)return;
   var now=Date.now();
   if(now-_v3dLastMeasureTime<300)return;
   _v3dLastMeasureTime=now;
@@ -4637,14 +4646,39 @@ function _v3dProject(p){
 function _v3dDetectGeometry(mouseCoords){
   if(!_o3dvViewer)return null;
   var v=_o3dvViewer.GetViewer();if(!v)return null;
-  // 用O3DV原生方法，但修正DPR坐标（华为鸿蒙canvas内部分辨率≠CSS尺寸）
   var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
   var rect=canvas.getBoundingClientRect();
   var dpr=window.devicePixelRatio||1;
+
+  // 策略1：O3DV原生方法，DPR修正坐标
   var mcCanvas={x:mouseCoords.x*dpr, y:mouseCoords.y*dpr};
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
   var hit=v.GetMeshIntersectionUnderMouse(mode,mcCanvas);
-  if(!hit||!hit.point||!hit.object||!hit.face)return null;
+  if(hit&&hit.point&&hit.object&&hit.face){
+    return _v3dProcessHit(hit,v);
+  }
+
+  // 策略2：Three.js Raycaster 兜底（scene遍历）
+  try{
+    var mouse=new THREE.Vector2(
+      (mouseCoords.x/rect.width)*2-1,
+      -(mouseCoords.y/rect.height)*2+1
+    );
+    var camera=v.camera;
+    if(!camera||!camera.isCamera){v.scene.traverse(function(o){if(o.isCamera&&!camera)camera=o;});}
+    if(!camera)return null;
+    var rc=new THREE.Raycaster();
+    rc.setFromCamera(mouse,camera);
+    var isects=[];
+    v.scene.traverse(function(o){if(o.isMesh&&o.geometry){try{var h=rc.intersectObject(o,false);if(h.length)isects.push(h[0]);}catch(e){}}});
+    if(isects.length){isects.sort(function(a,b){return a.distance-b.distance;});return _v3dProcessHit(isects[0],v);}
+  }catch(e){}
+
+  return null;
+}
+
+// 提取：处理命中结果（O3DV/Three.js统一入口）
+function _v3dProcessHit(hit,v){
 
   var obj=hit.object;
   obj.updateMatrixWorld(true);
@@ -4812,7 +4846,12 @@ function _v3dFitCircle3(p1,p2,p3){
 function _v3dSmartClick(mouseCoords){
   if(!_o3dvViewer||!_v3dMeasuring)return;
   var geo=_v3dDetectGeometry(mouseCoords);
-  if(!geo){return;}
+  if(!geo){
+    // 调试反馈：告诉用户点击未命中
+    var mel=document.getElementById('v3d-measure');
+    if(mel)mel.innerHTML='⚠️ 未检测到模型，请点击零件表面重试 <span style="color:#999;font-size:10px">('+new Date().getSeconds()+'s)</span>';
+    return;
+  }
 
   var mel=document.getElementById('v3d-measure');
 
