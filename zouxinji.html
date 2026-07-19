@@ -4637,17 +4637,13 @@ function _v3dProject(p){
 function _v3dDetectGeometry(mouseCoords){
   if(!_o3dvViewer)return null;
   var v=_o3dvViewer.GetViewer();if(!v)return null;
-  // 改用Three.js原生Raycaster（比O3DV的GetMeshIntersectionUnderMouse更可靠，兼容华为鸿蒙）
+  // 用O3DV原生方法，但修正DPR坐标（华为鸿蒙canvas内部分辨率≠CSS尺寸）
   var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
   var rect=canvas.getBoundingClientRect();
-  var mouse=new THREE.Vector2();
-  mouse.x=(mouseCoords.x/rect.width)*2-1;
-  mouse.y=-(mouseCoords.y/rect.height)*2+1;
-  var rc=new THREE.Raycaster();
-  rc.setFromCamera(mouse,v.camera);
-  var isects=rc.intersectObjects(v.scene.children,true);
-  if(!isects||isects.length===0)return null;
-  var hit=isects[0];
+  var dpr=window.devicePixelRatio||1;
+  var mcCanvas={x:mouseCoords.x*dpr, y:mouseCoords.y*dpr};
+  var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
+  var hit=v.GetMeshIntersectionUnderMouse(mode,mcCanvas);
   if(!hit||!hit.point||!hit.object||!hit.face)return null;
 
   var obj=hit.object;
