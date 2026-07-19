@@ -4483,8 +4483,9 @@ function _v3dToggleFilter(k){
 var _v3dLastMeasureTime=0;
 var _v3dOrbitControls=null; // 缓存OrbitControls引用
 var _v3dOverlayTouchStart=null;
-var _v3dCanvasClickHandler=null; // 原生canvas click兜底
-var _v3dLastClickTime=0; // 上次点击时间（防重复）
+var _v3dGlobalTouchHandler=null; // document touchend监听
+var _v3dGlobalClickHandler=null; // document click监听（桌面端）
+var _v3dLastClickTime=0; // 上次点击时间
 function _v3dGetOrbitControls(){
   try{
     var v=_o3dvViewer.GetViewer();if(!v)return null;
@@ -4586,7 +4587,6 @@ function v3dToggleMeasure(){
   var mel=document.getElementById('v3d-measure');
   var filt=document.getElementById('v3d-filter');
   var ctr=document.getElementById('v3d-container');
-  var overlay=ctr?ctr.querySelector('#v3d-touch-overlay'):null;
   if(_v3dMeasuring){
     // 关闭测量模式
     _v3dMeasuring=false;
@@ -4597,13 +4597,8 @@ function v3dToggleMeasure(){
     if(filt)filt.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
-    if(overlay)overlay.style.display='none';
-    // 移除canvas原生click监听
-    if(_v3dCanvasClickHandler){
-      var v3=_o3dvViewer.GetViewer();var cvs=v3?(v3.GetCanvas?v3.GetCanvas():v3.canvas):null;
-      if(cvs)cvs.removeEventListener('click',_v3dCanvasClickHandler);
-      _v3dCanvasClickHandler=null;
-    }
+    // 移除全局touchend监听
+    if(_v3dGlobalTouchHandler){document.removeEventListener('touchend',_v3dGlobalTouchHandler);_v3dGlobalTouchHandler=null;}
     _v3dClearHover();
   }else{
     // 开启测量模式
@@ -4614,25 +4609,31 @@ function v3dToggleMeasure(){
     if(filt)filt.style.display='flex';
     _v3dShowPrompt();
     var v2=_o3dvViewer.GetViewer();
-    // 方式1：O3DV SetMouseClickHandler
-    if(v2)v2.SetMouseClickHandler(function(mc){_v3dSmartClick(mc);});
-    // 方式2：原生canvas click兜底（用offsetX/Y，华为兼容）
+    // 全局touchend：不依赖任何DOM元素的pointer-events，直接拿坐标
     var cvs=v2?(v2.GetCanvas?v2.GetCanvas():v2.canvas):null;
-    if(cvs){
-      _v3dCanvasClickHandler=function(e){
-        if(!_v3dMeasuring)return;
-        var ox=e.offsetX!==undefined?e.offsetX:e.clientX-cvs.getBoundingClientRect().left;
-        var oy=e.offsetY!==undefined?e.offsetY:e.clientY-cvs.getBoundingClientRect().top;
-        // 只在O3DV handler没触发时兜底（避免重复）
-        if(!_v3dLastClickTime||Date.now()-_v3dLastClickTime>500){
-          _v3dSmartClick({x:ox,y:oy,source:'canvas'});
-        }
-      };
-      cvs.addEventListener('click',_v3dCanvasClickHandler,false);
-    }
+    _v3dGlobalTouchHandler=function(e){
+      if(!_v3dMeasuring||!cvs)return;
+      var t=e.changedTouches[0];if(!t)return;
+      var rect=cvs.getBoundingClientRect();
+      var ox=t.clientX-rect.left, oy=t.clientY-rect.top;
+      // 检查是否在canvas区域内
+      if(ox<0||oy<0||ox>rect.width||oy>rect.height)return;
+      _v3dLastClickTime=Date.now();
+      _v3dSmartClick({x:ox,y:oy,source:'doc'});
+    };
+    document.addEventListener('touchend',_v3dGlobalTouchHandler,{passive:false});
+    // 桌面端：click兜底
+    _v3dGlobalClickHandler=function(e){
+      if(!_v3dMeasuring||!cvs)return;
+      var rect=cvs.getBoundingClientRect();
+      var ox=e.clientX-rect.left, oy=e.clientY-rect.top;
+      if(ox<0||oy<0||ox>rect.width||oy>rect.height)return;
+      _v3dLastClickTime=Date.now();
+      _v3dSmartClick({x:ox,y:oy,source:'doc-click'});
+    };
+    document.addEventListener('click',_v3dGlobalClickHandler,false);
     _v3dOrbitControls=_v3dGetOrbitControls();
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=false;}
-    if(overlay){overlay.style.display='block';overlay.style.pointerEvents='none';}
   }
 }
 
