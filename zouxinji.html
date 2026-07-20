@@ -4345,6 +4345,12 @@ function loadO3dvEngine(){
     }
     _o3dvLoading=true;
     v3dShowStatus('⏳ 正在加载3D引擎（首次约5秒）...','#64b5f6');
+    // v24: 并行加载独立THREE.js，用于S7射线投射（不阻塞O3DV）
+    if(!window.THREE){
+      var st=document.createElement('script');
+      st.src='https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js';
+      document.head.appendChild(st);
+    }
     var s=document.createElement('script');
     s.src='https://cdn.jsdelivr.net/npm/online-3d-viewer@0.18.0/build/engine/o3dv.min.js';
     s.onload=function(){
@@ -4963,6 +4969,30 @@ function _v3dDetectGeometry(mouseCoords){
       }
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
+
+  // v24 S7: 独立THREE.js射线投射 — 绕过O3DV内部拾取
+  if(window.THREE&&window.THREE.Raycaster){
+    try{
+      var TH=window.THREE;
+      var meshes=[];
+      v.scene.traverse(function(o){if(o.isMesh&&o.visible&&o.geometry&&o.geometry.attributes&&o.geometry.attributes.position)meshes.push(o);});
+      if(meshes.length>0){
+        var ndcX=(mouseCoords.x/rect.width)*2-1;
+        var ndcY=-(mouseCoords.y/rect.height)*2+1;
+        var rc=new TH.Raycaster();
+        rc.setFromCamera(new TH.Vector2(ndcX,ndcY),v.camera);
+        var isects=rc.intersectObjects(meshes,false);
+        for(var j=0;j<isects.length;j++){
+          var is=isects[j];
+          if(is.object.visible&&is.object.isMesh&&is.point&&is.face){
+            dbg.push('S7:命中('+is.point.x.toFixed(1)+','+is.point.y.toFixed(1)+','+is.point.z.toFixed(1)+') meshes='+meshes.length);
+            return {geo:_v3dProcessHit(is,v),dbg:dbg};
+          }
+        }
+        dbg.push('S7:无交点 meshes='+meshes.length+' isects='+isects.length);
+      }else{dbg.push('S7:无mesh');}
+    }catch(e){dbg.push('S7:异常 '+e.message);}
+  }
 
   return {geo:null,dbg:dbg};
 }
