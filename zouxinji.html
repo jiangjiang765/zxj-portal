@@ -4348,11 +4348,11 @@ function loadO3dvEngine(){
     // v24: 并行加载独立THREE.js，用于S7射线投射（不阻塞O3DV）
     if(!window.THREE){
       var st=document.createElement('script');
-      st.src='https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js';
+      st.src='https://jsd.cdn.zzko.cn/npm/three@0.157.0/build/three.min.js';
       document.head.appendChild(st);
     }
     var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/online-3d-viewer@0.18.0/build/engine/o3dv.min.js';
+    s.src='https://jsd.cdn.zzko.cn/npm/online-3d-viewer@0.18.0/build/engine/o3dv.min.js';
     s.onload=function(){
       _o3dvLoading=false;
       if(window.OV&&OV.EmbeddedViewer){v3dShowStatus('✅ 3D引擎就绪','#4caf50');resolve();}
