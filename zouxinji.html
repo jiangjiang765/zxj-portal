@@ -4437,31 +4437,32 @@ function _o3dvPostProcess(viewer,name,file){
       }
     });
     v.Render();
-    // v19: monkey-patch renderer.render 缓存深度缓冲（补全renderTarget参数）
+    // v20: monkey-patch setRenderTarget 在RT解绑前截取深度缓冲
     if(!window.__zxj_depthPatched){
       try{
         var r=v.renderer;
         var gl2=r&&r.getContext?r.getContext():null;
-        if(r&&gl2&&r.render){
-          var _origRender=r.render.bind(r);
-          r.render=function(scene,camera,renderTarget){
-            // 先调用原始渲染（保留完整参数，不截断renderTarget）
-            _origRender(scene,camera,renderTarget);
-            // 渲染后立即读取深度缓冲
-            try{
-              var curFb=gl2.getParameter(gl2.FRAMEBUFFER_BINDING);
-              if(curFb!==null){
-                var cw=gl2.drawingBufferWidth||gl2.getParameter(gl2.VIEWPORT)[2];
-                var ch=gl2.drawingBufferHeight||gl2.getParameter(gl2.VIEWPORT)[3];
-                if(cw&&ch&&cw>0&&ch>0){
-                  var depthBuf=new Float32Array(cw*ch);
-                  gl2.readPixels(0,0,cw,ch,gl2.DEPTH_COMPONENT,gl2.FLOAT,depthBuf);
-                  window.__zxj_depthCache=depthBuf;
-                  window.__zxj_depthWidth=cw;
-                  window.__zxj_depthHeight=ch;
+        if(r&&gl2&&r.setRenderTarget){
+          var _origSetRT=r.setRenderTarget.bind(r);
+          r.setRenderTarget=function(rt){
+            // 即将解绑RT（rt===null），先读当前帧缓冲的深度
+            if(rt===null){
+              try{
+                var curFb=gl2.getParameter(gl2.FRAMEBUFFER_BINDING);
+                if(curFb!==null){
+                  var cw=gl2.drawingBufferWidth||gl2.getParameter(gl2.VIEWPORT)[2];
+                  var ch=gl2.drawingBufferHeight||gl2.getParameter(gl2.VIEWPORT)[3];
+                  if(cw&&ch&&cw>0&&ch>0){
+                    var depthBuf=new Float32Array(cw*ch);
+                    gl2.readPixels(0,0,cw,ch,gl2.DEPTH_COMPONENT,gl2.FLOAT,depthBuf);
+                    window.__zxj_depthCache=depthBuf;
+                    window.__zxj_depthWidth=cw;
+                    window.__zxj_depthHeight=ch;
+                  }
                 }
-              }
-            }catch(e){}
+              }catch(e){}
+            }
+            return _origSetRT(rt);
           };
           window.__zxj_depthPatched=true;
         }
