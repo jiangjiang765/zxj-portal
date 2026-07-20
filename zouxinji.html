@@ -4970,7 +4970,7 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
 
-  // v25 S7: 独立THREE.js手动射线-三角形检测 — 不依赖intersectObjects跨实例调用
+  // v26 S7: 独立THREE.js手动Möller-Trumbore — 绕过BufferAttribute直接读底层array
   if(window.THREE&&window.THREE.Vector3){
     try{
       var TH=window.THREE;
@@ -4989,35 +4989,41 @@ function _v3dDetectGeometry(mouseCoords){
           var mesh=meshes[mi];
           var geo=mesh.geometry;
           var pos=geo.attributes.position;
+          var posArr=pos.array; // 底层Float32Array，绕过getX/getY
           var idx=geo.index;
+          var idxArr=idx?idx.array:null; // 底层Uint16Array/Uint32Array
+          var nVtx=posArr.length/3; // 顶点数
+          var nTri=idxArr?(idxArr.length/3)|0:(nVtx-(nVtx%3))/3; // 三角形数
+          if(nTri===0)continue;
           mesh.updateMatrixWorld();
           var invMat=new TH.Matrix4().copy(mesh.matrixWorld).invert();
           var lOrg=rayOrg.clone().applyMatrix4(invMat);
           var lDir=rayDir.clone().transformDirection(invMat).normalize();
-          var cnt=idx?idx.count:(pos.count-(pos.count%3));
-          if(cnt===0)continue;
           totalMesh++;
-          for(var i=0;i<cnt;i+=3){
+          var _v0=new TH.Vector3(),_v1=new TH.Vector3(),_v2=new TH.Vector3();
+          var _e1=new TH.Vector3(),_e2=new TH.Vector3(),_h=new TH.Vector3(),_s=new TH.Vector3(),_q=new TH.Vector3();
+          for(var i=0;i<nTri;i++){
             var a,b,c;
-            if(idx){a=idx.getX(i);b=idx.getX(i+1);c=idx.getX(i+2);}
-            else{a=i;b=i+1;c=i+2;}
-            if(a>=pos.count||b>=pos.count||c>=pos.count)continue;
-            var v0=new TH.Vector3(pos.getX(a),pos.getY(a),pos.getZ(a));
-            var v1=new TH.Vector3(pos.getX(b),pos.getY(b),pos.getZ(b));
-            var v2=new TH.Vector3(pos.getX(c),pos.getY(c),pos.getZ(c));
-            var e1=new TH.Vector3().subVectors(v1,v0);
-            var e2=new TH.Vector3().subVectors(v2,v0);
-            var h=new TH.Vector3().crossVectors(lDir,e2);
-            var det=e1.dot(h);
+            if(idxArr){a=idxArr[i*3];b=idxArr[i*3+1];c=idxArr[i*3+2];}
+            else{a=i*3;b=i*3+1;c=i*3+2;}
+            if(a>=nVtx||b>=nVtx||c>=nVtx)continue;
+            var ai=a*3,bi=b*3,ci=c*3;
+            _v0.set(posArr[ai],posArr[ai+1],posArr[ai+2]);
+            _v1.set(posArr[bi],posArr[bi+1],posArr[bi+2]);
+            _v2.set(posArr[ci],posArr[ci+1],posArr[ci+2]);
+            _e1.subVectors(_v1,_v0);
+            _e2.subVectors(_v2,_v0);
+            _h.crossVectors(lDir,_e2);
+            var det=_e1.dot(_h);
             if(det>-1e-10&&det<1e-10)continue;
             var f=1/det;
-            var s=new TH.Vector3().subVectors(lOrg,v0);
-            var u=f*s.dot(h);
+            _s.subVectors(lOrg,_v0);
+            var u=f*_s.dot(_h);
             if(u<0||u>1)continue;
-            var q=new TH.Vector3().crossVectors(s,e1);
-            var vv=f*lDir.dot(q);
+            _q.crossVectors(_s,_e1);
+            var vv=f*lDir.dot(_q);
             if(vv<0||u+vv>1)continue;
-            var t=f*e2.dot(q);
+            var t=f*_e2.dot(_q);
             totalTri++;
             if(t>1e-10&&t<bestDist){
               bestDist=t;
