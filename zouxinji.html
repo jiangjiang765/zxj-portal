@@ -4437,16 +4437,16 @@ function _o3dvPostProcess(viewer,name,file){
       }
     });
     v.Render();
-    // v20: monkey-patch setRenderTarget 在RT解绑前截取深度缓冲
+    // v21: monkey-patch gl.bindFramebuffer 在RT解绑前截取深度缓冲（底层WebGL钩子）
     if(!window.__zxj_depthPatched){
       try{
         var r=v.renderer;
         var gl2=r&&r.getContext?r.getContext():null;
-        if(r&&gl2&&r.setRenderTarget){
-          var _origSetRT=r.setRenderTarget.bind(r);
-          r.setRenderTarget=function(rt){
-            // 即将解绑RT（rt===null），先读当前帧缓冲的深度
-            if(rt===null){
+        if(gl2&&gl2.bindFramebuffer){
+          var _origBindFb=gl2.bindFramebuffer.bind(gl2);
+          gl2.bindFramebuffer=function(target,framebuffer){
+            // 即将切换到默认帧缓冲（framebuffer===null），先读当前RT的深度
+            if(target===gl2.FRAMEBUFFER&&framebuffer===null){
               try{
                 var curFb=gl2.getParameter(gl2.FRAMEBUFFER_BINDING);
                 if(curFb!==null){
@@ -4462,12 +4462,14 @@ function _o3dvPostProcess(viewer,name,file){
                 }
               }catch(e){}
             }
-            return _origSetRT(rt);
+            return _origBindFb(target,framebuffer);
           };
           window.__zxj_depthPatched=true;
         }
       }catch(e){}
     }
+    // 补触发：手动调用一次Render，确保gl.bindFramebuffer被触发
+    try{v.Render();}catch(e){}
     // 2. 显示包围盒外形尺寸
     var bbox=v.GetBoundingBox(function(){return true;});
     if(bbox&&bbox.min&&bbox.max){
