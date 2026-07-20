@@ -4970,8 +4970,8 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
 
-  // v24 S7: 独立THREE.js射线投射 — 绕过O3DV内部拾取
-  if(window.THREE&&window.THREE.Raycaster){
+  // v25 S7: 独立THREE.js手动射线-三角形检测 — 不依赖intersectObjects跨实例调用
+  if(window.THREE&&window.THREE.Vector3){
     try{
       var TH=window.THREE;
       var meshes=[];
@@ -4981,15 +4981,57 @@ function _v3dDetectGeometry(mouseCoords){
         var ndcY=-(mouseCoords.y/rect.height)*2+1;
         var rc=new TH.Raycaster();
         rc.setFromCamera(new TH.Vector2(ndcX,ndcY),v.camera);
-        var isects=rc.intersectObjects(meshes,false);
-        for(var j=0;j<isects.length;j++){
-          var is=isects[j];
-          if(is.object.visible&&is.object.isMesh&&is.point&&is.face){
-            dbg.push('S7:命中('+is.point.x.toFixed(1)+','+is.point.y.toFixed(1)+','+is.point.z.toFixed(1)+') meshes='+meshes.length);
-            return {geo:_v3dProcessHit(is,v),dbg:dbg};
+        var rayOrg=rc.ray.origin.clone();
+        var rayDir=rc.ray.direction.clone().normalize();
+        var bestHit=null,bestDist=Infinity;
+        var totalTri=0,totalMesh=0;
+        for(var mi=0;mi<meshes.length;mi++){
+          var mesh=meshes[mi];
+          var geo=mesh.geometry;
+          var pos=geo.attributes.position;
+          var idx=geo.index;
+          mesh.updateMatrixWorld();
+          var invMat=new TH.Matrix4().copy(mesh.matrixWorld).invert();
+          var lOrg=rayOrg.clone().applyMatrix4(invMat);
+          var lDir=rayDir.clone().transformDirection(invMat).normalize();
+          var cnt=idx?idx.count:(pos.count-(pos.count%3));
+          if(cnt===0)continue;
+          totalMesh++;
+          for(var i=0;i<cnt;i+=3){
+            var a,b,c;
+            if(idx){a=idx.getX(i);b=idx.getX(i+1);c=idx.getX(i+2);}
+            else{a=i;b=i+1;c=i+2;}
+            if(a>=pos.count||b>=pos.count||c>=pos.count)continue;
+            var v0=new TH.Vector3(pos.getX(a),pos.getY(a),pos.getZ(a));
+            var v1=new TH.Vector3(pos.getX(b),pos.getY(b),pos.getZ(b));
+            var v2=new TH.Vector3(pos.getX(c),pos.getY(c),pos.getZ(c));
+            var e1=new TH.Vector3().subVectors(v1,v0);
+            var e2=new TH.Vector3().subVectors(v2,v0);
+            var h=new TH.Vector3().crossVectors(lDir,e2);
+            var det=e1.dot(h);
+            if(det>-1e-10&&det<1e-10)continue;
+            var f=1/det;
+            var s=new TH.Vector3().subVectors(lOrg,v0);
+            var u=f*s.dot(h);
+            if(u<0||u>1)continue;
+            var q=new TH.Vector3().crossVectors(s,e1);
+            var vv=f*lDir.dot(q);
+            if(vv<0||u+vv>1)continue;
+            var t=f*e2.dot(q);
+            totalTri++;
+            if(t>1e-10&&t<bestDist){
+              bestDist=t;
+              var wPt=new TH.Vector3().copy(lOrg).addScaledVector(lDir,t);
+              var wwPt=wPt.clone().applyMatrix4(mesh.matrixWorld);
+              bestHit={object:mesh,point:wwPt,face:{a:a,b:b,c:c},distance:t};
+            }
           }
         }
-        dbg.push('S7:无交点 meshes='+meshes.length+' isects='+isects.length);
+        if(bestHit){
+          dbg.push('S7:命中('+bestHit.point.x.toFixed(1)+','+bestHit.point.y.toFixed(1)+','+bestHit.point.z.toFixed(1)+') meshes='+totalMesh+' tri='+totalTri);
+          return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};
+        }
+        dbg.push('S7:无交点 meshes='+totalMesh+' tri='+totalTri);
       }else{dbg.push('S7:无mesh');}
     }catch(e){dbg.push('S7:异常 '+e.message);}
   }
