@@ -4699,6 +4699,19 @@ function _v3dDetectGeometry(mouseCoords){
   var mode=OV.IntersectionMode?OV.IntersectionMode.MeshOnly:1;
   var dbg=[];
 
+  // S6: monkey-patch GetMeshIntersectionUnderMouse 诊断内部行为
+  if(!window.__zxj_getMeshPatched&&v.GetMeshIntersectionUnderMouse){
+    var _origGM=v.GetMeshIntersectionUnderMouse.bind(v);
+    window.__zxj_getMeshLog=[];
+    v.GetMeshIntersectionUnderMouse=function(m,coords){
+      var r=_origGM(m,coords);
+      window.__zxj_getMeshLog.push({m:m,x:coords.x,y:coords.y,r:r?1:0});
+      if(window.__zxj_getMeshLog.length>20)window.__zxj_getMeshLog.shift();
+      return r;
+    };
+    window.__zxj_getMeshPatched=true;
+  }
+
   // 强制Render确保camera矩阵最新
   try{v.Render();v.mainModel&&v.mainModel.UpdateWorldMatrix();}catch(e){}
 
@@ -4761,6 +4774,12 @@ function _v3dDetectGeometry(mouseCoords){
     else if(!hit2.face)dbg.push('S2:有point+object无face');
     else {dbg.push('S2:命中('+sx+','+sy+')');return {geo:_v3dProcessHit(hit2,v),dbg:dbg};}
   }else{dbg.push('S2:null phys('+sx+','+sy+')');}
+
+  // 策略1b：O3DV原生方法，NDC坐标（-1到1）
+  var ndcX=(mouseCoords.x/rect.width)*2-1, ndcY=-(mouseCoords.y/rect.height)*2+1;
+  var hit1b=v.GetMeshIntersectionUnderMouse(mode,{x:ndcX,y:ndcY});
+  if(hit1b&&hit1b.point&&hit1b.object&&hit1b.face){dbg.push('S1b:命中 ndc('+ndcX.toFixed(2)+','+ndcY.toFixed(2)+')');return {geo:_v3dProcessHit(hit1b,v),dbg:dbg};}
+  dbg.push('S1b:null ndc('+ndcX.toFixed(2)+','+ndcY.toFixed(2)+')');
 
   // 策略3：手动射线（用scene自带Vec3，增强geometry探测）
   try{
@@ -4936,7 +4955,9 @@ function _v3dDetectGeometry(mouseCoords){
             return {geo:{type:'vert',pt:{x:wp.x,y:wp.y,z:wp.z},rawPt:{x:wp.x,y:wp.y,z:wp.z}},dbg:dbg};
           }
         }
-        dbg.push('S5:depth='+(depth).toFixed(4)+' fmt='+readFmt+' fb='+fbType+' from='+readFrom+' db='+dbBits+' bfb='+window.__zxj_bindFbCalls+'/'+window.__zxj_bindFbNullCalls+'/'+window.__zxj_bindFbRTCalls+' (no hit)');
+        var dtEnabled=false;try{dtEnabled=gl.isEnabled(gl.DEPTH_TEST);}catch(e){}
+        var s6info='';if(window.__zxj_getMeshLog&&window.__zxj_getMeshLog.length>0){var last=window.__zxj_getMeshLog[window.__zxj_getMeshLog.length-1];s6info=' S6:'+last.x.toFixed(1)+','+last.y.toFixed(1)+'→'+(last.r?'hit':'null');}
+        dbg.push('S5:depth='+(depth).toFixed(4)+' fmt='+readFmt+' fb='+fbType+' from='+readFrom+' db='+dbBits+' dt='+(dtEnabled?1:0)+' bfb='+window.__zxj_bindFbCalls+'/'+window.__zxj_bindFbNullCalls+'/'+window.__zxj_bindFbRTCalls+s6info+' (no hit)');
       }else{
         dbg.push('S5:readPixels failed all fb='+fbType+' db='+dbBits);
       }
