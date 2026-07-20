@@ -5047,7 +5047,6 @@ function _v3dDetectGeometry(mouseCoords){
 
 // 提取：处理命中结果（O3DV/Three.js统一入口）
 function _v3dProcessHit(hit,v){
-
   var obj=hit.object;
   obj.updateMatrixWorld(true);
   var f=hit.face;
@@ -5056,9 +5055,20 @@ function _v3dProcessHit(hit,v){
 
   // 获取三角面三个顶点(世界坐标)
   var ia=f.a, ib=f.b, ic=f.c;
-  var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
-  var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
-  var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
+  var va,vb,vc;
+  // v27: 华为兼容 — 用独立THREE.js+原始数组，绕过fromBufferAttribute
+  if(window.THREE&&window.THREE.Vector3&&posAttr.array){
+    var TH=window.THREE, posArr=posAttr.array;
+    var mw=new TH.Matrix4().fromArray(obj.matrixWorld.elements);
+    var ai=ia*3,bi=ib*3,ci=ic*3;
+    va=new TH.Vector3(posArr[ai],posArr[ai+1],posArr[ai+2]).applyMatrix4(mw);
+    vb=new TH.Vector3(posArr[bi],posArr[bi+1],posArr[bi+2]).applyMatrix4(mw);
+    vc=new TH.Vector3(posArr[ci],posArr[ci+1],posArr[ci+2]).applyMatrix4(mw);
+  }else{
+    va=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
+    vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
+    vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
+  }
 
   // 计算重心坐标
   var pt=hit.point;
