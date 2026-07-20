@@ -5236,7 +5236,7 @@ function _v3dSmartClick(mouseCoords){
   var result=_v3dDetectGeometry(mouseCoords);
   if(!result.geo){
     var mel=document.getElementById('v3d-measure');
-    var dbg='mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
+    var dbg='v27 mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
     dbg+='r'+rect.width.toFixed(0)+'x'+rect.height.toFixed(0)+' ';
     dbg+='dpr:'+dpr+' m:'+meshCount;
     if(result.dbg&&result.dbg.length)dbg+=' | '+result.dbg.join('; ');
