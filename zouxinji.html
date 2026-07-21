@@ -5336,14 +5336,31 @@ function _v3dProcessHit(hit,v){
 
   if(_v3dFilter.face){
     // 面上
+    var faceIndex=_v3dGetFaceIndexFromHit(obj,f);
     return {type:'face', pt:{x:pt.x,y:pt.y,z:pt.z},
             normal:{x:faceNormal.x,y:faceNormal.y,z:faceNormal.z},
-            area:faceArea, obj:obj, faceIndex:hit.faceIndex,
+            area:faceArea, obj:obj, faceIndex:faceIndex,
             vA:{x:va.x,y:va.y,z:va.z}, vB:{x:vb.x,y:vb.y,z:vb.z}, vC:{x:vc.x,y:vc.y,z:vc.z}};
   }
 
   // 默认返回面上的点
   return {type:'vert', pt:_v3dSnapToVertex({x:pt.x,y:pt.y,z:pt.z},_o3dvViewer)};
+}
+
+// --- 从命中面反查 faceIndex（不同策略来源不一致）---
+function _v3dGetFaceIndexFromHit(obj,hitFace){
+  if(hitFace&&typeof hitFace.faceIndex==='number')return hitFace.faceIndex;
+  var idx=obj.geometry.index;
+  if(!idx){
+    return Math.floor((hitFace.a||0)/3);
+  }
+  var arr=idx.array;
+  for(var i=0;i<arr.length;i+=3){
+    if(arr[i]===hitFace.a&&arr[i+1]===hitFace.b&&arr[i+2]===hitFace.c){
+      return i/3;
+    }
+  }
+  return 0;
 }
 
 // --- 重心坐标计算 ---
@@ -5380,49 +5397,122 @@ function _v3dSnapToVertex(p,viewer){
   }catch(e){return p;}
 }
 
-// --- 圆弧边检测：通过相邻面法线变化判断 ---
+// --- 圆弧边检测：检查该边是否属于圆柱面/圆锥面 ---
 function _v3dDetectCircularEdge(obj,ia,ib,ic,skipIdx,faceNormal){
   try{
-    // 简化检测：如果面是狭长三角形(一边远长于另两边)，很可能是圆柱面的细分
     var posAttr=obj.geometry.attributes.position;
+    var idx=obj.geometry.index;
     var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia);
     var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib);
     var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic);
-    var d1=va.distanceTo(vb),d2=vb.distanceTo(vc),d3=vc.distanceTo(va);
-    var sides=[d1,d2,d3].sort(function(a,b){return a-b;});
-    // 如果最长边>>另两边，且另两边相近 → 很可能是圆柱面细分
-    if(sides[2]>sides[1]*1.5&&sides[0]>sides[1]*0.3)return true;
-    return false;
+    // 确定边的两个顶点索引
+    var eIdx=[ia,ib,ic];
+    eIdx.splice(skipIdx,1); // 去掉对顶点，剩下边的两个顶点
+    var eA=eIdx[0], eB=eIdx[1];
+    var edgeVec=new THREE.Vector3().subVectors(vb,va); // 临时，后面重新算
+    // 计算边的真实方向（局部坐标）
+    var evA=new THREE.Vector3().fromBufferAttribute(posAttr,eA);
+    var evB=new THREE.Vector3().fromBufferAttribute(posAttr,eB);
+    var edgeDir=new THREE.Vector3().subVectors(evB,evA).normalize();
+
+    // 查找共享该边的相邻面
+    var sharedFaces=[];
+    var triCount=idx?Math.floor(idx.count/3):Math.floor(posAttr.count/3);
+    for(var i=0;i<triCount;i++){
+      var a=idx?idx.array[i*3]:i*3;
+      var b=idx?idx.array[i*3+1]:i*3+1;
+      var c=idx?idx.array[i*3+2]:i*3+2;
+      var hasA=(a===eA||b===eA||c===eA);
+      var hasB=(a===eB||b===eB||c===eB);
+      if(hasA&&hasB){
+        // 计算该面法线
+        var v0=new THREE.Vector3().fromBufferAttribute(posAttr,a);
+        var v1=new THREE.Vector3().fromBufferAttribute(posAttr,b);
+        var v2=new THREE.Vector3().fromBufferAttribute(posAttr,c);
+        var fn=new THREE.Vector3().subVectors(v1,v0).cross(new THREE.Vector3().subVectors(v2,v0)).normalize();
+        sharedFaces.push({i:i,a:a,b:b,c:c,n:fn});
+      }
+    }
+    if(sharedFaces.length===0)return false;
+    // 圆柱面判定：所有共享该边的面法线都近似垂直于边方向，且法线间夹角小（同一圆柱）
+    var allPerp=true;
+    for(var i=0;i<sharedFaces.length;i++){
+      if(Math.abs(sharedFaces[i].n.dot(edgeDir))>0.3){allPerp=false;break;}
+    }
+    if(!allPerp)return false;
+    // 面法线之间的最大夹角应<60°
+    if(sharedFaces.length>=2){
+      var maxDot=-1;
+      for(var i=0;i<sharedFaces.length;i++){
+        for(var j=i+1;j<sharedFaces.length;j++){
+          var d=Math.abs(sharedFaces[i].n.dot(sharedFaces[j].n));
+          if(d>maxDot)maxDot=d;
+        }
+      }
+      if(maxDot<Math.cos(60*Math.PI/180))return false;
+    }
+    return true;
   }catch(e){return false;}
 }
 
-// --- 沿圆弧边追踪多个点 ---
+// --- 沿圆弧边追踪多个点（世界坐标），用于更精确拟合圆 ---
 function _v3dTraceArcEdge(obj,ia,ib,ic,skipIdx){
   try{
+    var TH=window.THREE||THREE;
     var posAttr=obj.geometry.attributes.position;
-    var va=new THREE.Vector3().fromBufferAttribute(posAttr,ia).applyMatrix4(obj.matrixWorld);
-    var vb=new THREE.Vector3().fromBufferAttribute(posAttr,ib).applyMatrix4(obj.matrixWorld);
-    var vc=new THREE.Vector3().fromBufferAttribute(posAttr,ic).applyMatrix4(obj.matrixWorld);
-    // 返回3个顶点作为圆弧采样点
-    return [{x:va.x,y:va.y,z:va.z},{x:vb.x,y:vb.y,z:vb.z},{x:vc.x,y:vc.y,z:vc.z}];
+    var idx=obj.geometry.index;
+    var mw=new TH.Matrix4().fromArray(obj.matrixWorld.elements);
+    // 边的两个顶点索引
+    var eIdx=[ia,ib,ic]; eIdx.splice(skipIdx,1);
+    var eA=eIdx[0], eB=eIdx[1];
+    var pts=[];
+    // 添加边两个端点
+    var pA=new TH.Vector3().fromBufferAttribute(posAttr,eA).applyMatrix4(mw);
+    var pB=new TH.Vector3().fromBufferAttribute(posAttr,eB).applyMatrix4(mw);
+    pts.push({x:pA.x,y:pA.y,z:pA.z},{x:pB.x,y:pB.y,z:pB.z});
+
+    // 收集共享该边的面中的对顶点作为圆弧中间点
+    var triCount=idx?Math.floor(idx.count/3):Math.floor(posAttr.count/3);
+    for(var i=0;i<triCount;i++){
+      var a=idx?idx.array[i*3]:i*3;
+      var b=idx?idx.array[i*3+1]:i*3+1;
+      var c=idx?idx.array[i*3+2]:i*3+2;
+      var hasA=(a===eA||b===eA||c===eA);
+      var hasB=(a===eB||b===eB||c===eB);
+      if(hasA&&hasB){
+        // 对顶点
+        var opp=a;if(opp===eA||opp===eB)opp=b;if(opp===eA||opp===eB)opp=c;
+        var po=new TH.Vector3().fromBufferAttribute(posAttr,opp).applyMatrix4(mw);
+        pts.push({x:po.x,y:po.y,z:po.z});
+      }
+    }
+    return pts;
   }catch(e){return null;}
 }
 
-// --- 三点拟合圆 ---
+// --- 三点拟合圆（返回3D圆心和半径）---
 function _v3dFitCircle3(p1,p2,p3){
-  var v1={x:p2.x-p1.x,y:p2.y-p1.y,z:p2.z-p1.z};
-  var v2={x:p3.x-p1.x,y:p3.y-p1.y,z:p3.z-p1.z};
-  var nx=v1.y*v2.z-v1.z*v2.y, ny=v1.z*v2.x-v1.x*v2.z, nz=v1.x*v2.y-v1.y*v2.x;
-  var ax=Math.abs(nx),ay=Math.abs(ny),az=Math.abs(nz);
-  var q1,q2;
-  if(ax>=ay&&ax>=az){q1='y';q2='z';}else if(ay>=az){q1='x';q2='z';}else{q1='x';q2='y';}
-  var ax1=p1[q1],ay1=p1[q2],ax2=p2[q1],ay2=p2[q2],ax3=p3[q1],ay3=p3[q2];
-  var D=2*(ax1*(ay2-ay3)+ax2*(ay3-ay1)+ax3*(ay1-ay2));
+  var TH=window.THREE||THREE;
+  var vA=new TH.Vector3(p1.x,p1.y,p1.z);
+  var vB=new TH.Vector3(p2.x,p2.y,p2.z);
+  var vC=new TH.Vector3(p3.x,p3.y,p3.z);
+  var ab=new TH.Vector3().subVectors(vB,vA);
+  var ac=new TH.Vector3().subVectors(vC,vA);
+  var n=new TH.Vector3().crossVectors(ab,ac).normalize();
+  if(n.length()<1e-6)return null;
+  // 在三点所在平面建立局部坐标系
+  var u=ab.clone().normalize();
+  var v=new TH.Vector3().crossVectors(n,u).normalize();
+  var ax=vA.dot(u), ay=vA.dot(v);
+  var bx=vB.dot(u), by=vB.dot(v);
+  var cx=vC.dot(u), cy=vC.dot(v);
+  var D=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
   if(Math.abs(D)<1e-6)return null;
-  var cx=((ax1*ax1+ay1*ay1)*(ay2-ay3)+(ax2*ax2+ay2*ay2)*(ay3-ay1)+(ax3*ax3+ay3*ay3)*(ay1-ay2))/D;
-  var cy=((ax1*ax1+ay1*ay1)*(ax3-ax2)+(ax2*ax2+ay2*ay2)*(ax1-ax3)+(ax3*ax3+ay3*ay3)*(ax2-ax1))/D;
-  var R=Math.sqrt((ax1-cx)**2+(ay1-cy)**2);
-  return{radius:R, center:{x:cx,y:cy}};
+  var cu=((ax*ax+ay*ay)*(by-cy)+(bx*bx+by*by)*(cy-ay)+(cx*cx+cy*cy)*(ay-by))/D;
+  var cv=((ax*ax+ay*ay)*(cx-bx)+(bx*bx+by*by)*(ax-cx)+(cx*cx+cy*cy)*(bx-ax))/D;
+  var R=Math.sqrt((ax-cu)**2+(ay-cv)**2);
+  var center=new TH.Vector3().addScaledVector(u,cu).addScaledVector(v,cv);
+  return{radius:R, center:{x:center.x,y:center.y,z:center.z}, normal:{x:n.x,y:n.y,z:n.z}};
 }
 
 // --- 智能点击：自动识别+测量 ---
@@ -5529,13 +5619,87 @@ function _v3dHandleAngle(geo,mel){
   }
 }
 
-// --- 半径模式：点圆弧→半径 ---
+// --- 半径模式：点圆弧边 或 圆柱面 → 半径 ---
 function _v3dHandleRadius(geo,mel){
   if(geo.type==='arc'){
     _v3dFinishMeasure({type:'arc_r',label:'⭕ 半径',value:'R = '+geo.radius.toFixed(3)+' mm',pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B'],detail:'直径 D = '+(geo.radius*2).toFixed(3)+' mm'});
     return;
   }
-  mel.innerHTML='⚠️ 半径模式：请点击<b>圆弧边</b>';
+  if(geo.type==='face'){
+    // v27w: 直接点圆柱面拟合半径
+    var cyl=_v3dFitCylinderFromFace(geo);
+    if(cyl&&cyl.radius>0.01){
+      _v3dRemoveHighlight();
+      _v3dHighlightFace(geo); // 高亮该面区域
+      _v3dFinishMeasure({type:'cyl_r',label:'⭕ 半径',value:'R = '+cyl.radius.toFixed(3)+' mm',pts:[cyl.center],markerLabels:['C'],detail:'圆柱轴: ('+cyl.axis.x.toFixed(2)+','+cyl.axis.y.toFixed(2)+','+cyl.axis.z.toFixed(2)+') | 直径 D = '+(cyl.radius*2).toFixed(3)+' mm'});
+      return;
+    }
+  }
+  mel.innerHTML='⚠️ 半径模式：请点击<b>圆弧边</b>或<b>圆柱面</b>';
+}
+
+// --- 从面区域拟合圆柱（简化最小二乘）---
+function _v3dFitCylinderFromFace(geo){
+  try{
+    var TH=window.THREE||THREE;
+    var obj=geo.obj;
+    var faces=_v3dGetCoplanarFaces(obj,geo.faceIndex,geo.normal);
+    if(!faces||faces.length<2)return null;
+    // 收集所有顶点
+    var verts=[];
+    var vertSet={};
+    var normals=[];
+    var cenSum=new TH.Vector3();
+    for(var i=0;i<faces.length;i++){
+      var f=faces[i];
+      normals.push(f.n);
+      cenSum.add(f.cen);
+      var keyA=Math.round(f.va.x*1000)+','+Math.round(f.va.y*1000)+','+Math.round(f.va.z*1000);
+      var keyB=Math.round(f.vb.x*1000)+','+Math.round(f.vb.y*1000)+','+Math.round(f.vb.z*1000);
+      var keyC=Math.round(f.vc.x*1000)+','+Math.round(f.vc.y*1000)+','+Math.round(f.vc.z*1000);
+      if(!vertSet[keyA]){vertSet[keyA]=true;verts.push(f.va);}
+      if(!vertSet[keyB]){vertSet[keyB]=true;verts.push(f.vb);}
+      if(!vertSet[keyC]){vertSet[keyC]=true;verts.push(f.vc);}
+    }
+    if(verts.length<6)return null;
+    var center=cenSum.multiplyScalar(1/faces.length);
+    // 估计圆柱轴：尝试包围盒三轴，选择使面法线垂直度最好的
+    var minX=1e30,minY=1e30,minZ=1e30,maxX=-1e30,maxY=-1e30,maxZ=-1e30;
+    for(var i=0;i<verts.length;i++){
+      var p=verts[i];
+      if(p.x<minX)minX=p.x;if(p.x>maxX)maxX=p.x;
+      if(p.y<minY)minY=p.y;if(p.y>maxY)maxY=p.y;
+      if(p.z<minZ)minZ=p.z;if(p.z>maxZ)maxZ=p.z;
+    }
+    var axes=[
+      new TH.Vector3(1,0,0),new TH.Vector3(0,1,0),new TH.Vector3(0,0,1)
+    ];
+    var bestAxis=null,bestScore=Infinity;
+    for(var ai=0;ai<axes.length;ai++){
+      var a=axes[ai];
+      var score=0;
+      for(var i=0;i<normals.length;i++){
+        var d=Math.abs(normals[i].dot(a));
+        score+=d*d;
+      }
+      if(score<bestScore){bestScore=score;bestAxis=a;}
+    }
+    if(!bestAxis)return null;
+    // 计算所有顶点到轴的距离
+    var radii=[];
+    for(var i=0;i<verts.length;i++){
+      var p=verts[i];
+      var pc=new TH.Vector3().subVectors(p,center);
+      var proj=pc.dot(bestAxis);
+      var perp=new TH.Vector3().subVectors(pc,new TH.Vector3().addScaledVector(bestAxis,proj));
+      radii.push(perp.length());
+    }
+    radii.sort(function(a,b){return a-b;});
+    var R=radii[Math.floor(radii.length*0.5)]; // 中位数半径，抗 outliers
+    // 如果半径太小或太大，可能不是圆柱面
+    if(R<0.01||R>1000)return null;
+    return{radius:R, axis:{x:bestAxis.x,y:bestAxis.y,z:bestAxis.z}, center:{x:center.x,y:center.y,z:center.z}};
+  }catch(e){return null;}
 }
 
 // --- 点到面模式：点顶点+面→距离 ---
@@ -5939,9 +6103,9 @@ function _v3dClearHover(){
   // 预留给hover高亮功能
 }
 
-// --- 平面扩展：找出与命中三角面共面且相邻的所有三角面 ---
+// --- 平面/曲面扩展：找出与命中三角面共面或同光滑曲面的所有三角面 ---
 function _v3dFacesShareEdge(f1,f2,eps){
-  eps=eps||0.02;
+  eps=eps||0.04;
   var v1=[f1.va,f1.vb,f1.vc], v2=[f2.va,f2.vb,f2.vc];
   var shared=0;
   for(var i=0;i<3;i++){
@@ -5980,28 +6144,40 @@ function _v3dGetCoplanarFaces(obj,hitFaceIndex,hitNormal){
   var seed=faces[hitFaceIndex];
   var hitPlaneN=seed.n.clone();
   var hitPlaneD=-hitPlaneN.dot(seed.cen);
-  // 候选：法线平行且在同一平面上
+  // v27w: 双策略——严格共面平面 + 光滑曲面连续扩展
+  // 平面阈值：法线<10°, 平面距离<0.5mm；曲面阈值：法线<35°, 局部相邻法线<15°
+  var COS_PLANE=Math.cos(10*Math.PI/180);   // 0.985
+  var COS_SMOOTH=Math.cos(35*Math.PI/180);  // 0.819
+  var COS_LOCAL=Math.cos(15*Math.PI/180);   // 0.966
+  var PLANE_D=0.5;
   var candidates=[];
   for(var i=0;i<faces.length;i++){
     var f=faces[i];
-    if(Math.abs(f.n.dot(hitPlaneN)-1)>0.05) continue;
-    if(Math.abs(f.cen.dot(hitPlaneN)+hitPlaneD)>0.15) continue;
+    // 全局排除明显方向不同的面
+    if(f.n.dot(hitPlaneN)<COS_SMOOTH) continue;
     candidates.push(f);
   }
-  // BFS 找与 seed 相邻连通的面
+  // BFS：相邻面需共享边 + 满足平面或曲面连续条件
   var selected=[seed];
   var visited={}; visited[seed.i]=true;
   var queue=[seed];
   while(queue.length){
     var cur=queue.shift();
+    var curIsPlane=Math.abs(cur.n.dot(hitPlaneN)-1)<(1-COS_PLANE) && Math.abs(cur.cen.dot(hitPlaneN)+hitPlaneD)<PLANE_D;
     for(var i=0;i<candidates.length;i++){
       var cf=candidates[i];
       if(visited[cf.i]) continue;
-      if(_v3dFacesShareEdge(cur,cf)){
-        visited[cf.i]=true;
-        selected.push(cf);
-        queue.push(cf);
-      }
+      if(!_v3dFacesShareEdge(cur,cf)) continue;
+      // 条件1：严格共面平面
+      var planeOK=Math.abs(cf.n.dot(hitPlaneN)-1)<(1-COS_PLANE) && Math.abs(cf.cen.dot(hitPlaneN)+hitPlaneD)<PLANE_D;
+      // 条件2：光滑曲面连续（局部法线变化小）
+      var smoothOK=cf.n.dot(cur.n)>COS_LOCAL;
+      if(!planeOK && !smoothOK) continue;
+      // 标记曲面/平面类型：如果当前已离开严格平面，后续用曲面规则
+      if(!curIsPlane && !planeOK) cf._smooth=true;
+      visited[cf.i]=true;
+      selected.push(cf);
+      queue.push(cf);
     }
   }
   return selected;
@@ -6070,8 +6246,8 @@ function _v3dSetMode(mode){
     case 'area': f={vert:false,edge:false,face:true}; break;
     case 'coord': f={vert:true,edge:false,face:true}; break;
     case 'dist': f={vert:true,edge:false,face:false}; break;
-    case 'angle': f={vert:true,edge:true,face:false}; break;
-    case 'radius': f={vert:false,edge:true,face:false}; break;
+    case 'angle': f={vert:false,edge:false,face:true}; break;
+    case 'radius': f={vert:false,edge:true,face:true}; break;
     case 'pt2face': f={vert:true,edge:false,face:true}; break;
     case 'section': f={vert:false,edge:false,face:true}; break;
     case 'thick': f={vert:false,edge:false,face:true}; break;
