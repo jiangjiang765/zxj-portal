@@ -4979,38 +4979,62 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
 
-  // v27k S7: 独立THREE.js手动Möller-Trumbore + 索引越界fallback
+  // v27m S7: 独立THREE.js手动Möller-Trumbore + 全面调试
   if(window.THREE&&window.THREE.Vector3){
     try{
       var TH=window.THREE;
       var meshes=[];
       v.scene.traverse(function(o){if(o.isMesh&&o.visible&&o.geometry&&o.geometry.attributes&&o.geometry.attributes.position)meshes.push(o);});
+      // v27m: 先输出几何体诊断信息
       if(meshes.length>0){
+        var m0=meshes[0],g0=m0.geometry,p0=g0.attributes.position;
+        var i0=g0.index;
+        var pArr=p0.array,iArr=i0?i0.array:null;
+        var pItemSize=p0.itemSize||3;
+        var pLen=pArr?pArr.length:0;
+        var iLen=iArr?iArr.length:0;
+        var nVtx0=pLen/pItemSize;
+        var camType=v.camera?(v.camera.isPerspectiveCamera?'P':'O'):'?';
+        dbg.push('S7:geo='+g0.type+' itemSize='+pItemSize+' vtx='+nVtx0+' idx='+iLen+' cam='+camType);
+        // 输出前3个顶点
+        if(pLen>=9){
+          dbg.push('S7:v0=('+pArr[0].toFixed(1)+','+pArr[1].toFixed(1)+','+pArr[2].toFixed(1)+') v1=('+pArr[3].toFixed(1)+','+pArr[4].toFixed(1)+','+pArr[5].toFixed(1)+')');
+        }
+        // 输出射线信息
         var ndcX=(mouseCoords.x/rect.width)*2-1;
         var ndcY=-(mouseCoords.y/rect.height)*2+1;
         var rc=new TH.Raycaster();
         rc.setFromCamera(new TH.Vector2(ndcX,ndcY),v.camera);
         var rayOrg=rc.ray.origin.clone();
         var rayDir=rc.ray.direction.clone().normalize();
+        dbg.push('S7:ray org('+rayOrg.x.toFixed(1)+','+rayOrg.y.toFixed(1)+','+rayOrg.z.toFixed(1)+') dir('+rayDir.x.toFixed(2)+','+rayDir.y.toFixed(2)+','+rayDir.z.toFixed(2)+')');
+        // v27m: 先尝试intersectObjects（利用mesh自身的raycast）
+        var iSects=rc.intersectObjects(meshes,false);
+        if(iSects.length>0){
+          var h0=iSects[0];
+          dbg.push('S7:intersectObjects命中 dist='+h0.distance.toFixed(1));
+          return {geo:_v3dProcessHit(h0,v),dbg:dbg};
+        }
+        dbg.push('S7:intersectObjects=0');
+        // 回退到手动Möller-Trumbore
         var bestHit=null,bestDist=Infinity;
         var totalTri=0,totalMesh=0;
         for(var mi=0;mi<meshes.length;mi++){
           var mesh=meshes[mi];
           var geo=mesh.geometry;
           var pos=geo.attributes.position;
-          var posArr=pos.array; // 底层Float32Array，绕过getX/getY
+          var posArr=pos.array;
           var idx=geo.index;
-          var idxArr=idx?idx.array:null; // 底层Uint16Array/Uint32Array
-          var nVtx=posArr.length/3; // 顶点数
-          var useIdx=true; // 是否使用索引模式
-          var nTri=idxArr?(idxArr.length/3)|0:(nVtx-(nVtx%3))/3; // 三角形数
-          // v27k: 检测索引越界，自动回退到无索引模式
+          var idxArr=idx?idx.array:null;
+          var nVtx=posArr.length/(pos.itemSize||3);
+          var useIdx=true;
+          var nTri=idxArr?(idxArr.length/3)|0:(nVtx-(nVtx%3))/3;
           if(idxArr&&nTri>0){
             var sampleA=idxArr[0],sampleB=idxArr[1],sampleC=idxArr[2];
             if(sampleA>=nVtx||sampleB>=nVtx||sampleC>=nVtx){
               useIdx=false;
               nTri=(nVtx-(nVtx%3))/3;
-              dbg.push('S7:idxOOB vtx='+nVtx+' idxTri='+(idxArr.length/3)|0+' idx[0..2]='+sampleA+','+sampleB+','+sampleC+'→fallback无索引 nTri='+nTri);
+              dbg.push('S7:idxOOB→fallback nTri='+nTri);
             }
           }
           if(nTri===0)continue;
@@ -5021,7 +5045,7 @@ function _v3dDetectGeometry(mouseCoords){
           totalMesh++;
           var _v0=new TH.Vector3(),_v1=new TH.Vector3(),_v2=new TH.Vector3();
           var _e1=new TH.Vector3(),_e2=new TH.Vector3(),_h=new TH.Vector3(),_s=new TH.Vector3(),_q=new TH.Vector3();
-          var skipOob=0;
+          var skipOob=0,skipDet=0;
           for(var i=0;i<nTri;i++){
             var a,b,c;
             if(useIdx&&idxArr){a=idxArr[i*3];b=idxArr[i*3+1];c=idxArr[i*3+2];}
@@ -5035,7 +5059,7 @@ function _v3dDetectGeometry(mouseCoords){
             _e2.subVectors(_v2,_v0);
             _h.crossVectors(lDir,_e2);
             var det=_e1.dot(_h);
-            if(det>-1e-10&&det<1e-10)continue;
+            if(det>-1e-10&&det<1e-10){skipDet++;continue;}
             var f=1/det;
             _s.subVectors(lOrg,_v0);
             var u=f*_s.dot(_h);
@@ -5052,13 +5076,13 @@ function _v3dDetectGeometry(mouseCoords){
               bestHit={object:mesh,point:wwPt,face:{a:a,b:b,c:c},distance:t};
             }
           }
-          if(skipOob>0)dbg.push('S7:skipOob='+skipOob+'/'+nTri+' vtx='+nVtx);
+          if(skipOob>0||skipDet>0)dbg.push('S7:mt skipOob='+skipOob+' skipDet='+skipDet+' nTri='+nTri);
         }
         if(bestHit){
-          dbg.push('S7:命中('+bestHit.point.x.toFixed(1)+','+bestHit.point.y.toFixed(1)+','+bestHit.point.z.toFixed(1)+') meshes='+totalMesh+' tri='+totalTri);
+          dbg.push('S7:命中 mt meshes='+totalMesh+' tri='+totalTri);
           return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};
         }
-        dbg.push('S7:无交点 meshes='+totalMesh+' tri='+totalTri);
+        dbg.push('S7:无交点 m='+totalMesh+' t='+totalTri);
       }else{dbg.push('S7:无mesh');}
     }catch(e){dbg.push('S7:异常 '+e.message);}
   }
@@ -5260,7 +5284,7 @@ function _v3dSmartClick(mouseCoords){
     }
     if(mel){
       var dbgMsg='⚠️ 未检测到模型，请点击模型表面';
-      if(result.dbg&&result.dbg.length>0)dbgMsg+='<br><span style="font-size:9px;color:#888">'+result.dbg.slice(-3).join(' | ')+'</span>';
+      if(result.dbg&&result.dbg.length>0)dbgMsg+='<br><span style="font-size:9px;color:#888">'+result.dbg.slice(-6).join(' | ')+'</span>';
       mel.innerHTML=dbgMsg;
     }
     return;
