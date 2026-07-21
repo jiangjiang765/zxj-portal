@@ -4510,18 +4510,23 @@ var _v3dMeasuring=false;
 var _v3dSelStack=[];        // 当前选择的几何体栈 [{type:'vert'|'edge'|'face', data:..., pt:{x,y,z}}]
 var _v3dMeasureList=[];     // 已完成的测量 [{id, type, html, markers[], lines[], callout}]
 var _v3dMeasureId=0;        // 自增ID
-var _v3dFilter={vert:true,edge:true,face:true}; // 选择过滤器
+var _v3dMeasureMode='auto'; // 'auto'|'distance'|'edge'|'area'|'angle'|'pt2face'
+var _v3dFilter={vert:true,edge:true,face:true}; // 保留兼容
 var _v3dPreviewEl=null;     // 实时预览SVG
 
-// --- 选择过滤器 ---
-function _v3dToggleFilter(k){
-  _v3dFilter[k]=!_v3dFilter[k];
-  var btn=document.getElementById('v3d-f-'+k);
-  if(btn){
-    var colors={vert:'#4caf50',edge:'#ff9800',face:'#2196f3'};
-    btn.style.background=_v3dFilter[k]?colors[k]:'#333';
-    btn.style.opacity=_v3dFilter[k]?'1':'0.4';
+// --- 测量模式切换（v27h：先选模式再点模型）---
+function _v3dSetMeasureMode(mode){
+  if(_v3dMeasureMode===mode && _v3dSelStack.length>0){
+    _v3dSelStack=[];_v3dRemoveOverlay();_v3dShowPrompt();return;
   }
+  _v3dMeasureMode=mode;_v3dSelStack=[];_v3dRemoveOverlay();
+  var modes=['distance','edge','area','angle','pt2face'];
+  var colors={'distance':'#4caf50','edge':'#ff9800','area':'#1e88e5','angle':'#f57c00','pt2face':'#9c27b0'};
+  for(var i=0;i<modes.length;i++){
+    var btn=document.getElementById('v3d-m-'+modes[i]);
+    if(btn){btn.style.background=mode===modes[i]?colors[modes[i]]:'#333';btn.style.opacity=mode===modes[i]?'1':'0.5';}
+  }
+  _v3dShowPrompt();
 }
 
 // --- 触摸覆盖层方案（修复华为鸿蒙触摸测量）---
@@ -4652,7 +4657,7 @@ function v3dToggleMeasure(){
     if(btn)btn.style.background='#ff9800';
     if(mel)mel.style.display='block';
     if(filt)filt.style.display='flex';
-    _v3dShowPrompt();
+    _v3dSetMeasureMode('distance'); // 默认距离模式
     var v2=_o3dvViewer.GetViewer();
     // 全局touchend：不依赖任何DOM元素的pointer-events，直接拿坐标
     var cvs=v2?(v2.GetCanvas?v2.GetCanvas():v2.canvas):null;
@@ -5238,11 +5243,11 @@ function _v3dSmartClick(mouseCoords){
   var result=_v3dDetectGeometry(mouseCoords);
   if(!result.geo){
     var mel=document.getElementById('v3d-measure');
-    // 如果有已选面但未完成 → 点击空白处取消选择
-    if(_v3dSelStack.length===1 && _v3dSelStack[0].type==='face'){
+    // 点击空白处取消当前选择
+    if(_v3dSelStack.length>0){
       _v3dSelStack=[];
       _v3dRemoveOverlay();
-      if(mel)mel.innerHTML='📍 点击模型测量 — <b>自动识别</b>：顶点→距离，边→长度，圆弧→半径，面→面积/夹角 <span style="color:#999;font-size:10px">🧲吸附</span>';
+      _v3dShowPrompt();
       return;
     }
     var dbg='v27 mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
@@ -5283,22 +5288,108 @@ function _v3dSmartClick(mouseCoords){
     return;
   }
 
-  // 3. 点击面 → 显示面积
-  if(geo.type==='face' && _v3dSelStack.length===0){
-    // 先看是否已有面选择 → 如果再点一个面就量角度
-    // 单击面：先存起来，等第二次点击
-    _v3dSelStack.push(geo);
-    v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
-    mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> — 请选择：'+
-      ' <button onclick="_v3dFaceAction(\'area\')" style="background:#1e88e5;color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:12px;margin:0 4px;cursor:pointer">📐 测面积</button>'+
-      ' <button onclick="_v3dFaceAction(\'angle\')" style="background:#f57c00;color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:12px;margin:0 4px;cursor:pointer">📏 测夹角</button>'+
-      ' <span style="color:#999;font-size:10px">或点空白处取消</span>';
+  // 3. 点击面 → 按当前模式处理
+  if(geo.type==='face'){
+    if(_v3dMeasureMode==='area'){
+      // 面积模式：直接算面积
+      _v3dFinishMeasure({
+        type:'face_area',
+        label:'📐 面积',
+        value:geo.area.toFixed(3)+' mm²',
+        pts:[geo.pt],
+        markerLabels:['F'],
+        detail:'面法线: ('+geo.normal.x.toFixed(2)+', '+geo.normal.y.toFixed(2)+', '+geo.normal.z.toFixed(2)+')'
+      });
+      return;
+    }
+    if(_v3dMeasureMode==='angle'){
+      if(_v3dSelStack.length===0){
+        _v3dSelStack.push(geo);
+        v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
+        mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> → 点击<b>第二个面</b>量夹角 <span style="color:#999;font-size:10px">| 点空白取消</span>';
+      }else{
+        var ff=_v3dSelStack[0];
+        if(ff.type==='face'){
+          var n1=ff.normal,n2=geo.normal;
+          var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
+          if(dot>1)dot=1;if(dot<-1)dot=-1;
+          var ang=Math.acos(dot)*180/Math.PI;
+          _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ang.toFixed(2)+'°',pts:[ff.pt,geo.pt],markerLabels:['F1','F2'],detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')});
+        }
+      }
+      return;
+    }
+    // pt2face模式：面是第二个目标
+    if(_v3dMeasureMode==='pt2face'){
+      if(_v3dSelStack.length===0){
+        mel.innerHTML='⚠️ 请先点击<b>顶点</b>，再点面 <span style="color:#999;font-size:10px">| 点空白取消</span>';
+      }else{
+        var fv=_v3dSelStack[0];
+        if(fv.type==='vert'){
+          var pt=fv.pt,fn=geo.normal,fpt=geo.pt;
+          var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
+          _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pt,fpt],markerLabels:['P','F']});
+        }else{
+          _v3dSelStack=[];_v3dRemoveOverlay();_v3dShowPrompt();
+        }
+      }
+      return;
+    }
+    // auto模式或无模式：自动处理
+    if(_v3dSelStack.length===0){
+      _v3dSelStack.push(geo);
+      v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
+      mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> — 再点一个面量<b>夹角</b>，或点空白取消 <span style="color:#999;font-size:10px">| 提示：选"面积"模式可直接量面积</span>';
+    }else{
+      var f1=_v3dSelStack[0];
+      if(f1.type==='face'){
+        var nn1=f1.normal,nn2=geo.normal;
+        var dd=nn1.x*nn2.x+nn1.y*nn2.y+nn1.z*nn2.z;
+        if(dd>1)dd=1;if(dd<-1)dd=-1;
+        var ag=Math.acos(dd)*180/Math.PI;
+        _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ag.toFixed(2)+'°',pts:[f1.pt,geo.pt],markerLabels:['F1','F2'],detail:(ag>90?'(补角:'+(180-ag).toFixed(2)+'°)':'')});
+      }else if(f1.type==='vert'){
+        var pp=f1.pt,ffn=geo.normal,ffpt=geo.pt;
+        var dd2=Math.abs((pp.x-ffpt.x)*ffn.x+(pp.y-ffpt.y)*ffn.y+(pp.z-ffpt.z)*ffn.z);
+        _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dd2.toFixed(3)+' mm',pts:[pp,ffpt],markerLabels:['P','F']});
+      }
+    }
     return;
   }
 
   // === 需要两次选择的情况 ===
-  // 4. 顶点 → 存起来
+  // 4. 顶点
   if(geo.type==='vert'){
+    if(_v3dMeasureMode==='pt2face'){
+      // 点到面模式：顶点是第一个
+      if(_v3dSelStack.length===0){
+        _v3dSelStack.push(geo);
+        v3dAddMeasureMarker(geo.pt,'P','#9c27b0');
+        mel.innerHTML='📍 顶点('+_v3dFmtPt(geo.pt)+') → 点击<b>目标面</b>量点到面距离 <span style="color:#999;font-size:10px">| 点空白取消</span>';
+        return;
+      }
+    }
+    if(_v3dMeasureMode==='distance' || _v3dMeasureMode==='auto'){
+      if(_v3dSelStack.length===0){
+        _v3dSelStack.push(geo);
+        v3dAddMeasureMarker(geo.pt,'A','#4caf50');
+        mel.innerHTML='📍 A('+_v3dFmtPt(geo.pt)+') → 点击<b>第二个点</b>量距离 <span style="color:#999;font-size:10px">🧲</span>';
+      }else{
+        var first=_v3dSelStack[0];
+        if(first.type==='vert'){
+          var a=first.pt,p=geo.pt;
+          var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
+          var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+          _v3dFinishMeasure({type:'dist',label:'📏 距离',value:dist.toFixed(3)+' mm',pts:[a,p],markerLabels:['A','B'],detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)});
+        }else if(first.type==='face'){
+          var pt=geo.pt,fn=first.normal,fpt=first.pt;
+          var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
+          _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pt,fpt],markerLabels:['P','F']});
+        }
+      }
+      return;
+    }
+    // 其他模式：顶点作为通用点处理
     if(_v3dSelStack.length===0){
       _v3dSelStack.push(geo);
       v3dAddMeasureMarker(geo.pt,'A','#4caf50');
@@ -5306,91 +5397,38 @@ function _v3dSmartClick(mouseCoords){
     }else{
       var first=_v3dSelStack[0];
       if(first.type==='vert'){
-        // 两点 → 距离
         var a=first.pt,p=geo.pt;
         var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
         var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        _v3dFinishMeasure({
-          type:'dist',
-          label:'📏 距离',
-          value:dist.toFixed(3)+' mm',
-          pts:[a,p],
-          markerLabels:['A','B'],
-          detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)
-        });
+        _v3dFinishMeasure({type:'dist',label:'📏 距离',value:dist.toFixed(3)+' mm',pts:[a,p],markerLabels:['A','B'],detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)});
       }else if(first.type==='face'){
-        // 点+面 → 点到面距离
-        var pt=geo.pt;
-        var fn=first.normal;
-        var fpt=first.pt;
+        var pt=geo.pt,fn=first.normal,fpt=first.pt;
         var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
-        _v3dFinishMeasure({
-          type:'pt2face',
-          label:'📏 点到面',
-          value:dist.toFixed(3)+' mm',
-          pts:[pt,fpt],
-          markerLabels:['P','F']
-        });
+        _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pt,fpt],markerLabels:['P','F']});
       }
     }
     return;
   }
 
-  // 5. 第二次点面
+  // 5. 第二次点面（angle模式或其他模式的面+面逻辑）
   if(geo.type==='face' && _v3dSelStack.length>0){
     var first=_v3dSelStack[0];
     if(first.type==='face'){
-      // 两面 → 夹角
       var n1=first.normal,n2=geo.normal;
       var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
       if(dot>1)dot=1;if(dot<-1)dot=-1;
       var ang=Math.acos(dot)*180/Math.PI;
-      _v3dFinishMeasure({
-        type:'face_angle',
-        label:'📐 面夹角',
-        value:ang.toFixed(2)+'°',
-        pts:[first.pt,geo.pt],
-        markerLabels:['F1','F2'],
-        detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')
-      });
+      _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ang.toFixed(2)+'°',pts:[first.pt,geo.pt],markerLabels:['F1','F2'],detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')});
     }else if(first.type==='vert'){
-      // 已有顶点+面 → 点到面距离
-      var pt=first.pt;
-      var fn=geo.normal;
-      var fpt=geo.pt;
+      var pt=first.pt,fn=geo.normal,fpt=geo.pt;
       var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
-      _v3dFinishMeasure({
-        type:'pt2face',
-        label:'📏 点到面',
-        value:dist.toFixed(3)+' mm',
-        pts:[pt,fpt],
-        markerLabels:['P','F']
-      });
+      _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pt,fpt],markerLabels:['P','F']});
     }
     return;
   }
 }
 
-// --- 面操作：面积或夹角 ---
-function _v3dFaceAction(action){
-  if(_v3dSelStack.length!==1 || _v3dSelStack[0].type!=='face')return;
-  var mel=document.getElementById('v3d-measure');
-  if(action==='area'){
-    // 直接计算面积
-    var faceGeo=_v3dSelStack[0];
-    _v3dFinishMeasure({
-      type:'face_area',
-      label:'📐 面积',
-      value:faceGeo.area.toFixed(3)+' mm²',
-      pts:[faceGeo.pt],
-      markerLabels:['F'],
-      detail:'面法线: ('+faceGeo.normal.x.toFixed(2)+', '+faceGeo.normal.y.toFixed(2)+', '+faceGeo.normal.z.toFixed(2)+')'
-    });
-  }else if(action==='angle'){
-    // 提示选第二个面
-    if(mel)mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> → 请点击<b>第二个面</b>测量夹角 <span style="color:#999;font-size:10px">| 点空白取消</span>';
-  }
-}
+// 面操作函数已移除（v27h：改为测量模式驱动）
 
 // --- 完成一次测量，存入列表 ---
 function _v3dFinishMeasure(info){
@@ -5563,7 +5601,15 @@ function v3dClearAllMeasures(){
 function _v3dShowPrompt(){
   var mel=document.getElementById('v3d-measure');
   if(!mel)return;
-  mel.innerHTML='📍 点击模型测量 — <b>自动识别</b>：顶点→距离，边→长度，圆弧→半径，面→面积/夹角 <span style="color:#999;font-size:10px">🧲吸附</span>';
+  var tips={
+    'distance':'📍 <b>距离模式</b>：点击两个点量距离 <span style="color:#999;font-size:10px">🧲</span>',
+    'edge':'📍 <b>边模式</b>：点击一条边量长度 <span style="color:#999;font-size:10px">🧲</span>',
+    'area':'📍 <b>面积模式</b>：点击一个面直接量面积 <span style="color:#999;font-size:10px">🧲</span>',
+    'angle':'📍 <b>夹角模式</b>：点击两个面量夹角 <span style="color:#999;font-size:10px">🧲</span>',
+    'pt2face':'📍 <b>点到面模式</b>：先点顶点，再点面 <span style="color:#999;font-size:10px">🧲</span>',
+    'auto':'📍 点击模型测量 — 先选上方测量类型 <span style="color:#999;font-size:10px">🧲</span>'
+  };
+  mel.innerHTML=tips[_v3dMeasureMode]||tips['auto'];
 }
 
 function _v3dFmtPt(p){return '('+p.x.toFixed(2)+','+p.y.toFixed(2)+','+p.z.toFixed(2)+')';}
@@ -10408,11 +10454,13 @@ function _aiShowModal(title,body){
     <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px">📏 测量</button>
     <button id="v3d-btn-section" class="btn" style="background:#7b1fa2;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px">🔪 剖面</button>
     <button class="btn" style="background:#e74c3c;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px" onclick="v3dClearAllMeasures()">🗑️ 清除</button>
-    <div id="v3d-filter" style="display:none;gap:4px;align-items:center;font-size:11px">
-      <span style="color:var(--text-dim)">捕捉:</span>
-      <button id="v3d-f-vert" class="btn" style="background:#4caf50;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px">● 顶点</button>
-      <button id="v3d-f-edge" class="btn" style="background:#ff9800;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px">━ 边</button>
-      <button id="v3d-f-face" class="btn" style="background:#2196f3;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px">◻ 面</button>
+    <div id="v3d-filter" style="display:none;gap:3px;align-items:center;font-size:11px;flex-wrap:wrap;justify-content:center">
+      <span style="color:var(--text-dim);font-size:10px">测量:</span>
+      <button id="v3d-m-distance" class="btn" style="background:#333;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px" onclick="_v3dSetMeasureMode('distance')">📏 距离</button>
+      <button id="v3d-m-edge" class="btn" style="background:#333;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px" onclick="_v3dSetMeasureMode('edge')">━ 边</button>
+      <button id="v3d-m-area" class="btn" style="background:#333;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px" onclick="_v3dSetMeasureMode('area')">📐 面积</button>
+      <button id="v3d-m-angle" class="btn" style="background:#333;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px" onclick="_v3dSetMeasureMode('angle')">∠ 夹角</button>
+      <button id="v3d-m-pt2face" class="btn" style="background:#333;color:#fff;font-size:10px;padding:3px 7px;border-radius:4px" onclick="_v3dSetMeasureMode('pt2face')">↗ 点到面</button>
     </div>
   </div>
   <!-- 剖面控制区 -->
