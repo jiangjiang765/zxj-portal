@@ -4640,6 +4640,9 @@ function v3dToggleMeasure(){
     if(btn)btn.style.background='#1e88e5';
     if(mel)mel.style.display='none';
     if(modes)modes.style.display='none';
+    // 隐藏overlay
+    var overlay=document.getElementById('v3d-touch-overlay');
+    if(overlay)overlay.classList.remove('v3d-active');
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
     if(_v3dGlobalTouchHandler){document.removeEventListener('touchend',_v3dGlobalTouchHandler);_v3dGlobalTouchHandler=null;}
@@ -4653,6 +4656,9 @@ function v3dToggleMeasure(){
     if(btn)btn.style.background='#ff9800';
     if(modes)modes.style.display='block';
     if(mel)mel.style.display='block';
+    // 显示overlay以捕获触摸事件
+    var overlay2=document.getElementById('v3d-touch-overlay');
+    if(overlay2)overlay2.classList.add('v3d-active');
     _v3dShowPrompt();
     var v2=_o3dvViewer.GetViewer();
     // 全局touchend：不依赖任何DOM元素的pointer-events，直接拿坐标
@@ -5240,7 +5246,11 @@ function _v3dSmartClick(mouseCoords){
       _v3dShowPrompt();
       return;
     }
-    if(mel)mel.innerHTML='⚠️ 未检测到模型，请点击模型表面';
+    if(mel){
+      var dbgMsg='⚠️ 未检测到模型，请点击模型表面';
+      if(result.dbg&&result.dbg.length>0)dbgMsg+='<br><span style="font-size:9px;color:#888">'+result.dbg.slice(-3).join(' | ')+'</span>';
+      mel.innerHTML=dbgMsg;
+    }
     return;
   }
   var geo=result.geo;
