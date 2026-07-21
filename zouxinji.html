@@ -5138,16 +5138,16 @@ function _v3dDetectGeometry(mouseCoords){
           dbg.push('S7:命中 mt meshes='+totalMesh+' tri='+totalTri);
           return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};
         }
-        // v27p: 就近吸附——射线未精确命中时，最近面在4mm容差内则吸附
+        // v27r: 就近吸附——射线未精确命中时，最近面在10mm容差内则吸附（手机端手指精度不足）
         if(cenMesh){
           var snapD=Math.sqrt(minCenD2);
-          if(snapD<=4.0){
+          if(snapD<=10.0){
             cenMesh.updateMatrixWorld();
             var cenWp=new TH.Vector3(clX,clY,clZ).applyMatrix4(cenMesh.matrixWorld);
             dbg.push('S7:吸附命中 snap='+snapD.toFixed(2)+'mm m='+totalMesh);
             return {geo:_v3dProcessHit({object:cenMesh,point:cenWp,face:{a:cenA,b:cenB,c:cenC},distance:cenT},v),dbg:dbg};
           }
-          dbg.push('S7:最近面'+snapD.toFixed(1)+'mm>4mm容差');
+          dbg.push('S7:最近面'+snapD.toFixed(1)+'mm>10mm容差');
         }
         dbg.push('S7:无交点 m='+totalMesh+' t='+totalTri);
       }else{dbg.push('S7:无mesh');}
@@ -5193,6 +5193,57 @@ function _v3dDetectGeometry(mouseCoords){
       dbg.push('S8:mwT=('+mw[12].toFixed(1)+','+mw[13].toFixed(1)+','+mw[14].toFixed(1)+') mwS=('+mw[0].toFixed(2)+','+mw[5].toFixed(2)+','+mw[10].toFixed(2)+') camW=('+cm[12].toFixed(1)+','+cm[13].toFixed(1)+','+cm[14].toFixed(1)+')');
     }else{dbg.push('S8:无mesh/THREE obj='+allObj+' mesh='+allMesh.length);}
   }catch(e){dbg.push('S8:异常 '+e.message);}
+
+  // v27r S9: 屏幕空间最近面选择（最终兜底，解决射线与点击视觉位置不一致）
+  try{
+    var TH9=window.THREE;
+    if(TH9&&TH9.Vector3&&v.camera){
+      var bestScreenD2=Infinity,bestScreenMesh=null,bestScreenA=0,bestScreenB=0,bestScreenC=0;
+      var bestScreenWp=null,bestScreenN=null;
+      var scrW=rect.width,scrH=rect.height;
+      var ndc=new TH9.Vector3();
+      v.scene.traverse(function(o){
+        if(!o.isMesh||!o.geometry||!o.geometry.attributes.position)return;
+        var pos=o.geometry.attributes.position,posArr=pos.array;
+        var idx=o.geometry.index,idxArr=idx?idx.array:null;
+        var nVtx=posArr.length/(pos.itemSize||3);
+        var nTri=idxArr?(idxArr.length/3)|0:(nVtx-(nVtx%3))/3;
+        if(nTri===0)return;
+        o.updateMatrixWorld();
+        for(var i=0;i<nTri;i++){
+          var a=idxArr?idxArr[i*3]:i*3;
+          var b=idxArr?idxArr[i*3+1]:i*3+1;
+          var c=idxArr?idxArr[i*3+2]:i*3+2;
+          if(a>=nVtx||b>=nVtx||c>=nVtx)continue;
+          var va=new TH9.Vector3(posArr[a*3],posArr[a*3+1],posArr[a*3+2]).applyMatrix4(o.matrixWorld);
+          var vb=new TH9.Vector3(posArr[b*3],posArr[b*3+1],posArr[b*3+2]).applyMatrix4(o.matrixWorld);
+          var vc=new TH9.Vector3(posArr[c*3],posArr[c*3+1],posArr[c*3+2]).applyMatrix4(o.matrixWorld);
+          var cx=(va.x+vb.x+vc.x)/3,cy=(va.y+vb.y+vc.y)/3,cz=(va.z+vb.z+vc.z)/3;
+          ndc.set(cx,cy,cz).project(v.camera);
+          var sx=(ndc.x*0.5+0.5)*scrW;
+          var sy=(-ndc.y*0.5+0.5)*scrH;
+          var dx=sx-mouseCoords.x,dy=sy-mouseCoords.y;
+          var d2=dx*dx+dy*dy;
+          if(d2<bestScreenD2){
+            bestScreenD2=d2;
+            bestScreenMesh=o;
+            bestScreenA=a;bestScreenB=b;bestScreenC=c;
+            bestScreenWp={x:cx,y:cy,z:cz};
+            var e1=new TH9.Vector3().subVectors(vb,va);
+            var e2=new TH9.Vector3().subVectors(vc,va);
+            bestScreenN=new TH9.Vector3().crossVectors(e1,e2).normalize();
+          }
+        }
+      });
+      var bestScreenPx=Math.sqrt(bestScreenD2);
+      if(bestScreenMesh&&bestScreenPx<=60){
+        dbg.push('S9:屏幕吸附命中 d='+bestScreenPx.toFixed(1)+'px');
+        var fakeHit={object:bestScreenMesh,point:bestScreenWp,face:{a:bestScreenA,b:bestScreenB,c:bestScreenC},distance:1};
+        return {geo:_v3dProcessHit(fakeHit,v),dbg:dbg};
+      }
+      dbg.push('S9:屏幕最近面'+bestScreenPx.toFixed(1)+'px>60px容差');
+    }
+  }catch(e){dbg.push('S9:异常 '+e.message);}
 
   return {geo:null,dbg:dbg};
 }
