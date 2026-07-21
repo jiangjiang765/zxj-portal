@@ -4498,6 +4498,13 @@ function _o3dvPostProcess(viewer,name,file){
       }
       // 注入触摸覆盖层到v3d-container中（O3DV已创建canvas）
       _v3dInjectOverlay();
+      // 绑定测量模式按钮（仅一次）
+      if(!window.__zxj_mode_btns_bound){
+        window.__zxj_mode_btns_bound=true;
+        document.querySelectorAll('.v3d-mode-btn').forEach(function(b){
+          b.addEventListener('click',function(){_v3dSetMode(this.dataset.mode);});
+        });
+      }
     }
     v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
   }catch(e){
@@ -4507,10 +4514,15 @@ function _o3dvPostProcess(viewer,name,file){
 // ===== 专业级测量系统 =====
 // 全局状态
 var _v3dMeasuring=false;
+var _v3dMeasureMode='dist';  // 当前测量模式: dist/area/angle/radius/pt2face/section/coord/thick
 var _v3dSelStack=[];        // 当前选择的几何体栈 [{type:'vert'|'edge'|'face', data:..., pt:{x,y,z}}]
 var _v3dMeasureList=[];     // 已完成的测量 [{id, type, html, markers[], lines[], callout}]
 var _v3dMeasureId=0;        // 自增ID
 var _v3dPreviewEl=null;     // 实时预览SVG
+var _v3dSectionOn=false;    // 剖面是否开启
+var _v3dSectionPlane=null;  // 当前剖面平面 {axis,pos}
+var _v3dHighlightMesh=null; // 面高亮覆盖层（单面）
+var _v3dHighlightMeshes=[];  // 多面高亮数组
 
 // --- 触摸覆盖层方案（修复华为鸿蒙触摸测量）---
 var _v3dLastMeasureTime=0;
@@ -4618,28 +4630,29 @@ function v3dToggleMeasure(){
   if(!_o3dvViewer)return;
   var btn=document.getElementById('v3d-btn-measure');
   var mel=document.getElementById('v3d-measure');
-  var filt=document.getElementById('v3d-filter');
-  var ctr=document.getElementById('v3d-container');
+  var modes=document.getElementById('v3d-modes');
   if(_v3dMeasuring){
     // 关闭测量模式
     _v3dMeasuring=false;
     _v3dSelStack=[];
+    _v3dRemoveHighlight();
     var v=_o3dvViewer.GetViewer();if(v)v.SetMouseClickHandler(null);
     if(btn)btn.style.background='#1e88e5';
     if(mel)mel.style.display='none';
-    if(filt)filt.style.display='none';
+    if(modes)modes.style.display='none';
     if(_v3dPreviewEl){_v3dPreviewEl.remove();_v3dPreviewEl=null;}
     if(_v3dOrbitControls){_v3dOrbitControls.enabled=true;_v3dOrbitControls=null;}
-    // 移除全局touchend监听
     if(_v3dGlobalTouchHandler){document.removeEventListener('touchend',_v3dGlobalTouchHandler);_v3dGlobalTouchHandler=null;}
+    if(_v3dGlobalClickHandler){document.removeEventListener('click',_v3dGlobalClickHandler);_v3dGlobalClickHandler=null;}
     _v3dClearHover();
   }else{
     // 开启测量模式
     _v3dMeasuring=true;
     _v3dSelStack=[];
+    _v3dRemoveHighlight();
     if(btn)btn.style.background='#ff9800';
+    if(modes)modes.style.display='block';
     if(mel)mel.style.display='block';
-    if(filt)filt.style.display='flex';
     _v3dShowPrompt();
     var v2=_o3dvViewer.GetViewer();
     // 全局touchend：不依赖任何DOM元素的pointer-events，直接拿坐标
@@ -5124,7 +5137,8 @@ function _v3dProcessHit(hit,v){
     // 面上
     return {type:'face', pt:{x:pt.x,y:pt.y,z:pt.z},
             normal:{x:faceNormal.x,y:faceNormal.y,z:faceNormal.z},
-            area:faceArea, obj:obj, faceIndex:hit.faceIndex};
+            area:faceArea, obj:obj, faceIndex:hit.faceIndex,
+            vA:{x:va.x,y:va.y,z:va.z}, vB:{x:vb.x,y:vb.y,z:vb.z}, vC:{x:vc.x,y:vc.y,z:vc.z}};
   }
 
   // 默认返回面上的点
@@ -5215,119 +5229,328 @@ function _v3dSmartClick(mouseCoords){
   if(!_o3dvViewer||!_v3dMeasuring)return;
   _v3dLastClickTime=Date.now();
 
-  // 调试：收集场景信息
-  var v=_o3dvViewer.GetViewer();
-  var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
-  var rect=canvas.getBoundingClientRect();
-  var dpr=window.devicePixelRatio||1;
-  var meshCount=0;
-  try{v.scene.traverse(function(o){if(o.isMesh)meshCount++;});}catch(e){}
-
   var result=_v3dDetectGeometry(mouseCoords);
+  var mel=document.getElementById('v3d-measure');
+
   if(!result.geo){
-    var mel=document.getElementById('v3d-measure');
     // 点击空白处取消当前选择
     if(_v3dSelStack.length>0){
       _v3dSelStack=[];
-      _v3dRemoveOverlay();
+      _v3dRemoveHighlight();
       _v3dShowPrompt();
       return;
     }
-    var dbg='v27 mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
-    dbg+='r'+rect.width.toFixed(0)+'x'+rect.height.toFixed(0)+' ';
-    dbg+='dpr:'+dpr+' m:'+meshCount;
-    if(result.dbg&&result.dbg.length)dbg+=' | '+result.dbg.join('; ');
-    if(mel)mel.innerHTML='⚠️ 未检测到模型 '+dbg;
+    if(mel)mel.innerHTML='⚠️ 未检测到模型，请点击模型表面';
     return;
   }
   var geo=result.geo;
 
-  var mel=document.getElementById('v3d-measure');
+  // === 按模式分发 ===
+  switch(_v3dMeasureMode){
+    case 'dist': _v3dHandleDist(geo,mel); break;
+    case 'area': _v3dHandleArea(geo,mel); break;
+    case 'angle': _v3dHandleAngle(geo,mel); break;
+    case 'radius': _v3dHandleRadius(geo,mel); break;
+    case 'pt2face': _v3dHandlePt2Face(geo,mel); break;
+    case 'section': _v3dHandleSection(geo,mel); break;
+    case 'coord': _v3dHandleCoord(geo,mel); break;
+    case 'thick': _v3dHandleThick(geo,mel); break;
+  }
+}
 
-  // === 单击即完成的情况 ===
-  // 1. 点击边(直线) → 自动量长度
+// --- 距离模式：点两点→距离，点边→边长 ---
+function _v3dHandleDist(geo,mel){
   if(geo.type==='edge'){
-    _v3dFinishMeasure({
-      type:'edge_len',
-      label:'━ 边长',
-      value:geo.length.toFixed(3)+' mm',
-      pts:[geo.edgeA,geo.edgeB],
-      markerLabels:['A','B'],
-      detail:'方向: ('+geo.dir.x.toFixed(2)+', '+geo.dir.y.toFixed(2)+', '+geo.dir.z.toFixed(2)+')'
-    });
+    _v3dFinishMeasure({type:'edge_len',label:'📏 边长',value:geo.length.toFixed(3)+' mm',pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B']});
     return;
   }
-
-  // 2. 点击圆弧边 → 自动量半径/直径
   if(geo.type==='arc'){
-    _v3dFinishMeasure({
-      type:'arc_r',
-      label:'⭕ 半径',
-      value:'R = '+geo.radius.toFixed(3)+' mm',
-      pts:[geo.edgeA,geo.edgeB],
-      markerLabels:['A','B'],
-      detail:'直径 D = '+(geo.radius*2).toFixed(3)+' mm'
-    });
+    // 圆弧：显示弦长，提示用半径模式测R
+    var dx=geo.edgeB.x-geo.edgeA.x,dy=geo.edgeB.y-geo.edgeA.y,dz=geo.edgeB.z-geo.edgeA.z;
+    var chord=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    _v3dFinishMeasure({type:'chord_len',label:'📏 弦长',value:chord.toFixed(3)+' mm',pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B'],detail:'💡 测半径请切换⭕模式'});
     return;
   }
-
-  // 3. 点击面 → 自动：单击=面积，再点面=夹角
-  if(geo.type==='face'){
-    if(_v3dSelStack.length===0){
-      // 第一次点面：直接出面积，同时存起来准备量夹角
-      _v3dFinishMeasure({
-        type:'face_area',
-        label:'📐 面积',
-        value:geo.area.toFixed(3)+' mm²',
-        pts:[geo.pt],
-        markerLabels:['F'],
-        detail:'面法线: ('+geo.normal.x.toFixed(2)+', '+geo.normal.y.toFixed(2)+', '+geo.normal.z.toFixed(2)+')'
-      });
-      // 存面用于后续夹角测量
-      _v3dSelStack.push(geo);
-      v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
-      mel.innerHTML='✅ 面积已测 — 再点<b>另一个面</b>量夹角，或点空白清除 <span style="color:#999;font-size:10px">🧲</span>';
-    }else{
-      var f1=_v3dSelStack[0];
-      if(f1.type==='face'){
-        var n1=f1.normal,n2=geo.normal;
-        var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
-        if(dot>1)dot=1;if(dot<-1)dot=-1;
-        var ang=Math.acos(dot)*180/Math.PI;
-        _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ang.toFixed(2)+'°',pts:[f1.pt,geo.pt],markerLabels:['F1','F2'],detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')});
-      }else if(f1.type==='vert'){
-        var pp=f1.pt,fn=geo.normal,fpt=geo.pt;
-        var dist=Math.abs((pp.x-fpt.x)*fn.x+(pp.y-fpt.y)*fn.y+(pp.z-fpt.z)*fn.z);
-        _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pp,fpt],markerLabels:['P','F']});
-      }
-    }
-    return;
-  }
-
-  // 4. 顶点
   if(geo.type==='vert'){
     if(_v3dSelStack.length===0){
       _v3dSelStack.push(geo);
       v3dAddMeasureMarker(geo.pt,'A','#4caf50');
-      mel.innerHTML='📍 A('+_v3dFmtPt(geo.pt)+') → 点第2个点量<b>距离</b>，或点面量<b>点到面</b> <span style="color:#999;font-size:10px">🧲</span>';
-    }else{
-      var first=_v3dSelStack[0];
-      if(first.type==='vert'){
-        var a=first.pt,p=geo.pt;
-        var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
-        var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        _v3dFinishMeasure({type:'dist',label:'📏 距离',value:dist.toFixed(3)+' mm',pts:[a,p],markerLabels:['A','B'],detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)});
-      }else if(first.type==='face'){
-        var pt=geo.pt,fn=first.normal,fpt=first.pt;
-        var dist=Math.abs((pt.x-fpt.x)*fn.x+(pt.y-fpt.y)*fn.y+(pt.z-fpt.z)*fn.z);
-        _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pt,fpt],markerLabels:['P','F']});
-      }
+      mel.innerHTML='📍 起点A('+_v3dFmtPt(geo.pt)+') → 点<b>终点</b>测量距离';
+      return;
+    }
+    var first=_v3dSelStack[0];
+    if(first.type==='vert'){
+      var a=first.pt,p=geo.pt;
+      var dx=p.x-a.x,dy=p.y-a.y,dz=p.z-a.z;
+      var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      _v3dFinishMeasure({type:'dist',label:'📏 距离',value:dist.toFixed(3)+' mm',pts:[a,p],markerLabels:['A','B'],detail:'ΔX:'+Math.abs(dx).toFixed(3)+' ΔY:'+Math.abs(dy).toFixed(3)+' ΔZ:'+Math.abs(dz).toFixed(3)});
     }
     return;
   }
+  // 其他类型：提示
+  mel.innerHTML='⚠️ 距离模式：请点击<b>顶点</b>或<b>边</b>';
 }
 
-// v27i：自动识别模式，面→面积，两面→夹角，点→距离
+// --- 面积模式：点面→绿色高亮+面积 ---
+function _v3dHandleArea(geo,mel){
+  if(geo.type==='face'){
+    _v3dHighlightFace(geo);
+    _v3dFinishMeasure({type:'face_area',label:'📐 面积',value:geo.area.toFixed(3)+' mm²',pts:[geo.pt],markerLabels:['F'],detail:'面法线: ('+geo.normal.x.toFixed(2)+', '+geo.normal.y.toFixed(2)+', '+geo.normal.z.toFixed(2)+')'});
+    return;
+  }
+  mel.innerHTML='⚠️ 面积模式：请点击<b>模型表面</b>';
+}
+
+// --- 角度模式：点两面→夹角 ---
+function _v3dHandleAngle(geo,mel){
+  if(geo.type!=='face'){mel.innerHTML='⚠️ 角度模式：请点击<b>模型表面</b>';return;}
+  if(_v3dSelStack.length===0){
+    _v3dSelStack.push(geo);
+    _v3dHighlightFace(geo);
+    v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
+    mel.innerHTML='✅ 面1已选 — 点<b>第二个面</b>量夹角';
+    return;
+  }
+  var f1=_v3dSelStack[0];
+  if(f1.type==='face'){
+    _v3dHighlightFace(geo);
+    var n1=f1.normal,n2=geo.normal;
+    var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
+    if(dot>1)dot=1;if(dot<-1)dot=-1;
+    var ang=Math.acos(dot)*180/Math.PI;
+    _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ang.toFixed(2)+'°',pts:[f1.pt,geo.pt],markerLabels:['F1','F2'],detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')});
+  }
+}
+
+// --- 半径模式：点圆弧→半径 ---
+function _v3dHandleRadius(geo,mel){
+  if(geo.type==='arc'){
+    _v3dFinishMeasure({type:'arc_r',label:'⭕ 半径',value:'R = '+geo.radius.toFixed(3)+' mm',pts:[geo.edgeA,geo.edgeB],markerLabels:['A','B'],detail:'直径 D = '+(geo.radius*2).toFixed(3)+' mm'});
+    return;
+  }
+  mel.innerHTML='⚠️ 半径模式：请点击<b>圆弧边</b>';
+}
+
+// --- 点到面模式：点顶点+面→距离 ---
+function _v3dHandlePt2Face(geo,mel){
+  if(_v3dSelStack.length===0){
+    if(geo.type==='vert'){
+      _v3dSelStack.push(geo);
+      v3dAddMeasureMarker(geo.pt,'P','#4caf50');
+      mel.innerHTML='📍 点P('+_v3dFmtPt(geo.pt)+') → 点<b>面</b>测量距离';
+      return;
+    }
+    mel.innerHTML='⚠️ 点到面模式：先点<b>顶点</b>，再点<b>面</b>';
+    return;
+  }
+  var first=_v3dSelStack[0];
+  if(first.type==='vert'&&geo.type==='face'){
+    var pp=first.pt,fn=geo.normal,fpt=geo.pt;
+    var dist=Math.abs((pp.x-fpt.x)*fn.x+(pp.y-fpt.y)*fn.y+(pp.z-fpt.z)*fn.z);
+    _v3dFinishMeasure({type:'pt2face',label:'📏 点到面',value:dist.toFixed(3)+' mm',pts:[pp,geo.pt],markerLabels:['P','F']});
+    return;
+  }
+  mel.innerHTML='⚠️ 点到面模式：先点<b>顶点</b>，再点<b>面</b>';
+}
+
+// --- 截面模式：点面→沿轴切剖面，显示截面位置 ---
+function _v3dHandleSection(geo,mel){
+  if(geo.type!=='face'){mel.innerHTML='⚠️ 截面模式：请点击<b>模型表面</b>';return;}
+  // 获取当前剖面轴
+  var axisSel=document.getElementById('v3d-section-axis');
+  var axis=(axisSel&&axisSel.value)||'z';
+  // 取得面心在指定轴上的坐标
+  var pos;
+  if(axis==='x')pos=geo.pt.x;
+  else if(axis==='y')pos=geo.pt.y;
+  else pos=geo.pt.z;
+  // 更新滑块位置
+  var posRange=document.getElementById('v3d-section-pos');
+  var maxVal=100,minVal=0;
+  if(posRange){minVal=parseFloat(posRange.min)||0;maxVal=parseFloat(posRange.max)||100;}
+  // 将3D坐标映射到百分比
+  var bbox=_v3dGetBBox();
+  if(bbox){
+    var range=(axis==='x'?bbox.maxX-bbox.minX:(axis==='y'?bbox.maxY-bbox.minY:bbox.maxZ-bbox.minZ))||1;
+    var offset=(axis==='x'?pos-bbox.minX:(axis==='y'?pos-bbox.minY:pos-bbox.minZ));
+    var pct=Math.round(offset/range*100);
+    if(posRange)posRange.value=pct;
+    var valEl=document.getElementById('v3d-section-val');
+    if(valEl)valEl.textContent=pct+'%';
+  }
+  // 开启剖面
+  _v3dSectionOn=true;
+  _v3dSectionPlane={axis:axis,pos:pos};
+  _v3dApplySectionPlane();
+  // 更新剖面按钮状态
+  var sBtn=document.getElementById('v3d-btn-section');
+  if(sBtn)sBtn.style.background='#e040fb';
+  var sCtrl=document.getElementById('v3d-section-ctrl');
+  if(sCtrl)sCtrl.style.display='block';
+  // 高亮面
+  _v3dHighlightFace(geo);
+  // 显示结果
+  mel.innerHTML='🔪 截面位置：'+axis.toUpperCase()+'='+pos.toFixed(3)+'mm（面心）| 拖动滑块调整';
+}
+
+// --- 坐标模式：点顶点→显示XYZ ---
+function _v3dHandleCoord(geo,mel){
+  if(geo.type==='vert'){
+    var p=geo.pt;
+    _v3dFinishMeasure({type:'coord',label:'📍 坐标',value:'X='+p.x.toFixed(3)+' Y='+p.y.toFixed(3)+' Z='+p.z.toFixed(3)+' mm',pts:[p],markerLabels:['P'],detail:'点击顶点显示坐标'});
+    return;
+  }
+  if(geo.type==='face'){
+    var fp=geo.pt;
+    _v3dHighlightFace(geo);
+    _v3dFinishMeasure({type:'coord_face',label:'📍 面心坐标',value:'X='+fp.x.toFixed(3)+' Y='+fp.y.toFixed(3)+' Z='+fp.z.toFixed(3)+' mm',pts:[fp],markerLabels:['F'],detail:'法线: ('+geo.normal.x.toFixed(2)+','+geo.normal.y.toFixed(2)+','+geo.normal.z.toFixed(2)+')'});
+    return;
+  }
+  mel.innerHTML='⚠️ 坐标模式：请点击<b>顶点</b>或<b>面</b>查看坐标';
+}
+
+// --- 壁厚模式：点两面→最小距离 ---
+function _v3dHandleThick(geo,mel){
+  if(geo.type!=='face'){mel.innerHTML='⚠️ 壁厚模式：请点击<b>模型表面</b>';return;}
+  if(_v3dSelStack.length===0){
+    _v3dSelStack.push(geo);
+    _v3dHighlightFace(geo);
+    v3dAddMeasureMarker(geo.pt,'F1','#e040fb');
+    mel.innerHTML='🧱 面1已选 → 点<b>对面</b>测量壁厚';
+    return;
+  }
+  var f1=_v3dSelStack[0];
+  if(f1.type==='face'){
+    _v3dHighlightFace(geo);
+    v3dAddMeasureMarker(geo.pt,'F2','#e040fb');
+    // 计算两面间最小距离：取面心沿法线方向到另一面的距离
+    var n1=f1.normal,pt1=f1.pt,pt2=geo.pt;
+    var d1=Math.abs((pt2.x-pt1.x)*n1.x+(pt2.y-pt1.y)*n1.y+(pt2.z-pt1.z)*n1.z);
+    var n2=geo.normal;
+    var d2=Math.abs((pt1.x-pt2.x)*n2.x+(pt1.y-pt2.y)*n2.y+(pt1.z-pt2.z)*n2.z);
+    var thick=Math.min(d1,d2);
+    _v3dFinishMeasure({type:'wall_thick',label:'🧱 壁厚',value:thick.toFixed(3)+' mm',pts:[pt1,pt2],markerLabels:['F1','F2'],detail:'两面心间距: '+Math.sqrt((pt2.x-pt1.x)**2+(pt2.y-pt1.y)**2+(pt2.z-pt1.z)**2).toFixed(3)+' mm'});
+  }
+}
+
+// --- 获取模型包围盒 ---
+function _v3dGetBBox(){
+  try{
+    if(!_o3dvViewer)return null;
+    var v=_o3dvViewer.GetViewer();
+    if(!v||!v.scene)return null;
+    var bbox=null;
+    v.scene.traverse(function(obj){
+      if(obj.isMesh&&obj.geometry){
+        if(!obj.geometry.boundingBox)obj.geometry.computeBoundingBox();
+        var bb=obj.geometry.boundingBox;
+        if(bb&&isFinite(bb.min.x)){
+          if(!bbox){bbox={minX:bb.min.x,minY:bb.min.y,minZ:bb.min.z,maxX:bb.max.x,maxY:bb.max.y,maxZ:bb.max.z};}
+          else{
+            bbox.minX=Math.min(bbox.minX,bb.min.x);bbox.minY=Math.min(bbox.minY,bb.min.y);bbox.minZ=Math.min(bbox.minZ,bb.min.z);
+            bbox.maxX=Math.max(bbox.maxX,bb.max.x);bbox.maxY=Math.max(bbox.maxY,bb.max.y);bbox.maxZ=Math.max(bbox.maxZ,bb.max.z);
+          }
+        }
+      }
+    });
+    return bbox;
+  }catch(e){return null;}
+}
+
+// --- 应用剖面平面 ---
+function _v3dApplySectionPlane(){
+  try{
+    if(!_o3dvViewer||!_v3dSectionPlane)return;
+    var v=_o3dvViewer.GetViewer();
+    if(!v||!v.renderer)return;
+    var TH=window.THREE||(window.THREE&&window.THREE.Vector3?window.THREE:null);
+    if(!TH)return;
+    var sp=_v3dSectionPlane;
+    var normal=new TH.Vector3(sp.axis==='x'?1:0,sp.axis==='y'?1:0,sp.axis==='z'?1:0);
+    var plane=new TH.Plane(normal,-sp.pos);
+    v.renderer.clippingPlanes=[plane];
+    v.renderer.localClippingEnabled=true;
+    v.scene.traverse(function(obj){
+      if(obj.isMesh&&obj.material){
+        var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+        mats.forEach(function(m){m.clippingPlanes=[plane];m.needsUpdate=true;});
+      }
+    });
+    v.Render();
+  }catch(e){}
+}
+
+// --- 更新剖面平面（滑块/轴变化时） ---
+function _v3dUpdateSectionPlane(){
+  var axisSel=document.getElementById('v3d-section-axis');
+  var posRange=document.getElementById('v3d-section-pos');
+  if(!axisSel||!posRange)return;
+  var axis=axisSel.value;
+  var pct=parseFloat(posRange.value)/100;
+  var bbox=_v3dGetBBox();
+  if(!bbox)return;
+  var range=(axis==='x'?bbox.maxX-bbox.minX:(axis==='y'?bbox.maxY-bbox.minY:bbox.maxZ-bbox.minZ));
+  var offset=(axis==='x'?bbox.minX:(axis==='y'?bbox.minY:bbox.minZ));
+  var pos=offset+range*pct;
+  _v3dSectionPlane={axis:axis,pos:pos};
+  var valEl=document.getElementById('v3d-section-val');
+  if(valEl)valEl.textContent=Math.round(pct*100)+'%';
+  _v3dApplySectionPlane();
+  // 更新测量提示
+  var mel=document.getElementById('v3d-measure');
+  if(mel&&_v3dMeasureMode==='section')mel.innerHTML='🔪 截面位置：'+axis.toUpperCase()+'='+pos.toFixed(3)+'mm';
+}
+
+// --- 切换剖面 ---
+function v3dToggleSection(){
+  if(_v3dSectionOn){
+    _v3dCloseSection();
+  }else{
+    _v3dOpenSection();
+  }
+}
+
+function _v3dOpenSection(){
+  _v3dSectionOn=true;
+  var sBtn=document.getElementById('v3d-btn-section');
+  if(sBtn)sBtn.style.background='#e040fb';
+  var sCtrl=document.getElementById('v3d-section-ctrl');
+  if(sCtrl)sCtrl.style.display='block';
+  // 默认Z轴剖面在中间
+  var bbox=_v3dGetBBox();
+  if(bbox){
+    var axisSel=document.getElementById('v3d-section-axis');
+    var axis=(axisSel&&axisSel.value)||'z';
+    var mid=(axis==='x'?(bbox.minX+bbox.maxX)/2:(axis==='y'?(bbox.minY+bbox.maxY)/2:(bbox.minZ+bbox.maxZ)/2));
+    _v3dSectionPlane={axis:axis,pos:mid};
+    _v3dApplySectionPlane();
+  }
+}
+
+function _v3dCloseSection(){
+  if(!_o3dvViewer)return;
+  try{
+    var v=_o3dvViewer.GetViewer();
+    if(v&&v.renderer){
+      v.renderer.clippingPlanes=[];
+      v.renderer.localClippingEnabled=false;
+      v.scene.traverse(function(obj){
+        if(obj.isMesh&&obj.material){
+          var mats=Array.isArray(obj.material)?obj.material:[obj.material];
+          mats.forEach(function(m){m.clippingPlanes=[];m.needsUpdate=true;});
+        }
+      });
+      v.Render();
+    }
+  }catch(e){}
+  _v3dSectionOn=false;_v3dSectionPlane=null;
+  var sBtn=document.getElementById('v3d-btn-section');
+  if(sBtn)sBtn.style.background='#7b1fa2';
+  var sCtrl=document.getElementById('v3d-section-ctrl');
+  if(sCtrl)sCtrl.style.display='none';
+}
+
+// v27j：模式驱动测量，底部一排按钮选模式
 
 // --- 完成一次测量，存入列表 ---
 function _v3dFinishMeasure(info){
@@ -5472,25 +5695,12 @@ function _v3dRedrawAllMarkers(){
 function v3dClearAllMeasures(){
   _v3dMeasureList=[];
   _v3dSelStack=[];
+  _v3dRemoveHighlight();
   v3dClearMeasureMarkers();
   var container=document.getElementById('v3d-container');
   if(container)container.querySelectorAll('.v3d-callout').forEach(function(el){el.remove();});
   // 同时关闭剖面
-  if(_v3dSectionOn&&_o3dvViewer){
-    var v=_o3dvViewer.GetViewer();
-    if(v&&v.renderer){v.renderer.clippingPlanes=[];v.renderer.localClippingEnabled=false;
-      v.scene.traverse(function(obj){
-        if(obj.isMesh&&obj.material){
-          var mats=Array.isArray(obj.material)?obj.material:[obj.material];
-          mats.forEach(function(m){m.clippingPlanes=[];m.needsUpdate=true;});
-        }
-      });
-      v.Render();
-    }
-    _v3dSectionOn=false;_v3dSectionPlane=null;
-    var sBtn=document.getElementById('v3d-btn-section');if(sBtn)sBtn.style.background='#7b1fa2';
-    var sCtrl=document.getElementById('v3d-section-ctrl');if(sCtrl)sCtrl.style.display='none';
-  }
+  if(_v3dSectionOn)_v3dCloseSection();
   if(_v3dMeasuring)_v3dShowPrompt();
   var mel=document.getElementById('v3d-measure');
   if(!_v3dMeasuring&&mel)mel.style.display='none';
@@ -5500,7 +5710,8 @@ function v3dClearAllMeasures(){
 function _v3dShowPrompt(){
   var mel=document.getElementById('v3d-measure');
   if(!mel)return;
-  mel.innerHTML='📍 点击模型自动测量 — 点→距离 · 边→长度 · 面→面积 · 两面→夹角 <span style="color:#999;font-size:10px">🧲</span>';
+  var prompts={dist:'📍 点击两个<b>顶点</b>测距离，或点<b>边</b>测长度',area:'📐 点击<b>模型表面</b>测面积',angle:'∠ 点击<b>两个面</b>测夹角',radius:'⭕ 点击<b>圆弧边</b>测半径',pt2face:'📍 先点<b>顶点</b>，再点<b>面</b>测距离',section:'🔪 点击<b>表面</b>沿轴切剖面，拖动滑块调位置',coord:'📍 点击<b>顶点</b>显示XYZ坐标，或点<b>面</b>看面心',thick:'🧱 点击<b>两个面</b>测壁厚（最小距离）'};
+  mel.innerHTML=prompts[_v3dMeasureMode]||'';
 }
 
 function _v3dFmtPt(p){return '('+p.x.toFixed(2)+','+p.y.toFixed(2)+','+p.z.toFixed(2)+')';}
@@ -5508,6 +5719,60 @@ function _v3dFmtPt(p){return '('+p.x.toFixed(2)+','+p.y.toFixed(2)+','+p.z.toFix
 // --- 清除hover高亮 ---
 function _v3dClearHover(){
   // 预留给hover高亮功能
+}
+
+// --- 面高亮：创建绿色半透明三角面覆盖层 ---
+function _v3dHighlightFace(geo){
+  if(!geo||!geo.vA||!_o3dvViewer)return;
+  try{
+    var v=_o3dvViewer.GetViewer();
+    if(!v||!v.scene)return;
+    var TH=window.THREE||(window.THREE&&window.THREE.Vector3?window.THREE:null);
+    if(!TH)return;
+    var geom=new TH.BufferGeometry();
+    var a=geo.vA,b=geo.vB,c=geo.vC;
+    var n=geo.normal;
+    var off=0.15;
+    var verts=new Float32Array([
+      a.x+n.x*off,a.y+n.y*off,a.z+n.z*off,
+      b.x+n.x*off,b.y+n.y*off,b.z+n.z*off,
+      c.x+n.x*off,c.y+n.y*off,c.z+n.z*off
+    ]);
+    geom.setAttribute('position',new TH.BufferAttribute(verts,3));
+    var mat=new TH.MeshBasicMaterial({color:0x4caf50,side:TH.DoubleSide,transparent:true,opacity:0.5,depthTest:true,depthWrite:false});
+    var mesh=new TH.Mesh(geom,mat);
+    mesh.renderOrder=999;
+    mesh.material.depthTest=true;
+    mesh.material.depthWrite=false;
+    v.scene.add(mesh);
+    _v3dHighlightMeshes.push(mesh);
+    v.Render();
+  }catch(e){}
+}
+
+function _v3dRemoveHighlight(){
+  try{
+    var v=_o3dvViewer?_o3dvViewer.GetViewer():null;
+    if(v&&v.scene){
+      _v3dHighlightMeshes.forEach(function(m){v.scene.remove(m);});
+      v.Render();
+    }
+  }catch(e){}
+  _v3dHighlightMeshes=[];
+  _v3dHighlightMesh=null;
+}
+
+// --- 模式切换 ---
+function _v3dSetMode(mode){
+  _v3dMeasureMode=mode;
+  _v3dSelStack=[];
+  _v3dRemoveHighlight();
+  // 更新按钮状态
+  document.querySelectorAll('.v3d-mode-btn').forEach(function(b){
+    if(b.dataset.mode===mode){b.style.background='#1e88e5';b.style.color='#fff';}
+    else{b.style.background='rgba(255,255,255,.06)';b.style.color='#90caf9';}
+  });
+  _v3dShowPrompt();
 }
 
 // --- 标记点和测量线（复用原有函数，增强）---
@@ -10338,16 +10603,26 @@ function _aiShowModal(title,body){
     <!-- O3DV canvas will be injected here -->
     <!-- Touch overlay for measurement (injected dynamically after model loads) -->
   </div>
-  <!-- 测量信息区 -->
-  <div id="v3d-measure" style="display:none;padding:8px 12px;background:rgba(30,136,229,.12);border-top:1px solid rgba(30,136,229,.3);font-size:12px;color:#64b5f6;line-height:1.5;flex-shrink:0"></div>
+  <!-- 测量模式选择区 -->
+  <div id="v3d-modes" style="display:none;padding:8px 10px;background:rgba(30,136,229,.08);border-top:1px solid rgba(30,136,229,.25);flex-shrink:0">
+    <div style="display:flex;gap:8px;overflow-x:auto;justify-content:center;flex-wrap:nowrap">
+      <button class="v3d-mode-btn active" data-mode="dist" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:#1e88e5;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">📏<br>距离</button>
+      <button class="v3d-mode-btn" data-mode="area" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">📐<br>面积</button>
+      <button class="v3d-mode-btn" data-mode="angle" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">∠<br>角度</button>
+      <button class="v3d-mode-btn" data-mode="radius" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">⭕<br>半径</button>
+      <button class="v3d-mode-btn" data-mode="pt2face" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">📍<br>点到面</button>
+      <button class="v3d-mode-btn" data-mode="section" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">🔪<br>截面</button>
+      <button class="v3d-mode-btn" data-mode="coord" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">📍<br>坐标</button>
+      <button class="v3d-mode-btn" data-mode="thick" style="flex:0 0 auto;min-width:56px;padding:8px 6px;border:none;border-radius:10px;background:rgba(255,255,255,.06);color:#90caf9;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;line-height:1.3">🧱<br>壁厚</button>
+    </div>
+  </div>
+  <!-- 测量结果区 -->
+  <div id="v3d-measure" style="display:none;padding:6px 12px;background:rgba(255,152,0,.1);border-top:1px solid rgba(255,152,0,.3);font-size:12px;color:#ffb74d;line-height:1.5;flex-shrink:0;min-height:22px"></div>
   <!-- 底部工具栏 -->
   <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:linear-gradient(90deg,#0d1b2a,#1b2838);border-top:1px solid var(--border);justify-content:center;align-items:center;flex-shrink:0">
     <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px">📏 测量</button>
     <button id="v3d-btn-section" class="btn" style="background:#7b1fa2;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px">🔪 剖面</button>
     <button class="btn" style="background:#e74c3c;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px" onclick="v3dClearAllMeasures()">🗑️ 清除</button>
-    <div id="v3d-filter" style="display:none;gap:4px;align-items:center;font-size:11px">
-      <span style="color:var(--text-dim);font-size:10px">自动识别：</span><span style="color:#999;font-size:10px">点→距离 · 边→长度 · 面→面积 · 两面→夹角</span>
-    </div>
   </div>
   <!-- 剖面控制区 -->
   <div id="v3d-section-ctrl" style="display:none;padding:8px 12px;background:rgba(123,31,162,.12);border-top:1px solid rgba(123,31,162,.3);font-size:12px;color:#ce93d8;line-height:1.8;flex-shrink:0">
