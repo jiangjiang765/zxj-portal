@@ -5238,6 +5238,13 @@ function _v3dSmartClick(mouseCoords){
   var result=_v3dDetectGeometry(mouseCoords);
   if(!result.geo){
     var mel=document.getElementById('v3d-measure');
+    // 如果有已选面但未完成 → 点击空白处取消选择
+    if(_v3dSelStack.length===1 && _v3dSelStack[0].type==='face'){
+      _v3dSelStack=[];
+      _v3dRemoveOverlay();
+      if(mel)mel.innerHTML='📍 点击模型测量 — <b>自动识别</b>：顶点→距离，边→长度，圆弧→半径，面→面积/夹角 <span style="color:#999;font-size:10px">🧲吸附</span>';
+      return;
+    }
     var dbg='v27 mc:('+mouseCoords.x.toFixed(0)+','+mouseCoords.y.toFixed(0)+') ';
     dbg+='r'+rect.width.toFixed(0)+'x'+rect.height.toFixed(0)+' ';
     dbg+='dpr:'+dpr+' m:'+meshCount;
@@ -5282,7 +5289,10 @@ function _v3dSmartClick(mouseCoords){
     // 单击面：先存起来，等第二次点击
     _v3dSelStack.push(geo);
     v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
-    mel.innerHTML='📍 已选面F1，再点一个面量<b>夹角</b>，或点空白完成<b>面积</b>测量 <span style="color:#999;font-size:10px">🧲</span>';
+    mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> — 请选择：'+
+      ' <button onclick="_v3dFaceAction(\'area\')" style="background:#1e88e5;color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:12px;margin:0 4px;cursor:pointer">📐 测面积</button>'+
+      ' <button onclick="_v3dFaceAction(\'angle\')" style="background:#f57c00;color:#fff;border:none;padding:4px 12px;border-radius:4px;font-size:12px;margin:0 4px;cursor:pointer">📏 测夹角</button>'+
+      ' <span style="color:#999;font-size:10px">或点空白处取消</span>';
     return;
   }
 
@@ -5358,6 +5368,27 @@ function _v3dSmartClick(mouseCoords){
       });
     }
     return;
+  }
+}
+
+// --- 面操作：面积或夹角 ---
+function _v3dFaceAction(action){
+  if(_v3dSelStack.length!==1 || _v3dSelStack[0].type!=='face')return;
+  var mel=document.getElementById('v3d-measure');
+  if(action==='area'){
+    // 直接计算面积
+    var faceGeo=_v3dSelStack[0];
+    _v3dFinishMeasure({
+      type:'face_area',
+      label:'📐 面积',
+      value:faceGeo.area.toFixed(3)+' mm²',
+      pts:[faceGeo.pt],
+      markerLabels:['F'],
+      detail:'面法线: ('+faceGeo.normal.x.toFixed(2)+', '+faceGeo.normal.y.toFixed(2)+', '+faceGeo.normal.z.toFixed(2)+')'
+    });
+  }else if(action==='angle'){
+    // 提示选第二个面
+    if(mel)mel.innerHTML='📍 已选面 <b style="color:#2196f3">F1</b> → 请点击<b>第二个面</b>测量夹角 <span style="color:#999;font-size:10px">| 点空白取消</span>';
   }
 }
 
