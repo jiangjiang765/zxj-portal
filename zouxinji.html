@@ -5763,6 +5763,13 @@ function _v3dFinishMeasure(info){
   var container=document.getElementById('v3d-container');
   var mel=document.getElementById('v3d-measure');
 
+  // 单点/单选模式：自动清除历史，避免3D视图上标签堆叠
+  var singlePickTypes=['face_area','coord','coord_face','edge_len','chord_len','arc_r','wall_thick'];
+  if(singlePickTypes.indexOf(info.type)>=0){
+    _v3dMeasureList.forEach(function(m){_v3dDeleteMeasure(m.id);});
+    _v3dMeasureList=[];
+  }
+
   // 添加标记点和线
   var markers=[];
   var lines=[];
