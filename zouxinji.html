@@ -4979,7 +4979,7 @@ function _v3dDetectGeometry(mouseCoords){
     }else{dbg.push('S5:无WebGL');}
   }catch(e){dbg.push('S5:异常 '+e.message);}
 
-  // v26 S7: 独立THREE.js手动Möller-Trumbore — 绕过BufferAttribute直接读底层array
+  // v27k S7: 独立THREE.js手动Möller-Trumbore + 索引越界fallback
   if(window.THREE&&window.THREE.Vector3){
     try{
       var TH=window.THREE;
@@ -5002,7 +5002,17 @@ function _v3dDetectGeometry(mouseCoords){
           var idx=geo.index;
           var idxArr=idx?idx.array:null; // 底层Uint16Array/Uint32Array
           var nVtx=posArr.length/3; // 顶点数
+          var useIdx=true; // 是否使用索引模式
           var nTri=idxArr?(idxArr.length/3)|0:(nVtx-(nVtx%3))/3; // 三角形数
+          // v27k: 检测索引越界，自动回退到无索引模式
+          if(idxArr&&nTri>0){
+            var sampleA=idxArr[0],sampleB=idxArr[1],sampleC=idxArr[2];
+            if(sampleA>=nVtx||sampleB>=nVtx||sampleC>=nVtx){
+              useIdx=false;
+              nTri=(nVtx-(nVtx%3))/3;
+              dbg.push('S7:idxOOB vtx='+nVtx+' idxTri='+(idxArr.length/3)|0+' idx[0..2]='+sampleA+','+sampleB+','+sampleC+'→fallback无索引 nTri='+nTri);
+            }
+          }
           if(nTri===0)continue;
           mesh.updateMatrixWorld();
           var invMat=new TH.Matrix4().copy(mesh.matrixWorld).invert();
@@ -5011,11 +5021,12 @@ function _v3dDetectGeometry(mouseCoords){
           totalMesh++;
           var _v0=new TH.Vector3(),_v1=new TH.Vector3(),_v2=new TH.Vector3();
           var _e1=new TH.Vector3(),_e2=new TH.Vector3(),_h=new TH.Vector3(),_s=new TH.Vector3(),_q=new TH.Vector3();
+          var skipOob=0;
           for(var i=0;i<nTri;i++){
             var a,b,c;
-            if(idxArr){a=idxArr[i*3];b=idxArr[i*3+1];c=idxArr[i*3+2];}
+            if(useIdx&&idxArr){a=idxArr[i*3];b=idxArr[i*3+1];c=idxArr[i*3+2];}
             else{a=i*3;b=i*3+1;c=i*3+2;}
-            if(a>=nVtx||b>=nVtx||c>=nVtx)continue;
+            if(a>=nVtx||b>=nVtx||c>=nVtx){skipOob++;continue;}
             var ai=a*3,bi=b*3,ci=c*3;
             _v0.set(posArr[ai],posArr[ai+1],posArr[ai+2]);
             _v1.set(posArr[bi],posArr[bi+1],posArr[bi+2]);
@@ -5041,6 +5052,7 @@ function _v3dDetectGeometry(mouseCoords){
               bestHit={object:mesh,point:wwPt,face:{a:a,b:b,c:c},distance:t};
             }
           }
+          if(skipOob>0)dbg.push('S7:skipOob='+skipOob+'/'+nTri+' vtx='+nVtx);
         }
         if(bestHit){
           dbg.push('S7:命中('+bestHit.point.x.toFixed(1)+','+bestHit.point.y.toFixed(1)+','+bestHit.point.z.toFixed(1)+') meshes='+totalMesh+' tri='+totalTri);
