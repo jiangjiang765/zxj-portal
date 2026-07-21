@@ -5139,16 +5139,16 @@ function _v3dDetectGeometry(mouseCoords){
           dbg.push('S7:命中 mt meshes='+totalMesh+' tri='+totalTri);
           return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};
         }
-        // v27r: 就近吸附——射线未精确命中时，最近面在10mm容差内则吸附（手机端手指精度不足）
+        // v27r/v27v: 就近吸附——射线未精确命中时，最近面在20mm容差内则吸附（手机端手指精度不足）
         if(cenMesh){
           var snapD=Math.sqrt(minCenD2);
-          if(snapD<=10.0){
+          if(snapD<=20.0){
             cenMesh.updateMatrixWorld();
             var cenWp=new TH.Vector3(clX,clY,clZ).applyMatrix4(cenMesh.matrixWorld);
             dbg.push('S7:吸附命中 snap='+snapD.toFixed(2)+'mm m='+totalMesh);
             return {geo:_v3dProcessHit({object:cenMesh,point:cenWp,face:{a:cenA,b:cenB,c:cenC},distance:cenT},v),dbg:dbg};
           }
-          dbg.push('S7:最近面'+snapD.toFixed(1)+'mm>10mm容差');
+          dbg.push('S7:最近面'+snapD.toFixed(1)+'mm>20mm容差');
         }
         dbg.push('S7:无交点 m='+totalMesh+' t='+totalTri);
       }else{dbg.push('S7:无mesh');}
@@ -5237,12 +5237,12 @@ function _v3dDetectGeometry(mouseCoords){
         }
       });
       var bestScreenPx=Math.sqrt(bestScreenD2);
-      if(bestScreenMesh&&bestScreenPx<=120){
+      if(bestScreenMesh&&bestScreenPx<=200){
         dbg.push('S9:屏幕吸附命中 d='+bestScreenPx.toFixed(1)+'px');
         var fakeHit={object:bestScreenMesh,point:bestScreenWp,face:{a:bestScreenA,b:bestScreenB,c:bestScreenC},distance:1};
         return {geo:_v3dProcessHit(fakeHit,v),dbg:dbg};
       }
-      dbg.push('S9:屏幕最近面'+bestScreenPx.toFixed(1)+'px>120px容差');
+      dbg.push('S9:屏幕最近面'+bestScreenPx.toFixed(1)+'px>200px容差');
     }
   }catch(e){dbg.push('S9:异常 '+e.message);}
 
@@ -5496,11 +5496,13 @@ function _v3dHandleDist(geo,mel){
   mel.innerHTML='⚠️ 距离模式：请点击<b>顶点</b>或<b>边</b>';
 }
 
-// --- 面积模式：点面→绿色高亮+面积 ---
+// --- 面积模式：点面→绿色高亮整个连续平面+总面积 ---
 function _v3dHandleArea(geo,mel){
   if(geo.type==='face'){
-    _v3dHighlightFace(geo);
-    _v3dFinishMeasure({type:'face_area',label:'📐 面积',value:geo.area.toFixed(3)+' mm²',pts:[geo.pt],markerLabels:['F'],detail:'面法线: ('+geo.normal.x.toFixed(2)+', '+geo.normal.y.toFixed(2)+', '+geo.normal.z.toFixed(2)+')'});
+    _v3dRemoveHighlight();
+    var h=_v3dHighlightFace(geo);
+    var totalArea=(h&&h.area>0)?h.area:geo.area;
+    _v3dFinishMeasure({type:'face_area',label:'📐 面积',value:totalArea.toFixed(3)+' mm²',pts:[geo.pt],markerLabels:['F'],detail:'面法线: ('+geo.normal.x.toFixed(2)+', '+geo.normal.y.toFixed(2)+', '+geo.normal.z.toFixed(2)+')'});
     return;
   }
   mel.innerHTML='⚠️ 面积模式：请点击<b>模型表面</b>';
@@ -5593,6 +5595,7 @@ function _v3dHandleSection(geo,mel){
   var sCtrl=document.getElementById('v3d-section-ctrl');
   if(sCtrl)sCtrl.style.display='block';
   // 高亮面
+  _v3dRemoveHighlight();
   _v3dHighlightFace(geo);
   // 显示结果
   mel.innerHTML='🔪 截面位置：'+axis.toUpperCase()+'='+pos.toFixed(3)+'mm（面心）| 拖动滑块调整';
@@ -5904,15 +5907,21 @@ function _v3dRedrawAllMarkers(){
 function v3dClearAllMeasures(){
   _v3dMeasureList=[];
   _v3dSelStack=[];
+  _v3dMeasureId=0;
   _v3dRemoveHighlight();
   v3dClearMeasureMarkers();
   var container=document.getElementById('v3d-container');
-  if(container)container.querySelectorAll('.v3d-callout').forEach(function(el){el.remove();});
+  if(container){
+    container.querySelectorAll('.v3d-callout').forEach(function(el){el.remove();});
+    // 兜底：清除所有绝对定位SVG测量线和标记点
+    container.querySelectorAll('svg').forEach(function(el){if(el.style.position==='absolute')el.remove();});
+    container.querySelectorAll('.v3d-measure-dot').forEach(function(el){el.remove();});
+  }
   // 同时关闭剖面
   if(_v3dSectionOn)_v3dCloseSection();
   if(_v3dMeasuring)_v3dShowPrompt();
   var mel=document.getElementById('v3d-measure');
-  if(!_v3dMeasuring&&mel)mel.style.display='none';
+  if(mel)mel.innerHTML='';
 }
 
 // --- 提示信息 ---
@@ -5930,24 +5939,98 @@ function _v3dClearHover(){
   // 预留给hover高亮功能
 }
 
-// --- 面高亮：创建绿色半透明三角面覆盖层 ---
+// --- 平面扩展：找出与命中三角面共面且相邻的所有三角面 ---
+function _v3dFacesShareEdge(f1,f2,eps){
+  eps=eps||0.02;
+  var v1=[f1.va,f1.vb,f1.vc], v2=[f2.va,f2.vb,f2.vc];
+  var shared=0;
+  for(var i=0;i<3;i++){
+    for(var j=0;j<3;j++){
+      if(v1[i].distanceTo(v2[j])<eps) shared++;
+    }
+  }
+  return shared>=2;
+}
+function _v3dGetCoplanarFaces(obj,hitFaceIndex,hitNormal){
+  var TH=window.THREE;
+  if(!TH||!obj||!obj.geometry)return null;
+  var geo=obj.geometry;
+  var posAttr=geo.attributes.position;
+  var idx=geo.index;
+  var posArr=posAttr.array;
+  var mw=new TH.Matrix4().fromArray(obj.matrixWorld.elements);
+  var triCount=idx?Math.floor(idx.count/3):Math.floor(posArr.length/9);
+  var faces=[];
+  for(var i=0;i<triCount;i++){
+    var a,b,c;
+    if(idx){
+      a=idx.array[i*3]; b=idx.array[i*3+1]; c=idx.array[i*3+2];
+    }else{
+      a=i*3; b=i*3+1; c=i*3+2;
+    }
+    var ai=a*3,bi=b*3,ci=c*3;
+    var va=new TH.Vector3(posArr[ai],posArr[ai+1],posArr[ai+2]).applyMatrix4(mw);
+    var vb=new TH.Vector3(posArr[bi],posArr[bi+1],posArr[bi+2]).applyMatrix4(mw);
+    var vc=new TH.Vector3(posArr[ci],posArr[ci+1],posArr[ci+2]).applyMatrix4(mw);
+    var n=new TH.Vector3().subVectors(vb,va).cross(new TH.Vector3().subVectors(vc,va)).normalize();
+    var cen=new TH.Vector3().addVectors(va,vb).add(vc).multiplyScalar(1/3);
+    faces.push({i:i,va:va,vb:vb,vc:vc,n:n,cen:cen});
+  }
+  if(hitFaceIndex<0||hitFaceIndex>=faces.length)return [faces[0]];
+  var seed=faces[hitFaceIndex];
+  var hitPlaneN=seed.n.clone();
+  var hitPlaneD=-hitPlaneN.dot(seed.cen);
+  // 候选：法线平行且在同一平面上
+  var candidates=[];
+  for(var i=0;i<faces.length;i++){
+    var f=faces[i];
+    if(Math.abs(f.n.dot(hitPlaneN)-1)>0.05) continue;
+    if(Math.abs(f.cen.dot(hitPlaneN)+hitPlaneD)>0.15) continue;
+    candidates.push(f);
+  }
+  // BFS 找与 seed 相邻连通的面
+  var selected=[seed];
+  var visited={}; visited[seed.i]=true;
+  var queue=[seed];
+  while(queue.length){
+    var cur=queue.shift();
+    for(var i=0;i<candidates.length;i++){
+      var cf=candidates[i];
+      if(visited[cf.i]) continue;
+      if(_v3dFacesShareEdge(cur,cf)){
+        visited[cf.i]=true;
+        selected.push(cf);
+        queue.push(cf);
+      }
+    }
+  }
+  return selected;
+}
+
+// --- 面高亮：创建绿色半透明平面覆盖层（扩展到整个连续平面） ---
 function _v3dHighlightFace(geo){
-  if(!geo||!geo.vA||!_o3dvViewer)return;
+  if(!geo||!geo.vA||!_o3dvViewer)return null;
   try{
     var v=_o3dvViewer.GetViewer();
-    if(!v||!v.scene)return;
+    if(!v||!v.scene)return null;
     var TH=window.THREE||(window.THREE&&window.THREE.Vector3?window.THREE:null);
-    if(!TH)return;
-    var geom=new TH.BufferGeometry();
-    var a=geo.vA,b=geo.vB,c=geo.vC;
-    var n=geo.normal;
+    if(!TH)return null;
+    // 扩展平面
+    var selected=_v3dGetCoplanarFaces(geo.obj,geo.faceIndex,geo.normal);
+    if(!selected||selected.length===0) selected=[{va:new TH.Vector3(geo.vA.x,geo.vA.y,geo.vA.z),vb:new TH.Vector3(geo.vB.x,geo.vB.y,geo.vB.z),vc:new TH.Vector3(geo.vC.x,geo.vC.y,geo.vC.z),n:new TH.Vector3(geo.normal.x,geo.normal.y,geo.normal.z)}];
+    var verts=[];
+    var totalArea=0;
     var off=0.08;
-    var verts=new Float32Array([
-      a.x+n.x*off,a.y+n.y*off,a.z+n.z*off,
-      b.x+n.x*off,b.y+n.y*off,b.z+n.z*off,
-      c.x+n.x*off,c.y+n.y*off,c.z+n.z*off
-    ]);
-    geom.setAttribute('position',new TH.BufferAttribute(verts,3));
+    for(var i=0;i<selected.length;i++){
+      var f=selected[i];
+      var n=f.n;
+      verts.push(f.va.x+n.x*off,f.va.y+n.y*off,f.va.z+n.z*off);
+      verts.push(f.vb.x+n.x*off,f.vb.y+n.y*off,f.vb.z+n.z*off);
+      verts.push(f.vc.x+n.x*off,f.vc.y+n.y*off,f.vc.z+n.z*off);
+      totalArea += 0.5 * new TH.Vector3().subVectors(f.vb,f.va).cross(new TH.Vector3().subVectors(f.vc,f.va)).length();
+    }
+    var geom=new TH.BufferGeometry();
+    geom.setAttribute('position',new TH.BufferAttribute(new Float32Array(verts),3));
     // v27q: CAD风格亮绿高亮，带发光效果
     var mat=new TH.MeshBasicMaterial({color:0x00e676,side:TH.DoubleSide,transparent:true,opacity:0.72,depthTest:false,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-10,polygonOffsetUnits:-10});
     var mesh=new TH.Mesh(geom,mat);
@@ -5961,7 +6044,9 @@ function _v3dHighlightFace(geo){
     v.scene.add(mesh);
     _v3dHighlightMeshes.push(mesh);
     v.Render();
+    return {area:totalArea,mesh:mesh};
   }catch(e){}
+  return null;
 }
 
 function _v3dRemoveHighlight(){
