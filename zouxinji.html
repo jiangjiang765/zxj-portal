@@ -5087,6 +5087,46 @@ function _v3dDetectGeometry(mouseCoords){
     }catch(e){dbg.push('S7:异常 '+e.message);}
   }
 
+  // v27n S8: 顶点级决定性诊断——世界包围盒+顶点到射线最近距离
+  try{
+    var TH8=window.THREE;
+    var allMesh=[],allObj=0;
+    v.scene.traverse(function(o){allObj++;if(o.isMesh&&o.geometry&&o.geometry.attributes&&o.geometry.attributes.position)allMesh.push(o);});
+    var nCvs=document.querySelectorAll('canvas').length;
+    if(allMesh.length>0&&TH8&&TH8.Raycaster){
+      var am=allMesh[0],ag=am.geometry,ap=ag.attributes.position,apArr=ap.array;
+      var anV=apArr.length/(ap.itemSize||3);
+      am.updateMatrixWorld(true);
+      if(v.camera&&v.camera.updateMatrixWorld)v.camera.updateMatrixWorld(true);
+      var mw=am.matrixWorld.elements;
+      var bx0=1e30,by0=1e30,bz0=1e30,bx1=-1e30,by1=-1e30,bz1=-1e30;
+      var ndcX8=(mouseCoords.x/rect.width)*2-1,ndcY8=-(mouseCoords.y/rect.height)*2+1;
+      var rc8=new TH8.Raycaster();
+      rc8.setFromCamera(new TH8.Vector2(ndcX8,ndcY8),v.camera);
+      var rO=rc8.ray.origin,rD=rc8.ray.direction;
+      var minD=1e30,minI=-1,mwX=0,mwY=0,mwZ=0;
+      for(var vi=0;vi<anV;vi++){
+        var lx=apArr[vi*3],ly=apArr[vi*3+1],lz=apArr[vi*3+2];
+        var wx=mw[0]*lx+mw[4]*ly+mw[8]*lz+mw[12];
+        var wy=mw[1]*lx+mw[5]*ly+mw[9]*lz+mw[13];
+        var wz=mw[2]*lx+mw[6]*ly+mw[10]*lz+mw[14];
+        if(wx<bx0)bx0=wx;if(wx>bx1)bx1=wx;
+        if(wy<by0)by0=wy;if(wy>by1)by1=wy;
+        if(wz<bz0)bz0=wz;if(wz>bz1)bz1=wz;
+        var px=wx-rO.x,py=wy-rO.y,pz=wz-rO.z;
+        var pd=px*rD.x+py*rD.y+pz*rD.z;
+        var qx=px-pd*rD.x,qy=py-pd*rD.y,qz=pz-pd*rD.z;
+        var dd=Math.sqrt(qx*qx+qy*qy+qz*qz);
+        if(dd<minD){minD=dd;minI=vi;mwX=wx;mwY=wy;mwZ=wz;}
+      }
+      var cm=v.camera.matrixWorld.elements;
+      dbg.push('S8:obj='+allObj+' mesh='+allMesh.length+' cvs='+nCvs+' vis='+(am.visible?1:0)+' name='+(am.name||'-'));
+      dbg.push('S8:bboxW('+bx0.toFixed(1)+','+by0.toFixed(1)+','+bz0.toFixed(1)+')~('+bx1.toFixed(1)+','+by1.toFixed(1)+','+bz1.toFixed(1)+')');
+      dbg.push('S8:min顶点距射线='+minD.toFixed(2)+' @v'+minI+' w('+mwX.toFixed(1)+','+mwY.toFixed(1)+','+mwZ.toFixed(1)+')');
+      dbg.push('S8:mwT=('+mw[12].toFixed(1)+','+mw[13].toFixed(1)+','+mw[14].toFixed(1)+') mwS=('+mw[0].toFixed(2)+','+mw[5].toFixed(2)+','+mw[10].toFixed(2)+') camW=('+cm[12].toFixed(1)+','+cm[13].toFixed(1)+','+cm[14].toFixed(1)+')');
+    }else{dbg.push('S8:无mesh/THREE obj='+allObj+' mesh='+allMesh.length);}
+  }catch(e){dbg.push('S8:异常 '+e.message);}
+
   return {geo:null,dbg:dbg};
 }
 
@@ -5284,7 +5324,7 @@ function _v3dSmartClick(mouseCoords){
     }
     if(mel){
       var dbgMsg='⚠️ 未检测到模型，请点击模型表面';
-      if(result.dbg&&result.dbg.length>0)dbgMsg+='<br><span style="font-size:9px;color:#888">'+result.dbg.slice(-6).join(' | ')+'</span>';
+      if(result.dbg&&result.dbg.length>0)dbgMsg+='<br><span style="font-size:9px;color:#888">'+result.dbg.slice(-10).join(' | ')+'</span>';
       mel.innerHTML=dbgMsg;
     }
     return;
