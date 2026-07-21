@@ -5019,6 +5019,8 @@ function _v3dDetectGeometry(mouseCoords){
         // 回退到手动Möller-Trumbore
         var bestHit=null,bestDist=Infinity;
         var totalTri=0,totalMesh=0;
+        // v27p: 就近吸附追踪（最近面质心）
+        var minCenD2=Infinity,cenMesh=null,cenA=0,cenB=0,cenC=0,cenT=0,clX=0,clY=0,clZ=0;
         for(var mi=0;mi<meshes.length;mi++){
           var mesh=meshes[mi];
           var geo=mesh.geometry;
@@ -5055,6 +5057,15 @@ function _v3dDetectGeometry(mouseCoords){
             _v0.set(posArr[ai],posArr[ai+1],posArr[ai+2]);
             _v1.set(posArr[bi],posArr[bi+1],posArr[bi+2]);
             _v2.set(posArr[ci],posArr[ci+1],posArr[ci+2]);
+            // v27p: 追踪最近面质心（局部空间，点到射线距离）
+            var ccx=(_v0.x+_v1.x+_v2.x)/3,ccy=(_v0.y+_v1.y+_v2.y)/3,ccz=(_v0.z+_v1.z+_v2.z)/3;
+            var cpx=ccx-lOrg.x,cpy=ccy-lOrg.y,cpz=ccz-lOrg.z;
+            var cpd=cpx*lDir.x+cpy*lDir.y+cpz*lDir.z;
+            if(cpd>0){
+              var cqx=cpx-cpd*lDir.x,cqy=cpy-cpd*lDir.y,cqz=cpz-cpd*lDir.z;
+              var cd2=cqx*cqx+cqy*cqy+cqz*cqz;
+              if(cd2<minCenD2){minCenD2=cd2;cenMesh=mesh;cenA=a;cenB=b;cenC=c;cenT=cpd;clX=ccx;clY=ccy;clZ=ccz;}
+            }
             _e1.subVectors(_v1,_v0);
             _e2.subVectors(_v2,_v0);
             _h.crossVectors(lDir,_e2);
@@ -5081,6 +5092,17 @@ function _v3dDetectGeometry(mouseCoords){
         if(bestHit){
           dbg.push('S7:命中 mt meshes='+totalMesh+' tri='+totalTri);
           return {geo:_v3dProcessHit(bestHit,v),dbg:dbg};
+        }
+        // v27p: 就近吸附——射线未精确命中时，最近面在4mm容差内则吸附
+        if(cenMesh){
+          var snapD=Math.sqrt(minCenD2);
+          if(snapD<=4.0){
+            cenMesh.updateMatrixWorld();
+            var cenWp=new TH.Vector3(clX,clY,clZ).applyMatrix4(cenMesh.matrixWorld);
+            dbg.push('S7:吸附命中 snap='+snapD.toFixed(2)+'mm m='+totalMesh);
+            return {geo:_v3dProcessHit({object:cenMesh,point:cenWp,face:{a:cenA,b:cenB,c:cenC},distance:cenT},v),dbg:dbg};
+          }
+          dbg.push('S7:最近面'+snapD.toFixed(1)+'mm>4mm容差');
         }
         dbg.push('S7:无交点 m='+totalMesh+' t='+totalTri);
       }else{dbg.push('S7:无mesh');}
