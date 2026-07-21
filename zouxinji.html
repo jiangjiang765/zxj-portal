@@ -565,6 +565,14 @@ html.portal-auto .login-overlay{display:none!important}
 #v3d-modal-measure.v3d-show{display:flex}
 #v3d-touch-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;background:rgba(0,0,0,0.001);touch-action:none;cursor:crosshair}
 #v3d-touch-overlay.v3d-active{display:block}
+@media(min-width:768px){
+  .v3d-left-toolbar{display:flex!important}
+  #v3d-modes{display:none!important}
+}
+@media(max-width:767px){
+  .v3d-left-toolbar{display:none!important}
+  #v3d-modes{display:block}
+}
 .v3d-callout{position:absolute;pointer-events:auto;background:rgba(13,27,42,.92);border:1px solid var(--gold);border-radius:8px;padding:4px 8px;font-size:11px;color:#fff;white-space:nowrap;z-index:40;transform:translate(-50%,-120%);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .v3d-callout .v3d-del{color:#f44336;cursor:pointer;margin-left:6px;font-weight:700}
 .v3d-measure-dot{position:absolute;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);z-index:35;pointer-events:none}
@@ -4340,6 +4348,11 @@ function v3dShowStatus(msg,color){
 }
 function loadO3dvEngine(){
   return new Promise(function(resolve,reject){
+    // v27q: 前置WebGL检测
+    try{
+      var testC=document.createElement('canvas'); var gl=testC.getContext('webgl')||testC.getContext('experimental-webgl');
+      if(!gl){_o3dvLoading=false;reject(new Error('当前浏览器或设备未启用WebGL，无法加载3D引擎'));return;}
+    }catch(e){}
     if(window.OV&&OV.EmbeddedViewer){resolve();return;}
     if(_o3dvLoading){
       var ck=setInterval(function(){if(window.OV&&OV.EmbeddedViewer){clearInterval(ck);resolve();}},200);
@@ -4397,7 +4410,12 @@ function closeV3dAll(){
 function handleV3dFile(input){
   var file=input.files[0];if(!file)return;
   var name=file.name;
-  v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f6');
+  // v27q: 前置WebGL检测
+  try{
+    var testC=document.createElement('canvas'); var gl=testC.getContext('webgl')||testC.getContext('experimental-webgl');
+    if(!gl){v3dShowStatus('❌ 浏览器不支持WebGL，无法显示3D模型。请更换Chrome/Edge浏览器或启用显卡加速','#f44336');input.value='';return;}
+  }catch(e){}
+  v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — 加载中...','#64b5f5');
   loadO3dvEngine().then(function(){
     // Hide select modal, show measure modal
     document.getElementById('v3d-modal-select').style.display='none';
@@ -4415,7 +4433,7 @@ function handleV3dFile(input){
     var mBtn=document.getElementById('v3d-btn-measure');if(mBtn)mBtn.style.background='#1e88e5';
     try{
       var viewer=new OV.EmbeddedViewer(container,{
-        backgroundColor:new OV.RGBAColor(26,26,46,255),
+        backgroundColor:new OV.RGBAColor(10,22,40,255),
         defaultColor:new OV.RGBColor(190,193,200),
         onModelLoaded:function(){_o3dvPostProcess(viewer,name,file);}
       });
@@ -4496,6 +4514,33 @@ function _o3dvPostProcess(viewer,name,file){
           dims[0].v.toFixed(1)+'×'+dims[1].v.toFixed(1)+'×'+dims[2].v.toFixed(1)+'mm '+
           '<span style="font-size:9px;color:var(--text-dim)">('+dims[0].l+dims[1].l+dims[2].l+')</span>';
       }
+      // v27q: 添加场景坐标轴指示器（CAD风格）
+      try{
+        if(window.THREE&&window.THREE.AxesHelper){
+          var oldAxes=v.scene.getObjectByName('__zxj_axes_helper__');
+          if(oldAxes)v.scene.remove(oldAxes);
+          var axisLen=Math.max(dx,dy,dz)*0.15||8;
+          var axes=new THREE.AxesHelper(axisLen);
+          axes.name='__zxj_axes_helper__';
+          axes.position.set(0,0,0);
+          v.scene.add(axes);
+        }
+      }catch(e){}
+      // v27q: 桌面端加载常见修复——强制重设canvas尺寸并渲染两次
+      try{
+        var cvs=v.GetCanvas?v.GetCanvas():v.canvas;
+        var cnt=document.getElementById('v3d-container');
+        if(cvs&&cnt){
+          var r=cnt.getBoundingClientRect();
+          if(r.width>0&&r.height>0){
+            cvs.style.width=r.width+'px'; cvs.style.height=r.height+'px';
+            if(v.renderer&&v.renderer.setSize){v.renderer.setSize(r.width,r.height,false);}
+            if(v.camera&&v.camera.aspect){v.camera.aspect=r.width/r.height; v.camera.updateProjectionMatrix();}
+          }
+        }
+        setTimeout(function(){try{v.Render();v.Render();}catch(e){}},100);
+        setTimeout(function(){try{v.Render();v.Render();}catch(e){}},500);
+      }catch(e){}
       // 注入触摸覆盖层到v3d-container中（O3DV已创建canvas）
       _v3dInjectOverlay();
       // 绑定测量模式按钮（仅一次）
@@ -5840,18 +5885,23 @@ function _v3dHighlightFace(geo){
     var geom=new TH.BufferGeometry();
     var a=geo.vA,b=geo.vB,c=geo.vC;
     var n=geo.normal;
-    var off=0.15;
+    var off=0.08;
     var verts=new Float32Array([
       a.x+n.x*off,a.y+n.y*off,a.z+n.z*off,
       b.x+n.x*off,b.y+n.y*off,b.z+n.z*off,
       c.x+n.x*off,c.y+n.y*off,c.z+n.z*off
     ]);
     geom.setAttribute('position',new TH.BufferAttribute(verts,3));
-    var mat=new TH.MeshBasicMaterial({color:0x4caf50,side:TH.DoubleSide,transparent:true,opacity:0.5,depthTest:true,depthWrite:false});
+    // v27q: CAD风格亮绿高亮，带发光效果
+    var mat=new TH.MeshBasicMaterial({color:0x00e676,side:TH.DoubleSide,transparent:true,opacity:0.72,depthTest:false,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-10,polygonOffsetUnits:-10});
     var mesh=new TH.Mesh(geom,mat);
-    mesh.renderOrder=999;
-    mesh.material.depthTest=true;
-    mesh.material.depthWrite=false;
+    mesh.renderOrder=9999;
+    // 添加白色边缘增强轮廓感
+    var edgeGeom=new TH.EdgesGeometry(geom);
+    var edgeMat=new TH.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.9,depthTest:false});
+    var edgeLines=new TH.LineSegments(edgeGeom,edgeMat);
+    edgeLines.renderOrder=10000;
+    mesh.add(edgeLines);
     v.scene.add(mesh);
     _v3dHighlightMeshes.push(mesh);
     v.Render();
@@ -5948,6 +5998,10 @@ setTimeout(function(){
   // 测量按钮
   var measureBtn=document.getElementById('v3d-btn-measure');
   if(measureBtn)measureBtn.addEventListener('click',function(e){e.stopPropagation();v3dToggleMeasure();});
+  // v27q: 左侧CAD风格工具栏
+  document.querySelectorAll('.v3d-tb-btn').forEach(function(b){
+    b.addEventListener('click',function(e){e.stopPropagation();if(!_v3dMeasuring)v3dToggleMeasure();_v3dSetMode(this.dataset.mode);});
+  });
   // 剖面按钮
   var sectionBtn=document.getElementById('v3d-btn-section');
   if(sectionBtn)sectionBtn.addEventListener('click',function(e){e.stopPropagation();v3dToggleSection();});
@@ -10707,7 +10761,7 @@ function _aiShowModal(title,body){
     <div id="v3d-dimensions" style="display:none;font-size:11px;color:#64b5f6;white-space:nowrap"></div>
   </div>
   <!-- 3D模型查看区 -->
-  <div id="v3d-container" style="flex:1;position:relative;overflow:hidden;background:#1a1a2e">
+  <div id="v3d-container" style="flex:1;position:relative;overflow:hidden;background:linear-gradient(180deg,#0a1628 0%,#1a3a6e 50%,#0d1b2a 100%)">
     <!-- O3DV canvas will be injected here -->
     <!-- Touch overlay for measurement (injected dynamically after model loads) -->
   </div>
@@ -10726,6 +10780,14 @@ function _aiShowModal(title,body){
   </div>
   <!-- 测量结果区 -->
   <div id="v3d-measure" style="display:none;padding:6px 12px;background:rgba(255,152,0,.1);border-top:1px solid rgba(255,152,0,.3);font-size:12px;color:#ffb74d;line-height:1.5;flex-shrink:0;min-height:22px"></div>
+  <!-- 左侧悬浮工具栏（桌面端垂直显示，参考CAD风格） -->
+  <div class="v3d-left-toolbar" style="display:none;position:absolute;left:10px;top:60px;z-index:100;flex-direction:column;gap:8px;background:rgba(13,27,42,.85);padding:8px;border-radius:10px;border:1px solid rgba(100,181,246,.25);box-shadow:0 4px 12px rgba(0,0,0,.4)">
+    <button class="btn v3d-tb-btn" data-mode="dist" title="距离" style="width:40px;height:40px;border-radius:8px;background:#1e88e5;color:#fff;font-size:16px;padding:0">📏</button>
+    <button class="btn v3d-tb-btn" data-mode="area" title="面积" style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.08);color:#90caf9;font-size:16px;padding:0">📐</button>
+    <button class="btn v3d-tb-btn" data-mode="angle" title="角度" style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.08);color:#90caf9;font-size:16px;padding:0">∠</button>
+    <button class="btn v3d-tb-btn" data-mode="radius" title="半径" style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.08);color:#90caf9;font-size:16px;padding:0">⭕</button>
+    <button class="btn v3d-tb-btn" data-mode="coord" title="坐标" style="width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.08);color:#90caf9;font-size:16px;padding:0">📍</button>
+  </div>
   <!-- 底部工具栏 -->
   <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:linear-gradient(90deg,#0d1b2a,#1b2838);border-top:1px solid var(--border);justify-content:center;align-items:center;flex-shrink:0">
     <button id="v3d-btn-measure" class="btn" style="background:#1e88e5;color:#fff;min-width:60px;font-size:12px;padding:6px 10px;border-radius:8px">📏 测量</button>
