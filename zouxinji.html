@@ -4463,6 +4463,23 @@ function _o3dvPostProcess(viewer,name,file){
       }
     });
     v.Render();
+    // v27z: 添加模型实线轮廓，方便测量时找点找边
+    try{
+      if(window.THREE&&window.THREE.EdgesGeometry&&window.THREE.LineSegments&&window.THREE.LineBasicMaterial){
+        v.scene.traverse(function(obj){
+          if(obj.isMesh&&obj.geometry){
+            var oldEdges=obj.getObjectByName('__zxj_edges__');
+            if(oldEdges){obj.remove(oldEdges); if(oldEdges.geometry)oldEdges.geometry.dispose();}
+            var edges=new THREE.EdgesGeometry(obj.geometry, 30);
+            var lineMat=new THREE.LineBasicMaterial({color:0xffffff, transparent:true, opacity:0.55, depthTest:true, depthWrite:false});
+            var lineSeg=new THREE.LineSegments(edges, lineMat);
+            lineSeg.name='__zxj_edges__';
+            obj.add(lineSeg);
+          }
+        });
+        v.Render();
+      }
+    }catch(e){}
     // v22: monkey-patch gl.bindFramebuffer + 诊断计数器
     window.__zxj_bindFbCalls=0;window.__zxj_bindFbNullCalls=0;window.__zxj_bindFbRTCalls=0;
     if(!window.__zxj_depthPatched){
