@@ -4404,6 +4404,8 @@ function closeV3dAll(){
   var dimEl=document.getElementById('v3d-dimensions');if(dimEl)dimEl.style.display='none';
   var melEl=document.getElementById('v3d-measure');if(melEl)melEl.style.display='none';
   var mBtn=document.getElementById('v3d-btn-measure');if(mBtn)mBtn.style.background='#1e88e5';
+  var d2Btn=document.getElementById('v3d-btn-2d');if(d2Btn){d2Btn.style.display='none';d2Btn.textContent='2D';d2Btn.style.background='#7b1fa2';}
+  _v3d2DMode=false;_v3dPerspCamera=null;
   // 移除覆盖层
   _v3dRemoveOverlay();
 }
@@ -4431,6 +4433,8 @@ function handleV3dFile(input){
     var dimEl=document.getElementById('v3d-dimensions');if(dimEl)dimEl.style.display='none';
     var melEl=document.getElementById('v3d-measure');if(melEl)melEl.style.display='none';
     var mBtn=document.getElementById('v3d-btn-measure');if(mBtn)mBtn.style.background='#1e88e5';
+    var d2Btn=document.getElementById('v3d-btn-2d');if(d2Btn){d2Btn.style.display='inline-block';d2Btn.textContent='2D';d2Btn.style.background='#7b1fa2';}
+    _v3d2DMode=false;_v3dPerspCamera=null;
     try{
       var viewer=new OV.EmbeddedViewer(container,{
         backgroundColor:new OV.RGBAColor(10,22,40,255),
@@ -4566,6 +4570,8 @@ function _o3dvPostProcess(viewer,name,file){
         document.querySelectorAll('.v3d-mode-btn').forEach(function(b){
           b.addEventListener('click',function(){_v3dSetMode(this.dataset.mode);});
         });
+        var d2Btn=document.getElementById('v3d-btn-2d');
+        if(d2Btn)d2Btn.addEventListener('click',_v3dToggle2D);
       }
     }
     v3dShowStatus('📄 '+esc(name)+' ('+formatFileSize(file.size)+') — ✅ 加载成功','#4caf50');
@@ -4586,6 +4592,8 @@ var _v3dSectionOn=false;    // 剖面是否开启
 var _v3dSectionPlane=null;  // 当前剖面平面 {axis,pos}
 var _v3dHighlightMesh=null; // 面高亮覆盖层（单面）
 var _v3dHighlightMeshes=[];  // 多面高亮数组
+var _v3d2DMode=false;       // 是否2D正交视图模式
+var _v3dPerspCamera=null;   // 切换2D前保存的透视相机
 
 // --- 触摸覆盖层方案（修复华为鸿蒙触摸测量）---
 var _v3dLastMeasureTime=0;
@@ -4602,6 +4610,61 @@ function _v3dGetOrbitControls(){
     return null;
   }catch(e){return null;}
 }
+
+// --- 2D/3D视图切换：切正交前视图，方便像看工程图一样测量 ---
+function _v3dToggle2D(){
+  try{
+    if(!_o3dvViewer)return;
+    var v=_o3dvViewer.GetViewer();if(!v||!v.scene)return;
+    var TH=window.THREE||THREE;if(!TH||!TH.OrthographicCamera)return;
+    var btn=document.getElementById('v3d-btn-2d');
+    if(!_v3d2DMode){
+      // 进入2D前视图正交投影
+      var bbox=v.GetBoundingBox(function(){return true;});
+      if(!bbox||!bbox.min||!bbox.max)return;
+      var cx=(bbox.min.x+bbox.max.x)/2;
+      var cy=(bbox.min.y+bbox.max.y)/2;
+      var cz=(bbox.min.z+bbox.max.z)/2;
+      var dx=bbox.max.x-bbox.min.x, dy=bbox.max.y-bbox.min.y, dz=bbox.max.z-bbox.min.z;
+      var size=Math.max(dx,dy,dz)*1.05||10;
+      var canvas=v.GetCanvas?v.GetCanvas():v.canvas;
+      var aspect=(canvas&&canvas.clientHeight>0)?(canvas.clientWidth/canvas.clientHeight):1;
+      var orthoSize=size/2;
+      var left=-orthoSize*aspect, right=orthoSize*aspect, top=orthoSize, bottom=-orthoSize;
+      var near=0.01, far=size*4;
+      var orthoCam=new TH.OrthographicCamera(left,right,top,bottom,near,far);
+      orthoCam.position.set(cx, cy, cz+size);
+      orthoCam.lookAt(cx,cy,cz);
+      orthoCam.updateProjectionMatrix();
+      if(!_v3dPerspCamera)_v3dPerspCamera=v.camera;
+      v.camera=orthoCam;
+      var controls=_v3dGetOrbitControls();
+      if(controls){
+        controls.object=orthoCam;
+        controls.target.set(cx,cy,cz);
+        controls.enableRotate=false;
+        if(controls.update)controls.update();
+      }
+      _v3d2DMode=true;
+      if(btn){btn.textContent='3D';btn.style.background='#e040fb';}
+    }else{
+      // 恢复3D透视视图
+      if(_v3dPerspCamera){
+        v.camera=_v3dPerspCamera;
+        var controls=_v3dGetOrbitControls();
+        if(controls){
+          controls.object=_v3dPerspCamera;
+          controls.enableRotate=true;
+          if(controls.update)controls.update();
+        }
+      }
+      _v3d2DMode=false;
+      if(btn){btn.textContent='2D';btn.style.background='#7b1fa2';}
+    }
+    v.Render();v.Render();
+  }catch(e){}
+}
+
 // 注入触摸覆盖层到v3d-container中（必须在O3DV canvas创建后调用）
 function _v3dInjectOverlay(){
   var container=document.getElementById('v3d-container');
@@ -11168,6 +11231,7 @@ function _aiShowModal(title,body){
   <div style="display:flex;align-items:center;padding:10px 12px;background:linear-gradient(90deg,#0d1b2a,#1b2838);border-bottom:1px solid var(--border);flex-shrink:0;gap:10px">
     <button id="v3d-back-btn" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);font-size:14px;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap">&#8592; 返回</button>
     <div id="v3d-filename" style="font-size:13px;color:var(--gold);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></div>
+    <button id="v3d-btn-2d" style="display:none;background:#7b1fa2;color:#fff;border:none;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap">2D</button>
     <div id="v3d-dimensions" style="display:none;font-size:11px;color:#64b5f6;white-space:nowrap"></div>
   </div>
   <!-- 3D模型查看区 -->
