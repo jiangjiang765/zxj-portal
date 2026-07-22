@@ -5598,25 +5598,55 @@ function _v3dHandleArea(geo,mel){
   mel.innerHTML='⚠️ 面积模式：请点击<b>模型表面</b>';
 }
 
-// --- 角度模式：点两面→夹角 ---
+// --- 角度模式：三点定角（顶点O → 边1点A → 边2点B）---
 function _v3dHandleAngle(geo,mel){
-  if(geo.type!=='face'){mel.innerHTML='⚠️ 角度模式：请点击<b>模型表面</b>';return;}
+  var pt=geo.pt;
+  if(!pt){mel.innerHTML='⚠️ 未检测到有效点，请重新点击';return;}
+
+  // 第一步：选顶点O
   if(_v3dSelStack.length===0){
-    _v3dSelStack.push(geo);
-    _v3dHighlightFace(geo);
-    v3dAddMeasureMarker(geo.pt,'F1','#2196f3');
-    mel.innerHTML='✅ 面1已选 — 点<b>第二个面</b>量夹角';
+    _v3dSelStack.push({type:'pt',pt:pt});
+    v3dAddMeasureMarker(pt,'O','#2196f3');
+    mel.innerHTML='✅ 顶点O已选 — 点<b>第一条边上的点A</b>';
     return;
   }
-  var f1=_v3dSelStack[0];
-  if(f1.type==='face'){
-    _v3dHighlightFace(geo);
-    var n1=f1.normal,n2=geo.normal;
-    var dot=n1.x*n2.x+n1.y*n2.y+n1.z*n2.z;
-    if(dot>1)dot=1;if(dot<-1)dot=-1;
-    var ang=Math.acos(dot)*180/Math.PI;
-    _v3dFinishMeasure({type:'face_angle',label:'📐 面夹角',value:ang.toFixed(2)+'°',pts:[f1.pt,geo.pt],markerLabels:['F1','F2'],detail:(ang>90?'(补角:'+(180-ang).toFixed(2)+'°)':'')});
+
+  // 第二步：选边1点A
+  if(_v3dSelStack.length===1){
+    var O=_v3dSelStack[0].pt;
+    if(_v3dSamePt(pt,O)){mel.innerHTML='⚠️ A点不能与O点重合';return;}
+    _v3dSelStack.push({type:'pt',pt:pt});
+    v3dAddMeasureMarker(pt,'A','#ff9800');
+    v3dDrawMeasureLine(O,pt);
+    mel.innerHTML='✅ 边OA已选 — 点<b>第二条边上的点B</b>';
+    return;
   }
+
+  // 第三步：选边2点B，计算夹角
+  if(_v3dSelStack.length===2){
+    var O=_v3dSelStack[0].pt;
+    var A=_v3dSelStack[1].pt;
+    if(_v3dSamePt(pt,O)){mel.innerHTML='⚠️ B点不能与O点重合';return;}
+    var B=pt;
+    var vOA={x:A.x-O.x,y:A.y-O.y,z:A.z-O.z};
+    var vOB={x:B.x-O.x,y:B.y-O.y,z:B.z-O.z};
+    var lenOA=Math.sqrt(vOA.x*vOA.x+vOA.y*vOA.y+vOA.z*vOA.z);
+    var lenOB=Math.sqrt(vOB.x*vOB.x+vOB.y*vOB.y+vOB.z*vOB.z);
+    if(lenOA<1e-6||lenOB<1e-6){mel.innerHTML='⚠️ 边长太短，无法计算角度';return;}
+    var dot=vOA.x*vOB.x+vOA.y*vOB.y+vOA.z*vOB.z;
+    var cos=dot/(lenOA*lenOB);
+    if(cos>1)cos=1;if(cos<-1)cos=-1;
+    var ang=Math.acos(cos)*180/Math.PI;
+    v3dAddMeasureMarker(B,'B','#ff9800');
+    v3dDrawMeasureLine(O,B);
+    _v3dFinishMeasure({type:'angle_3pt',label:'📐 角度',value:ang.toFixed(2)+'°',pts:[O,A,B],markerLabels:['O','A','B'],detail:'OA='+lenOA.toFixed(3)+'mm | OB='+lenOB.toFixed(3)+'mm'});
+  }
+}
+
+// --- 判断两点是否重合 ---
+function _v3dSamePt(p1,p2,eps){
+  eps=eps||0.01;
+  return Math.abs(p1.x-p2.x)<eps&&Math.abs(p1.y-p2.y)<eps&&Math.abs(p1.z-p2.z)<eps;
 }
 
 // --- 半径模式：点圆弧边 或 圆柱面 → 半径 ---
@@ -5944,7 +5974,14 @@ function _v3dFinishMeasure(info){
       v3dAddMeasureMarker(info.pts[i],lbl,col);
       markers.push({pt:info.pts[i],label:lbl,color:col});
     }
-    v3dDrawMeasureLine(info.pts[0],info.pts[1]);
+    // 两点：直接连线；三点及以上：从第一点辐射到后续各点（适合角度测量）
+    if(info.pts.length===2){
+      v3dDrawMeasureLine(info.pts[0],info.pts[1]);
+    }else{
+      for(var i=1;i<info.pts.length;i++){
+        v3dDrawMeasureLine(info.pts[0],info.pts[i]);
+      }
+    }
   }else if(info.pts&&info.pts.length===1){
     var lbl=info.markerLabels?info.markerLabels[0]:'A';
     v3dAddMeasureMarker(info.pts[0],lbl,'#4caf50');
@@ -5953,7 +5990,10 @@ function _v3dFinishMeasure(info){
 
   // 添加callout标签（贴在模型上）
   var callout=null;
-  if(info.pts&&info.pts.length>=2){
+  if(info.pts&&info.pts.length>=3){
+    // 三点及以上：标注放在第一个点（角度顶点）
+    callout=_v3dAddCallout(info.pts[0],info.label+': '+info.value,id);
+  }else if(info.pts&&info.pts.length===2){
     var mid={x:(info.pts[0].x+info.pts[1].x)/2,y:(info.pts[0].y+info.pts[1].y)/2,z:(info.pts[0].z+info.pts[1].z)/2};
     callout=_v3dAddCallout(mid,info.label+': '+info.value,id);
   }else{
@@ -6092,7 +6132,7 @@ function v3dClearAllMeasures(){
 function _v3dShowPrompt(){
   var mel=document.getElementById('v3d-measure');
   if(!mel)return;
-  var prompts={dist:'📍 点击两个<b>顶点</b>测距离，或点<b>边</b>测长度',area:'📐 点击<b>模型表面</b>测面积',angle:'∠ 点击<b>两个面</b>测夹角',radius:'⭕ 点击<b>圆弧边</b>测半径',pt2face:'📍 先点<b>顶点</b>，再点<b>面</b>测距离',section:'🔪 点击<b>表面</b>沿轴切剖面，拖动滑块调位置',coord:'📍 点击<b>顶点</b>显示XYZ坐标，或点<b>面</b>看面心',thick:'🧱 点击<b>两个面</b>测壁厚（最小距离）'};
+  var prompts={dist:'📍 点击两个<b>顶点</b>测距离，或点<b>边</b>测长度',area:'📐 点击<b>模型表面</b>测面积',angle:'∠ 点<b>顶点O</b>→<b>边1点A</b>→<b>边2点B</b>测夹角',radius:'⭕ 点击<b>圆弧边</b>测半径',pt2face:'📍 先点<b>顶点</b>，再点<b>面</b>测距离',section:'🔪 点击<b>表面</b>沿轴切剖面，拖动滑块调位置',coord:'📍 点击<b>顶点</b>显示XYZ坐标，或点<b>面</b>看面心',thick:'🧱 点击<b>两个面</b>测壁厚（最小距离）'};
   mel.innerHTML=prompts[_v3dMeasureMode]||'';
 }
 
@@ -6246,7 +6286,7 @@ function _v3dSetMode(mode){
     case 'area': f={vert:false,edge:false,face:true}; break;
     case 'coord': f={vert:true,edge:false,face:true}; break;
     case 'dist': f={vert:true,edge:false,face:false}; break;
-    case 'angle': f={vert:false,edge:false,face:true}; break;
+    case 'angle': f={vert:true,edge:true,face:true}; break;
     case 'radius': f={vert:false,edge:true,face:true}; break;
     case 'pt2face': f={vert:true,edge:false,face:true}; break;
     case 'section': f={vert:false,edge:false,face:true}; break;
